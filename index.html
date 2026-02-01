@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Studio Jaqueline Mendanha — Gestão</title>
+
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#7B2CBF">
+
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brandRow">
+        <img id="logoImg" class="logo isHidden" alt="Logo do Studio" />
+        <div>
+          <div class="brand__title" id="studioTitle">Studio Jaqueline Mendanha</div>
+          <div class="brand__subtitle">Agenda • WhatsApp • Materiais</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="topbar__right">
+      <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
+      <label class="btn btn--ghost fileBtn">
+        Importar backup
+        <input type="file" id="fileImport" accept="application/json" hidden />
+      </label>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs"></nav>
+
+  <main class="wrap" role="main">
+    <!-- DASHBOARD -->
+    <section class="panel" data-route="dashboard">
+      <div class="panel__head">
+        <h2>Dashboard</h2>
+        <p>Resumo do estúdio (atualiza automaticamente).</p>
+      </div>
+
+      <div class="cards">
+        <div class="card card--accent">
+          <div class="card__label">Receita (Recebidos)</div>
+          <div class="card__value" id="kpiReceita">R$ 0,00</div>
+        </div>
+        <div class="card">
+          <div class="card__label">Custos (Atendimentos)</div>
+          <div class="card__value" id="kpiCustos">R$ 0,00</div>
+        </div>
+        <div class="card">
+          <div class="card__label">Despesas</div>
+          <div class="card__value" id="kpiDespesas">R$ 0,00</div>
+        </div>
+        <div class="card card--accent">
+          <div class="card__label">Lucro Líquido</div>
+          <div class="card__value" id="kpiLucro">R$ 0,00</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="box">
+          <h3>Métricas</h3>
+          <canvas id="chartBars" height="180"></canvas>
+          <small class="hint">Receita / Lucro / Despesas</small>
+        </div>
+        <div class="box">
+          <h3>Receita por mês</h3>
+          <canvas id="chartLine" height="180"></canvas>
+          <small class="hint">Crescimento mensal</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- AGENDA -->
+    <section class="panel" data-route="agenda">
+      <div class="panel__head">
+        <h2>Agenda</h2>
+        <p>Status “Realizado” + Recebido cria/atualiza Atendimentos automaticamente.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddAgenda">+ Novo agendamento</button>
+        <button class="btn btn--ghost" id="btnClearAgenda">Limpar agenda (somente agenda)</button>
+        <button class="btn btn--ghost" id="btnReportToday">Relatório de hoje (WhatsApp)</button>
+      </div>
+
+      <div class="notice" id="agendaNotice" hidden></div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblAgenda">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Cliente</th>
+              <th>Contato</th>
+              <th>Procedimento</th>
+              <th>Valor</th>
+              <th>Status</th>
+              <th>Recebido</th>
+              <th>Obs.</th>
+              <th>Enviar WhatsApp</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- WHATSAPP -->
+    <section class="panel" data-route="whatsapp">
+      <div class="panel__head">
+        <h2>WhatsApp (templates)</h2>
+        <p>Edite textos e horários. Envio é com 1 clique.</p>
+      </div>
+
+      <div class="grid2">
+        <div class="box">
+          <h3>Horários</h3>
+          <div class="row">
+            <label class="field">
+              <span>Lembrete (1 dia antes) — hora</span>
+              <input id="wppHoraLembrete" type="time" step="60" />
+            </label>
+            <label class="field">
+              <span>Relatório do dia — hora</span>
+              <input id="wppHoraRelatorio" type="time" step="60" />
+            </label>
+          </div>
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn btn--ghost" id="btnQueueTomorrow">Gerar fila de lembretes (para amanhã)</button>
+            <button class="btn btn--ghost" id="btnSendReport">Enviar relatório de hoje (WhatsApp)</button>
+          </div>
+          <small class="hint">Variáveis: {cliente}, {data}, {hora}, {procedimento}, {valor}, {studio}</small>
+        </div>
+
+        <div class="box">
+          <h3>Templates editáveis</h3>
+
+          <label class="field">
+            <span>Confirmação (ao agendar)</span>
+            <textarea id="tplConfirmacao" rows="3"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Lembrete (1 dia antes)</span>
+            <textarea id="tplLembrete" rows="3"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Agradecimento (após atendimento)</span>
+            <textarea id="tplAgradecimento" rows="3"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Relatório diário (para você)</span>
+            <textarea id="tplRelatorio" rows="3"></textarea>
+          </label>
+
+          <div class="actions">
+            <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-top:12px;">
+        <h3>Fila de envio (1 clique)</h3>
+        <div id="wppQueue"></div>
+      </div>
+    </section>
+
+    <!-- ATENDIMENTOS -->
+    <section class="panel" data-route="atendimentos">
+      <div class="panel__head">
+        <h2>Atendimentos</h2>
+        <p>Você informa o <b>Recebido</b>. O sistema calcula custo material e lucro automaticamente.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddAtendimento">+ Novo atendimento</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblAtend">
+          <thead>
+            <tr>
+              <th>Data</th><th>Cliente</th><th>WhatsApp</th><th>Procedimento</th><th>Valor</th><th>Recebido</th>
+              <th>Custo Material</th><th>Mão de obra</th><th>Custo Total</th><th>Lucro</th>
+              <th>Foto</th><th>WhatsApp (msg + foto)</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <small class="hint">Foto fica salva no seu aparelho (localStorage). Evite fotos muito pesadas.</small>
+    </section>
+
+    <!-- PROCEDIMENTOS -->
+    <section class="panel" data-route="procedimentos">
+      <div class="panel__head">
+        <h2>Procedimentos (reajuste)</h2>
+        <p>Altere preço e data. Agenda e Atendimentos atualizam automaticamente.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddProc">+ Adicionar procedimento</button>
+        <button class="btn btn--ghost" id="btnResetProc">Restaurar padrão</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblProc">
+          <thead>
+            <tr>
+              <th>Procedimento</th><th>Preço</th><th>Data reajuste</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CLIENTES -->
+    <section class="panel" data-route="clientes">
+      <div class="panel__head">
+        <h2>Clientes + Anamnese</h2>
+        <p>Campos essenciais.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddCliente">+ Nova cliente</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblCli">
+          <thead>
+            <tr>
+              <th>Cliente</th><th>WhatsApp</th><th>Telefone</th><th>Nasc.</th><th>Alergia</th><th>Quais</th>
+              <th>Gestante</th><th>Saúde</th><th>Medicamentos</th><th>Obs.</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- MATERIAIS -->
+    <section class="panel" data-route="materiais">
+      <div class="panel__head">
+        <h2>Materiais (ml / L / g / kg / un)</h2>
+        <p>Você coloca quanto comprou, valor e quanto usa por cliente. O custo sai automático (correto).</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddMat">+ Novo material</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblMat">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Qtd total</th>
+              <th>Unidade</th>
+              <th>Valor compra</th>
+              <th>Custo unitário</th>
+              <th>Qtd por cliente</th>
+              <th>Rendimento (clientes)</th>
+              <th>Custo por cliente</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <small class="hint">
+        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml. Se usar 1 ml por cliente → 120 clientes e custo por cliente = 0,15.
+      </small>
+    </section>
+
+    <!-- DESPESAS -->
+    <section class="panel" data-route="despesas">
+      <div class="panel__head">
+        <h2>Despesas</h2>
+        <p>Fixa/Variável.</p>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnAddDespesa">+ Nova despesa</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="tblDesp">
+          <thead>
+            <tr>
+              <th>Data</th><th>Tipo</th><th>Valor</th><th>Descrição</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CONFIG -->
+    <section class="panel" data-route="config">
+      <div class="panel__head">
+        <h2>Configurações</h2>
+        <p>Logo, cores e WhatsApp do estúdio.</p>
+      </div>
+
+      <div class="grid2">
+        <div class="box">
+          <h3>Identidade</h3>
+          <div class="row">
+            <label class="field">
+              <span>Nome do Studio</span>
+              <input id="cfgStudioNome" />
+            </label>
+            <label class="field">
+              <span>Logo (URL da imagem)</span>
+              <input id="cfgLogoUrl" placeholder="https://..." />
+            </label>
+          </div>
+        </div>
+
+        <div class="box">
+          <h3>Cores</h3>
+          <div class="row">
+            <label class="field">
+              <span>Cor Primária</span>
+              <input id="cfgCorPrimaria" type="color" />
+            </label>
+            <label class="field">
+              <span>Cor Acento</span>
+              <input id="cfgCorAcento" type="color" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="box" style="margin-top:12px;">
+        <h3>WhatsApp do Studio (para relatório)</h3>
+        <label class="field">
+          <span>Seu número (somente dígitos com DDI/DDD) — Ex: 5517999999999</span>
+          <input id="cfgStudioWpp" placeholder="5517..." />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="btnSaveConfig">Salvar Config</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>Dados salvos no seu aparelho (localStorage). Use backup para não perder.</small>
+  </footer>
+
+  <!-- IMPORTANTE: firebase.js ANTES do app.js -->
+  <script type="module" src="./firebase.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

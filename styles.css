@@ -1,0 +1,322 @@
+:root{
+  --p:#7B2CBF;
+  --a:#F72585;
+  --txt:#1f2230;
+  --muted:#6b7280;
+  --soft:#F3E8FF;
+  --soft2:#FFE3F2;
+  --card:#ffffff;
+  --line:#e6e7eb;
+  --edit:#CFE8FF;
+  --radius:18px;
+}
+
+*{ box-sizing:border-box; }
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background:#f6f7fb;
+  color:var(--txt);
+}
+
+/* HEADER */
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  background:linear-gradient(90deg, var(--p), #5a189a);
+  color:#fff;
+  flex-wrap:wrap;
+
+  position:sticky;
+  top:0;
+  z-index:50;
+}
+
+.brandRow{ display:flex; align-items:center; gap:12px; }
+
+/* ✅ LOGO: aparece por padrão, esconde só quando tiver isHidden */
+.logo{
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  object-fit:cover;
+  background:rgba(255,255,255,.25);
+  border:1px solid rgba(255,255,255,.25);
+  display:block;
+}
+.logo.isHidden{ display:none; }
+
+.brand__title{ font-weight:1000; font-size:18px; letter-spacing:.2px; }
+.brand__subtitle{ opacity:.9; font-size:12px; margin-top:2px; }
+
+.topbar__right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+/* TABS */
+.tabs{
+  display:flex;
+  gap:8px;
+  padding:10px 12px;
+  overflow:auto;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  position:sticky;
+  top:66px; /* ✅ abaixo do header sticky */
+  z-index:20;
+}
+.tab{
+  border:1px solid var(--line);
+  background:#fff;
+  padding:10px 12px;
+  border-radius:999px;
+  font-weight:900;
+  font-size:13px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.tab.active{
+  border-color:transparent;
+  background:linear-gradient(90deg, var(--a), var(--p));
+  color:#fff;
+}
+
+.wrap{ padding:14px; max-width:1250px; margin:0 auto; }
+.panel{ display:none; }
+.panel.active{ display:block; }
+
+.panel__head h2{ margin:8px 0 2px; font-size:20px; }
+.panel__head p{ margin:0 0 12px; color:var(--muted); }
+
+.cards{
+  display:grid;
+  grid-template-columns:repeat(12,1fr);
+  gap:10px;
+}
+.card{
+  grid-column:span 6;
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:0 6px 18px rgba(16,24,40,.06);
+}
+.card--accent{
+  border-color:transparent;
+  background:linear-gradient(135deg, var(--soft2), var(--soft));
+}
+.card__label{ font-weight:1000; font-size:12px; color:#3b2b5f; }
+.card__value{ font-weight:1100; font-size:22px; margin-top:8px; }
+
+.grid2{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+  margin-top:12px;
+}
+.box{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:0 6px 18px rgba(16,24,40,.06);
+}
+.box h3{ margin:0 0 10px; font-size:16px; }
+.hint{ color:var(--muted); display:block; margin-top:8px; }
+
+.actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:10px 0 12px;
+}
+
+.btn{
+  border:none;
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:1000;
+  cursor:pointer;
+  background:linear-gradient(90deg, var(--a), var(--p));
+  color:#fff;
+}
+.btn--ghost{
+  background:#fff;
+  color:var(--txt);
+  border:1px solid var(--line);
+}
+.fileBtn{ display:inline-flex; align-items:center; gap:8px; }
+
+.row{ display:flex; gap:12px; flex-wrap:wrap; }
+.field{ display:flex; flex-direction:column; gap:6px; min-width:240px; }
+.field span{ font-weight:1000; font-size:12px; color:#3b2b5f; }
+
+/* ✅ inputs normais brancos (mais limpo) */
+input, select, textarea{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:12px 10px;
+  font-weight:900;
+  background:#fff;
+  font-size:14px;
+  width:100%;
+}
+textarea{ resize:vertical; }
+
+/* TABELAS */
+.tableWrap{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:auto;
+  box-shadow:0 6px 18px rgba(16,24,40,.06);
+}
+.table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:1250px;
+}
+.table thead th{
+  position:sticky;
+  top:0;
+  background:#2B2D42;
+  color:#fff;
+  text-align:left;
+  padding:10px;
+  font-size:12px;
+  letter-spacing:.2px;
+}
+.table td{
+  border-top:1px solid var(--line);
+  padding:10px;
+  vertical-align:top;
+}
+
+/* ✅ inputs de tabela (mini) continuam com azul edit */
+.mini{
+  width:100%;
+  min-width:120px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+  background:var(--edit);
+  font-weight:1000;
+}
+.mini.read{ background:var(--soft); }
+.mini.money{ text-align:right; }
+
+.iconBtn{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:12px;
+  padding:8px 10px;
+  cursor:pointer;
+  font-weight:1100;
+}
+.iconRow{ display:flex; gap:8px; align-items:center; }
+
+.notice{
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid #ffb4b4;
+  background:#ffe7e7;
+  border-radius:12px;
+  font-weight:1000;
+}
+.danger{ background:#ffe7e7 !important; border-color:#ffb4b4 !important; }
+.ok{ background:#e7fff0 !important; border-color:#b4ffd0 !important; }
+
+.footer{
+  padding:16px;
+  text-align:center;
+  color:var(--muted);
+}
+
+pre{
+  white-space:pre-wrap;
+  margin:0;
+  font-family:inherit;
+  background:#f7f7fb;
+  padding:10px;
+  border-radius:12px;
+  border:1px solid #eee;
+}
+
+/* DESKTOP */
+@media (min-width: 900px){
+  .grid2{ grid-template-columns:1fr 1fr; }
+  .card{ grid-column:span 3; }
+  .wrap{ padding:18px; }
+}
+
+/* MOBILE */
+@media (max-width: 768px){
+  .topbar{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+  }
+
+  .topbar__right{
+    width:100%;
+    justify-content:flex-start;
+    gap:8px;
+  }
+
+  /* ✅ no header, botões não precisam ser 100% */
+  .topbar__right .btn{ width:auto; }
+
+  .brand__title{ font-size:16px; }
+  .brand__subtitle{ font-size:11px; }
+
+  .tabs{ padding:8px; gap:6px; top:118px; }
+  .tab{ padding:8px 12px; font-size:12px; }
+
+  .cards{ grid-template-columns:1fr; }
+  .card{ grid-column:span 12; }
+  .card__value{ font-size:20px; }
+
+  .wrap{ padding:10px; }
+
+  input, select, textarea{
+    font-size:14px;
+    padding:10px;
+  }
+  .field{ min-width:100%; }
+
+  .btn{
+    width:100%;
+    justify-content:center;
+  }
+  .actions{
+    flex-direction:column;
+    gap:8px;
+  }
+
+  .tableWrap{ overflow-x:auto; }
+  .table{ min-width:900px; }
+
+  .table thead th{
+    font-size:11px;
+    padding:8px;
+  }
+  .table td{ padding:8px; }
+
+  .mini{
+    min-width:110px;
+    font-size:13px;
+    padding:8px;
+  }
+
+  /* ✅ canvas com altura fixa pra não quebrar o draw do JS */
+  canvas{
+    width:100% !important;
+    height:180px !important;
+  }
+
+  .footer{
+    font-size:12px;
+    padding:12px;
+  }
+}
