@@ -1,8 +1,8 @@
-/* Studio Jaqueline Mendanha — Gestão Completa (SYNC PRO)
-   - Sincronização total: qualquer dado automático atualiza tudo no sistema
-   - Sem bug de digitação: evita re-render de tabelas enquanto digita
-   - REGRA DO ESTÚDIO (CORRIGIDO): "Realizado" => Recebido automático (valor do procedimento)
-   - Agenda cria/atualiza Atendimentos automaticamente (sem depender de rec > 0)
+/* Studio Jaqueline Mendanha — Gestão Completa (SYNC PRO / FIXED)
+   - Blindado contra tela branca (elementos ausentes não quebram)
+   - Sincronização total (derived + UI)
+   - Regra do estúdio: Realizado => Recebido = preço do procedimento (sempre)
+   - Agenda cria/remove Atendimentos automaticamente
 */
 
 const ROUTES = [
@@ -19,6 +19,32 @@ const ROUTES = [
 
 const KEY = "sjm_sync_pro_v1";
 
+/* =================== HELPERS SAFE =================== */
+const $ = (sel)=> document.querySelector(sel);
+const $$ = (sel)=> Array.from(document.querySelectorAll(sel));
+const byId = (id)=> document.getElementById(id);
+
+function safeText(id, text){
+  const el = byId(id);
+  if(el) el.textContent = text;
+}
+function safeValue(id, value){
+  const el = byId(id);
+  if(el) el.value = value;
+}
+function onClick(id, fn){
+  const el = byId(id);
+  if(el) el.onclick = fn;
+}
+function onChange(id, fn){
+  const el = byId(id);
+  if(el) el.addEventListener("change", fn);
+}
+function onInput(id, fn){
+  const el = byId(id);
+  if(el) el.addEventListener("input", fn);
+}
+
 const money = (n)=> (Number(n||0)).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 
 const num = (v)=> {
@@ -34,6 +60,18 @@ const num = (v)=> {
 const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(2,6);
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 
+function fmtBRDate(iso){
+  if(!iso) return "";
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function addDaysISO(iso, days){
+  const d = new Date(iso+"T00:00:00");
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+
+/* =================== STATE =================== */
 function defaultState(){
   return {
     settings: {
@@ -98,12 +136,54 @@ function sanitizeState(parsed){
   s.despesas = arr(s.despesas);
   s.wppQueue = arr(s.wppQueue);
 
-  // migração suave: garante campos novos da agenda
+  // migração: agenda
   s.agenda.forEach(a=>{
     if(a && typeof a==="object"){
       if(a.recebido === undefined) a.recebido = 0;
       if(a.atendId === undefined) a.atendId = "";
       if(a.status === undefined) a.status = "Agendado";
+      if(a.obs === undefined) a.obs = "";
+      if(a.hora === undefined) a.hora = "08:00";
+      if(a.data === undefined) a.data = todayISO();
+      if(a.cliente === undefined) a.cliente = "";
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Alongamento");
+    }
+  });
+
+  // migração: atendimentos
+  s.atendimentos.forEach(a=>{
+    if(a && typeof a==="object"){
+      if(a.data === undefined) a.data = todayISO();
+      if(a.cliente === undefined) a.cliente = "";
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Alongamento");
+      if(a.recebido === undefined) a.recebido = 0;
+      if(a.maoObra === undefined) a.maoObra = 0;
+      if(a.foto === undefined) a.foto = "";
+      if(a.fromAgendaId === undefined) a.fromAgendaId = "";
+      if(a.auto === undefined) a.auto = !!a.fromAgendaId;
+    }
+  });
+
+  // migração: materiais
+  s.materiais.forEach(m=>{
+    if(m && typeof m==="object"){
+      if(m.qtdTotal === undefined) m.qtdTotal = 0;
+      if(m.valorCompra === undefined) m.valorCompra = 0;
+      if(m.qtdCliente === undefined) m.qtdCliente = 0;
+      if(m.unidade === undefined) m.unidade = "ml";
+      if(m.custoUnit === undefined) m.custoUnit = 0;
+      if(m.custoCliente === undefined) m.custoCliente = 0;
+      if(m.rendimento === undefined) m.rendimento = 0;
+    }
+  });
+
+  // migração: despesas
+  s.despesas.forEach(d=>{
+    if(d && typeof d==="object"){
+      if(d.data === undefined) d.data = todayISO();
+      if(d.tipo === undefined) d.tipo = "Fixa";
+      if(d.valor === undefined) d.valor = 0;
+      if(d.desc === undefined) d.desc = "";
     }
   });
 
@@ -114,8 +194,7 @@ function load(){
   try{
     const raw = localStorage.getItem(KEY);
     if(!raw) return defaultState();
-    const parsed = JSON.parse(raw);
-    return sanitizeState(parsed);
+    return sanitizeState(JSON.parse(raw));
   }catch{
     return defaultState();
   }
@@ -123,29 +202,23 @@ function load(){
 
 let state = load();
 
-/* =================== CLOUD SYNC (Firebase Bridge) ===================
-   - Recebe estado remoto via window.__SJM_SET_STATE_FROM_CLOUD(remote)
-   - Envia estado local via window.__SJM_PUSH_TO_CLOUD(state)
-   - Debounce para não floodar Firestore
-   - Sem loop (firebase.js já tem ignoreNextPush)
-*/
+/* =================== CLOUD SYNC (Firebase Bridge) =================== */
 let cloudTimer = null;
-
 function scheduleCloudPush(){
   if(typeof window.__SJM_PUSH_TO_CLOUD !== "function") return;
-
   if(cloudTimer) clearTimeout(cloudTimer);
   cloudTimer = setTimeout(async ()=>{
     cloudTimer = null;
-    try{
-      await window.__SJM_PUSH_TO_CLOUD(state);
-    }catch(e){
-      console.error("Cloud push falhou:", e);
-    }
+    try{ await window.__SJM_PUSH_TO_CLOUD(state); }
+    catch(e){ console.error("Cloud push falhou:", e); }
   }, 350);
 }
 
-// Função chamada pelo firebase.js quando chegar atualização remota
+function saveSoft(){
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.warn("localStorage cheio?", e); }
+  scheduleCloudPush();
+}
+
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   state = sanitizeState(remoteState);
 
@@ -160,12 +233,7 @@ window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   scheduleSync();
 };
 
-function saveSoft(){
-  localStorage.setItem(KEY, JSON.stringify(state));
-  scheduleCloudPush();
-}
-
-/* ======= CONFIRM DELETE ======= */
+/* =================== CONFIRM DELETE =================== */
 function confirmDel(label="este item"){
   return confirm(`Tem certeza que deseja excluir ${label}?`);
 }
@@ -176,39 +244,53 @@ function applyTheme(){
   r.style.setProperty("--p", state.settings.corPrimaria || "#7B2CBF");
   r.style.setProperty("--a", state.settings.corAcento || "#F72585");
 
-  document.getElementById("studioTitle").textContent = state.settings.studioNome || "Studio Jaqueline Mendanha";
+  safeText("studioTitle", state.settings.studioNome || "Studio Jaqueline Mendanha");
 
-  const img = document.getElementById("logoImg");
-  const url = (state.settings.logoUrl||"").trim();
-  if(url){
-    img.src = url;
-    img.classList.remove("isHidden");
-  }else{
-    img.removeAttribute("src");
-    img.classList.add("isHidden");
+  const img = byId("logoImg");
+  if(img){
+    const url = (state.settings.logoUrl||"").trim();
+    if(url){
+      img.src = url;
+      img.classList.remove("isHidden");
+    }else{
+      img.removeAttribute("src");
+      img.classList.add("isHidden");
+    }
   }
 }
 applyTheme();
 
 /* =================== ROUTING =================== */
-const tabs = document.getElementById("tabs");
-tabs.innerHTML = ROUTES.map(r => `<button class="tab" data-tab="${r.id}">${r.label}</button>`).join("");
+(function initRouting(){
+  const tabs = byId("tabs");
+  if(!tabs) return;
 
-tabs.addEventListener("click", (e)=>{
-  const btn = e.target.closest(".tab");
-  if(!btn) return;
-  setRoute(btn.dataset.tab);
-});
+  tabs.innerHTML = ROUTES.map(r => `<button class="tab" data-tab="${r.id}">${r.label}</button>`).join("");
+
+  tabs.addEventListener("click", (e)=>{
+    const btn = e.target.closest(".tab");
+    if(!btn) return;
+    setRoute(btn.dataset.tab);
+  });
+
+  function setRoute(route){
+    $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab===route));
+    $$(".panel").forEach(p => p.classList.toggle("active", p.dataset.route===route));
+    history.replaceState({}, "", `#${route}`);
+  }
+
+  // expose
+  window.__SJM_SET_ROUTE = setRoute;
+
+  setRoute(location.hash.replace("#","") || "dashboard");
+})();
 
 function setRoute(route){
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab===route));
-  document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.dataset.route===route));
-  history.replaceState({}, "", `#${route}`);
+  if(typeof window.__SJM_SET_ROUTE === "function") window.__SJM_SET_ROUTE(route);
 }
-setRoute(location.hash.replace("#","") || "dashboard");
 
 /* =================== BACKUP =================== */
-document.getElementById("btnExport").addEventListener("click", ()=>{
+onClick("btnExport", ()=>{
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -220,15 +302,17 @@ document.getElementById("btnExport").addEventListener("click", ()=>{
   URL.revokeObjectURL(url);
 });
 
-document.getElementById("fileImport").addEventListener("change", async (e)=>{
+onChange("fileImport", async (e)=>{
   const file = e.target.files?.[0];
   if(!file) return;
   try{
-    const text = await file.text();
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(await file.text());
     state = sanitizeState(parsed);
 
     enforceAgendaRecebidoRules();
+    syncAgendaToAtendimentos();
+    state.materiais.forEach(calcularMaterial);
+    state.atendimentos.forEach(calcularAtendimento);
 
     saveSoft();
     applyTheme();
@@ -242,7 +326,7 @@ document.getElementById("fileImport").addEventListener("change", async (e)=>{
   }
 });
 
-/* =================== DOM HELPERS =================== */
+/* =================== DOM HELPERS (tables) =================== */
 function inputHTML({value="", type="text", cls="", readonly=false, options=null, step=null, inputmode=null}){
   const stepAttr = step ? ` step="${step}"` : "";
   const imAttr = inputmode ? ` inputmode="${inputmode}"` : "";
@@ -253,20 +337,9 @@ function inputHTML({value="", type="text", cls="", readonly=false, options=null,
   return `<input class="mini ${cls} ${readonly?"read":""}" type="${type}" value="${value ?? ""}" ${readonly?"readonly":""}${stepAttr}${imAttr} />`;
 }
 function getCell(tr, idx){ return tr.querySelectorAll("td")[idx]; }
-function getInp(td){ return td.querySelector("input,select"); }
+function getInp(td){ return td ? td.querySelector("input,select") : null; }
 
-function fmtBRDate(iso){
-  if(!iso) return "";
-  const [y,m,d] = iso.split("-");
-  return `${d}/${m}/${y}`;
-}
-function addDaysISO(iso, days){
-  const d = new Date(iso+"T00:00:00");
-  d.setDate(d.getDate()+days);
-  return d.toISOString().slice(0,10);
-}
-
-/* =================== DEBOUNCE UPDATES =================== */
+/* =================== DEBOUNCE SYNC =================== */
 let syncTimer = null;
 function scheduleSync(){
   if(syncTimer) clearTimeout(syncTimer);
@@ -276,7 +349,7 @@ function scheduleSync(){
   }, 120);
 }
 
-/* =================== CORE: LOOKUPS =================== */
+/* =================== CORE LOOKUPS =================== */
 function procPrice(nome){
   const p = state.procedimentos.find(x => x.nome === nome);
   return p ? num(p.preco) : 0;
@@ -290,7 +363,7 @@ function clientWpp(name){
   return c?.wpp || c?.tel || "";
 }
 
-/* =================== REGRA DO ESTÚDIO (CHAVE) ===================
+/* =================== REGRA DO ESTÚDIO ===================
    - Realizado => recebido = preço do procedimento (sempre)
    - Cancelado/Remarcado => recebido = 0
 */
@@ -331,15 +404,11 @@ function fillTpl(tpl, a){
     .replaceAll("{studio}", studio);
 }
 async function copyToClipboardSafe(text){
-  try{
-    await navigator.clipboard.writeText(text);
-    return true;
-  }catch{
-    return false;
-  }
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch{ return false; }
 }
 
-/* =================== MATERIAIS (CORRETO) =================== */
+/* =================== MATERIAIS =================== */
 function calcularMaterial(m){
   const qtdTotal = num(m.qtdTotal);
   const valorCompra = num(m.valorCompra);
@@ -364,11 +433,10 @@ function calcularAtendimento(a){
   a.lucro = num(a.recebido) - num(a.custoTotal);
 }
 
-/* =================== AGENDA -> ATENDIMENTOS (CORRIGIDO) =================== */
+/* =================== AGENDA -> ATENDIMENTOS =================== */
 function getAtendimentoByAgendaId(agendaId){
   return state.atendimentos.find(x => x.fromAgendaId === agendaId) || null;
 }
-
 function ensureAtendimentoFromAgenda(ag){
   let at = getAtendimentoByAgendaId(ag.id);
   if(!at){
@@ -391,17 +459,14 @@ function ensureAtendimentoFromAgenda(ag){
   }
   return at;
 }
-
 function removeAtendimentoFromAgenda(agendaId){
   const before = state.atendimentos.length;
   state.atendimentos = state.atendimentos.filter(x => x.fromAgendaId !== agendaId);
   return state.atendimentos.length !== before;
 }
-
 function syncAgendaToAtendimentos(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
-
     if(status === "Realizado"){
       ag.recebido = procPrice(ag.procedimento);
 
@@ -417,7 +482,7 @@ function syncAgendaToAtendimentos(){
   });
 }
 
-/* =================== DASH (RESUMO) =================== */
+/* =================== DASH =================== */
 function calcResumo(){
   const receita = state.atendimentos.reduce((s,a)=> s + num(a.recebido), 0);
   const custos  = state.atendimentos.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
@@ -441,7 +506,7 @@ function calcMonthlyRevenue(){
   return keys.map(k => ({ k, v: map.get(k) }));
 }
 
-/* ======= Charts (sem libs) ======= */
+/* ======= Charts (no libs) ======= */
 function drawBars(canvas, labels, values){
   if(!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -536,10 +601,10 @@ function renderAllHard(){
 }
 
 /* =================== AGENDA =================== */
-const tblAgendaBody = document.querySelector("#tblAgenda tbody");
-const agendaNotice = document.getElementById("agendaNotice");
+function getAgendaTbody(){ return $("#tblAgenda tbody"); }
+function getAgendaNotice(){ return byId("agendaNotice"); }
 
-document.getElementById("btnAddAgenda").onclick = ()=>{
+onClick("btnAddAgenda", ()=>{
   const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
   state.agenda.unshift({
     id:uid(),
@@ -555,19 +620,18 @@ document.getElementById("btnAddAgenda").onclick = ()=>{
   saveSoft();
   renderAgendaHard();
   scheduleSync();
-};
+});
 
-document.getElementById("btnClearAgenda").onclick = ()=>{
+onClick("btnClearAgenda", ()=>{
   if(state.agenda.length && !confirm("Tem certeza que deseja limpar a agenda inteira?")) return;
-
   state.agenda.forEach(a => removeAtendimentoFromAgenda(a.id));
   state.agenda = [];
   saveSoft();
   renderAgendaHard();
   scheduleSync();
-};
+});
 
-document.getElementById("btnReportToday").onclick = ()=> sendReportToday();
+onClick("btnReportToday", ()=> sendReportToday());
 
 function isConflict(i){
   const a = state.agenda[i];
@@ -578,8 +642,14 @@ function isConflict(i){
 }
 
 function renderAgendaHard(){
-  agendaNotice.hidden = true;
-  agendaNotice.textContent = "";
+  const tblAgendaBody = getAgendaTbody();
+  const agendaNotice = getAgendaNotice();
+  if(!tblAgendaBody) return;
+
+  if(agendaNotice){
+    agendaNotice.hidden = true;
+    agendaNotice.textContent = "";
+  }
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
   const statuses = ["Agendado","Realizado","Cancelado","Remarcado"];
@@ -633,106 +703,106 @@ function renderAgendaHard(){
     const updateConflictUI = ()=>{
       const conflict = isConflict(idx);
       tr.classList.toggle("danger", conflict);
-      if(conflict){
-        agendaNotice.hidden = false;
-        agendaNotice.textContent = "⚠️ Horário já ocupado no mesmo dia. Ajuste hora/data ou cancele um deles.";
+      if(agendaNotice){
+        if(conflict){
+          agendaNotice.hidden = false;
+          agendaNotice.textContent = "⚠️ Horário já ocupado no mesmo dia. Ajuste hora/data ou cancele um deles.";
+        }else{
+          agendaNotice.hidden = true;
+          agendaNotice.textContent = "";
+        }
       }
     };
 
-    getInp(tdData).addEventListener("change", ()=>{
+    getInp(tdData)?.addEventListener("change", ()=>{
       a.data = getInp(tdData).value;
-      saveSoft(); updateConflictUI();
-      scheduleSync();
+      saveSoft(); updateConflictUI(); scheduleSync();
     });
-    getInp(tdHora).addEventListener("change", ()=>{
+    getInp(tdHora)?.addEventListener("change", ()=>{
       a.hora = getInp(tdHora).value;
-      saveSoft(); updateConflictUI();
-      scheduleSync();
+      saveSoft(); updateConflictUI(); scheduleSync();
     });
 
-    getInp(tdCli).addEventListener("input", ()=>{
+    getInp(tdCli)?.addEventListener("input", ()=>{
       a.cliente = getInp(tdCli).value;
-      inpWpp.value = clientWpp(a.cliente);
-      saveSoft();
-      scheduleSync();
+      if(inpWpp) inpWpp.value = clientWpp(a.cliente);
+      saveSoft(); scheduleSync();
     });
 
-    getInp(tdProc).addEventListener("change", ()=>{
+    getInp(tdProc)?.addEventListener("change", ()=>{
       a.procedimento = getInp(tdProc).value;
       const preco = procPrice(a.procedimento);
-
-      inpVal.value = preco.toFixed(2);
+      if(inpVal) inpVal.value = preco.toFixed(2);
 
       if((a.status||"Agendado") === "Realizado"){
         a.recebido = preco;
-        inpRec.value = preco.toFixed(2);
+        if(inpRec) inpRec.value = preco.toFixed(2);
       }
-
-      saveSoft();
-      scheduleSync();
+      saveSoft(); scheduleSync();
     });
 
-    getInp(tdSta).addEventListener("change", ()=>{
+    getInp(tdSta)?.addEventListener("change", ()=>{
       a.status = getInp(tdSta).value;
 
       if(a.status === "Realizado"){
         a.recebido = procPrice(a.procedimento);
-        inpRec.value = num(a.recebido).toFixed(2);
+        if(inpRec) inpRec.value = num(a.recebido).toFixed(2);
       }else if(a.status === "Cancelado" || a.status === "Remarcado"){
         a.recebido = 0;
-        inpRec.value = "0.00";
+        if(inpRec) inpRec.value = "0.00";
       }
 
-      saveSoft(); updateConflictUI();
-      scheduleSync();
+      saveSoft(); updateConflictUI(); scheduleSync();
     });
 
-    inpRec.addEventListener("input", ()=>{
+    inpRec?.addEventListener("input", ()=>{
       a.recebido = num(inpRec.value);
 
+      // trava a regra
       if((a.status||"Agendado") === "Realizado"){
         a.recebido = procPrice(a.procedimento);
         inpRec.value = num(a.recebido).toFixed(2);
       }
 
-      saveSoft();
-      scheduleSync();
+      saveSoft(); scheduleSync();
     });
 
-    getInp(tdObs).addEventListener("input", ()=>{
+    getInp(tdObs)?.addEventListener("input", ()=>{
       a.obs = getInp(tdObs).value;
       saveSoft();
     });
 
-    tr.querySelector("[data-conf]").onclick = ()=>{
+    tr.querySelector("[data-conf]")?.addEventListener("click", ()=>{
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplConfirmacao, a);
       window.open(waLink(phone, txt), "_blank");
-    };
-    tr.querySelector("[data-lem]").onclick = ()=>{
+    });
+
+    tr.querySelector("[data-lem]")?.addEventListener("click", ()=>{
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplLembrete, a);
       window.open(waLink(phone, txt), "_blank");
-    };
+    });
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este agendamento")) return;
-
       removeAtendimentoFromAgenda(a.id);
-
       state.agenda.splice(idx,1);
       saveSoft();
       renderAgendaHard();
       scheduleSync();
-    };
+    });
 
     updateConflictUI();
   });
 }
 
 function updateAgendaAutoCells(){
+  const tblAgendaBody = getAgendaTbody();
+  if(!tblAgendaBody) return;
+
   const rows = tblAgendaBody.querySelectorAll("tr");
   rows.forEach((tr)=>{
     const id = tr.dataset.id;
@@ -756,14 +826,14 @@ function updateAgendaAutoCells(){
 }
 
 /* =================== PROCEDIMENTOS =================== */
-const tblProcBody = document.querySelector("#tblProc tbody");
-document.getElementById("btnAddProc").onclick = ()=>{
+const tblProcBody = $("#tblProc tbody");
+onClick("btnAddProc", ()=>{
   state.procedimentos.push({ id: uid(), nome:"", preco:0, reajuste:"" });
   saveSoft();
   renderProcedimentos();
   scheduleSync();
-};
-document.getElementById("btnResetProc").onclick = ()=>{
+});
+onClick("btnResetProc", ()=>{
   if(!confirm("Restaurar procedimentos padrão? Isso remove os seus atuais.")) return;
   state.procedimentos = defaultState().procedimentos;
   saveSoft();
@@ -771,9 +841,11 @@ document.getElementById("btnResetProc").onclick = ()=>{
   renderAgendaHard();
   renderAtendimentosHard();
   scheduleSync();
-};
+});
 
 function renderProcedimentos(){
+  if(!tblProcBody) return;
+
   tblProcBody.innerHTML = state.procedimentos.map(p=>`
     <tr data-id="${p.id}">
       <td>${inputHTML({value:p.nome})}</td>
@@ -796,19 +868,19 @@ function renderProcedimentos(){
       scheduleSync();
     });
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este procedimento")) return;
       state.procedimentos = state.procedimentos.filter(x=>x.id!==id);
       saveSoft();
       renderProcedimentos();
       scheduleSync();
-    };
+    });
   });
 }
 
 /* =================== CLIENTES =================== */
-const tblCliBody = document.querySelector("#tblCli tbody");
-document.getElementById("btnAddCliente").onclick = ()=>{
+const tblCliBody = $("#tblCli tbody");
+onClick("btnAddCliente", ()=>{
   state.clientes.unshift({
     id:uid(), nome:"", wpp:"", tel:"", nasc:"",
     alergia:"N", quais:"", gestante:"N", saude:"", meds:"", obs:""
@@ -816,9 +888,11 @@ document.getElementById("btnAddCliente").onclick = ()=>{
   saveSoft();
   renderClientes();
   scheduleSync();
-};
+});
 
 function renderClientes(){
+  if(!tblCliBody) return;
+
   const sn = ["S","N"];
   tblCliBody.innerHTML = state.clientes.map(c=>`
     <tr data-id="${c.id}">
@@ -856,19 +930,19 @@ function renderClientes(){
       scheduleSync();
     });
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("esta cliente")) return;
       state.clientes = state.clientes.filter(x=>x.id!==id);
       saveSoft();
       renderClientes();
       scheduleSync();
-    };
+    });
   });
 }
 
 /* =================== MATERIAIS =================== */
-const tblMatBody = document.querySelector("#tblMat tbody");
-document.getElementById("btnAddMat").onclick = ()=>{
+const tblMatBody = $("#tblMat tbody");
+onClick("btnAddMat", ()=>{
   state.materiais.unshift({
     id:uid(), nome:"",
     qtdTotal:0, unidade:"ml", valorCompra:0,
@@ -877,9 +951,11 @@ document.getElementById("btnAddMat").onclick = ()=>{
   saveSoft();
   renderMateriaisHard();
   scheduleSync();
-};
+});
 
 function renderMateriaisHard(){
+  if(!tblMatBody) return;
+
   const unidades = ["ml","L","g","kg","un"];
   state.materiais.forEach(calcularMaterial);
 
@@ -915,9 +991,9 @@ function renderMateriaisHard(){
 
       calcularMaterial(m);
 
-      inpCU.value = (m.custoUnit||0).toFixed(6);
-      inpRen.value = (m.rendimento||0).toFixed(0);
-      inpCC.value = (m.custoCliente||0).toFixed(2);
+      if(inpCU) inpCU.value = (m.custoUnit||0).toFixed(6);
+      if(inpRen) inpRen.value = (m.rendimento||0).toFixed(0);
+      if(inpCC) inpCC.value = (m.custoCliente||0).toFixed(2);
 
       saveSoft();
       scheduleSync();
@@ -926,19 +1002,19 @@ function renderMateriaisHard(){
     tr.addEventListener("input", recompute);
     tr.addEventListener("change", recompute);
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este material")) return;
       state.materiais = state.materiais.filter(x=>x.id!==id);
       saveSoft();
       renderMateriaisHard();
       scheduleSync();
-    };
+    });
   });
 }
 
 /* =================== ATENDIMENTOS =================== */
-const tblAtendBody = document.querySelector("#tblAtend tbody");
-document.getElementById("btnAddAtendimento").onclick = ()=>{
+const tblAtendBody = $("#tblAtend tbody");
+onClick("btnAddAtendimento", ()=>{
   const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
   state.atendimentos.unshift({
     id:uid(), data:todayISO(),
@@ -956,7 +1032,7 @@ document.getElementById("btnAddAtendimento").onclick = ()=>{
   saveSoft();
   renderAtendimentosHard();
   scheduleSync();
-};
+});
 
 function fileToDataURL(file){
   return new Promise((resolve,reject)=>{
@@ -968,6 +1044,8 @@ function fileToDataURL(file){
 }
 
 function renderAtendimentosHard(){
+  if(!tblAtendBody) return;
+
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
   state.atendimentos.forEach(calcularAtendimento);
 
@@ -1026,64 +1104,66 @@ function renderAtendimentosHard(){
     const inpWpp = getInp(tdWpp);
     const inpVal = getInp(tdVal);
 
-    getInp(tdData).addEventListener("change", ()=>{
+    getInp(tdData)?.addEventListener("change", ()=>{
       a.data = getInp(tdData).value;
       saveSoft();
       scheduleSync();
     });
 
-    getInp(tdCli).addEventListener("input", ()=>{
+    getInp(tdCli)?.addEventListener("input", ()=>{
       a.cliente = getInp(tdCli).value;
-      inpWpp.value = clientWpp(a.cliente);
+      if(inpWpp) inpWpp.value = clientWpp(a.cliente);
       saveSoft();
       scheduleSync();
     });
 
-    getInp(tdProc).addEventListener("change", ()=>{
+    getInp(tdProc)?.addEventListener("change", ()=>{
       a.procedimento = getInp(tdProc).value;
-      inpVal.value = procPrice(a.procedimento).toFixed(2);
+      if(inpVal) inpVal.value = procPrice(a.procedimento).toFixed(2);
       saveSoft();
       scheduleSync();
     });
 
-    getInp(tdRec).addEventListener("input", ()=>{
+    getInp(tdRec)?.addEventListener("input", ()=>{
       a.recebido = num(getInp(tdRec).value);
       saveSoft();
       scheduleSync();
     });
 
-    getInp(tdMao).addEventListener("input", ()=>{
+    getInp(tdMao)?.addEventListener("input", ()=>{
       a.maoObra = num(getInp(tdMao).value);
       saveSoft();
       scheduleSync();
     });
 
     const photoInput = tr.querySelector("[data-photo]");
-    photoInput.onchange = async ()=>{
-      const file = photoInput.files?.[0];
-      if(!file) return;
-      a.foto = await fileToDataURL(file);
-      saveSoft();
-      alert("Foto salva ✅");
-      photoInput.value = "";
-    };
+    if(photoInput){
+      photoInput.onchange = async ()=>{
+        const file = photoInput.files?.[0];
+        if(!file) return;
+        a.foto = await fileToDataURL(file);
+        saveSoft();
+        alert("Foto salva ✅");
+        photoInput.value = "";
+      };
+    }
 
-    tr.querySelector("[data-openphoto]").onclick = ()=>{
+    tr.querySelector("[data-openphoto]")?.addEventListener("click", ()=>{
       if(!a.foto){ alert("Sem foto nesse atendimento."); return; }
       const w = window.open("", "_blank");
       w.document.write(`<img src="${a.foto}" style="max-width:100%;height:auto;"/>`);
-    };
+    });
 
-    tr.querySelector("[data-thx]").onclick = async ()=>{
+    tr.querySelector("[data-thx]")?.addEventListener("click", async ()=>{
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const fake = { data:a.data, hora:"", cliente:a.cliente, procedimento:a.procedimento };
       const txt = fillTpl(state.wpp.tplAgradecimento, fake);
       await copyToClipboardSafe(txt);
       window.open(waLink(phone, txt), "_blank");
-    };
+    });
 
-    tr.querySelector("[data-sendphoto]").onclick = async ()=>{
+    tr.querySelector("[data-sendphoto]")?.addEventListener("click", async ()=>{
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       if(!a.foto){ alert("Esse atendimento não tem foto. Clique no 📷 e adicione."); return; }
@@ -1103,19 +1183,21 @@ function renderAtendimentosHard(){
           <img src="${a.foto}" style="max-width:100%;height:auto;border-radius:12px;border:1px solid #eee"/>
         </div>
       `);
-    };
+    });
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este atendimento")) return;
       state.atendimentos = state.atendimentos.filter(x=>x.id!==id);
       saveSoft();
       renderAtendimentosHard();
       scheduleSync();
-    };
+    });
   });
 }
 
 function updateAtendimentosAutoCells(){
+  if(!tblAtendBody) return;
+
   const rows = tblAtendBody.querySelectorAll("tr");
   rows.forEach((tr)=>{
     const id = tr.dataset.id;
@@ -1143,15 +1225,17 @@ function updateAtendimentosAutoCells(){
 }
 
 /* =================== DESPESAS =================== */
-const tblDespBody = document.querySelector("#tblDesp tbody");
-document.getElementById("btnAddDespesa").onclick = ()=>{
+const tblDespBody = $("#tblDesp tbody");
+onClick("btnAddDespesa", ()=>{
   state.despesas.unshift({ id:uid(), data:todayISO(), tipo:"Fixa", valor:0, desc:"" });
   saveSoft();
   renderDespesas();
   scheduleSync();
-};
+});
 
 function renderDespesas(){
+  if(!tblDespBody) return;
+
   const tipos = ["Fixa","Variável"];
   tblDespBody.innerHTML = state.despesas.map(d=>`
     <tr data-id="${d.id}">
@@ -1177,13 +1261,13 @@ function renderDespesas(){
       scheduleSync();
     });
 
-    tr.querySelector("[data-del]").onclick = ()=>{
+    tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("esta despesa")) return;
       state.despesas = state.despesas.filter(x=>x.id!==id);
       saveSoft();
       renderDespesas();
       scheduleSync();
-    };
+    });
   });
 }
 
@@ -1191,15 +1275,17 @@ function renderDespesas(){
 function updateDashboardKPIs(){
   const { receita, custos, despesas, lucro } = calcResumo();
 
-  document.getElementById("kpiReceita").textContent = money(receita);
-  document.getElementById("kpiCustos").textContent = money(custos);
-  document.getElementById("kpiDespesas").textContent = money(despesas);
-  document.getElementById("kpiLucro").textContent = money(lucro);
+  safeText("kpiReceita", money(receita));
+  safeText("kpiCustos", money(custos));
+  safeText("kpiDespesas", money(despesas));
+  safeText("kpiLucro", money(lucro));
 
-  drawBars(document.getElementById("chartBars"), ["Receita","Lucro","Despesas"], [receita, lucro, despesas]);
+  const bars = byId("chartBars");
+  drawBars(bars, ["Receita","Lucro","Despesas"], [receita, lucro, despesas]);
 
+  const line = byId("chartLine");
   const monthly = calcMonthlyRevenue();
-  drawLine(document.getElementById("chartLine"), monthly.length ? monthly : [{k:"-",v:0},{k:"-",v:0}]);
+  drawLine(line, monthly.length ? monthly : [{k:"-",v:0},{k:"-",v:0}]);
 }
 function renderDashboard(){ updateDashboardKPIs(); }
 
@@ -1233,13 +1319,15 @@ function sendReportToday(){
 }
 
 function renderWppQueue(){
-  const box = document.getElementById("wppQueue");
+  const box = byId("wppQueue");
   if(!box) return;
+
   const q = state.wppQueue || [];
   if(!q.length){
     box.innerHTML = `<div class="hint">Sem mensagens na fila.</div>`;
     return;
   }
+
   box.innerHTML = q.map((m,i)=>`
     <div style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eee;">
       <div style="flex:1;">
@@ -1278,33 +1366,33 @@ function renderWppQueue(){
 }
 
 function bindWppUI(){
-  const hL = document.getElementById("wppHoraLembrete");
-  const hR = document.getElementById("wppHoraRelatorio");
-  const tC = document.getElementById("tplConfirmacao");
-  const tL = document.getElementById("tplLembrete");
-  const tA = document.getElementById("tplAgradecimento");
-  const tRel = document.getElementById("tplRelatorio");
+  const hL = byId("wppHoraLembrete");
+  const hR = byId("wppHoraRelatorio");
+  const tC = byId("tplConfirmacao");
+  const tL = byId("tplLembrete");
+  const tA = byId("tplAgradecimento");
+  const tRel = byId("tplRelatorio");
 
-  hL.value = state.wpp.horaLembrete || "09:00";
-  hR.value = state.wpp.horaRelatorio || "20:00";
-  tC.value = state.wpp.tplConfirmacao || "";
-  tL.value = state.wpp.tplLembrete || "";
-  tA.value = state.wpp.tplAgradecimento || "";
-  tRel.value = state.wpp.tplRelatorio || "";
+  if(hL) hL.value = state.wpp.horaLembrete || "09:00";
+  if(hR) hR.value = state.wpp.horaRelatorio || "20:00";
+  if(tC) tC.value = state.wpp.tplConfirmacao || "";
+  if(tL) tL.value = state.wpp.tplLembrete || "";
+  if(tA) tA.value = state.wpp.tplAgradecimento || "";
+  if(tRel) tRel.value = state.wpp.tplRelatorio || "";
 
-  document.getElementById("btnSaveWpp").onclick = ()=>{
-    state.wpp.horaLembrete = hL.value || "09:00";
-    state.wpp.horaRelatorio = hR.value || "20:00";
-    state.wpp.tplConfirmacao = tC.value;
-    state.wpp.tplLembrete = tL.value;
-    state.wpp.tplAgradecimento = tA.value;
-    state.wpp.tplRelatorio = tRel.value;
+  onClick("btnSaveWpp", ()=>{
+    state.wpp.horaLembrete = hL?.value || "09:00";
+    state.wpp.horaRelatorio = hR?.value || "20:00";
+    state.wpp.tplConfirmacao = tC?.value ?? state.wpp.tplConfirmacao;
+    state.wpp.tplLembrete = tL?.value ?? state.wpp.tplLembrete;
+    state.wpp.tplAgradecimento = tA?.value ?? state.wpp.tplAgradecimento;
+    state.wpp.tplRelatorio = tRel?.value ?? state.wpp.tplRelatorio;
     saveSoft();
     alert("WhatsApp salvo ✅");
     renderWppQueue();
-  };
+  });
 
-  document.getElementById("btnQueueTomorrow").onclick = ()=>{
+  onClick("btnQueueTomorrow", ()=>{
     const tomorrow = addDaysISO(todayISO(), 1);
     const itens = state.agenda
       .filter(a => a.data === tomorrow && (a.status||"Agendado") !== "Cancelado")
@@ -1321,52 +1409,58 @@ function bindWppUI(){
     saveSoft();
     setRoute("whatsapp");
     renderWppQueue();
-  };
+  });
 
-  document.getElementById("btnSendReport").onclick = ()=> sendReportToday();
+  onClick("btnSendReport", ()=> sendReportToday());
 }
 
 /* =================== CONFIG =================== */
 function bindConfigUI(){
-  const elNome = document.getElementById("cfgStudioNome");
-  const elLogo = document.getElementById("cfgLogoUrl");
-  const elP = document.getElementById("cfgCorPrimaria");
-  const elA = document.getElementById("cfgCorAcento");
-  const elW = document.getElementById("cfgStudioWpp");
+  const elNome = byId("cfgStudioNome");
+  const elLogo = byId("cfgLogoUrl");
+  const elP = byId("cfgCorPrimaria");
+  const elA = byId("cfgCorAcento");
+  const elW = byId("cfgStudioWpp");
 
-  elNome.value = state.settings.studioNome || "Studio Jaqueline Mendanha";
-  elLogo.value = state.settings.logoUrl || "";
-  elP.value = state.settings.corPrimaria || "#7B2CBF";
-  elA.value = state.settings.corAcento || "#F72585";
-  elW.value = state.settings.studioWpp || "";
+  if(elNome) elNome.value = state.settings.studioNome || "Studio Jaqueline Mendanha";
+  if(elLogo) elLogo.value = state.settings.logoUrl || "";
+  if(elP) elP.value = state.settings.corPrimaria || "#7B2CBF";
+  if(elA) elA.value = state.settings.corAcento || "#F72585";
+  if(elW) elW.value = state.settings.studioWpp || "";
 
-  document.getElementById("btnSaveConfig").onclick = ()=>{
-    state.settings.studioNome = elNome.value.trim() || "Studio Jaqueline Mendanha";
-    state.settings.logoUrl = elLogo.value.trim();
-    state.settings.corPrimaria = elP.value;
-    state.settings.corAcento = elA.value;
-    state.settings.studioWpp = elW.value.trim();
+  onClick("btnSaveConfig", ()=>{
+    state.settings.studioNome = elNome?.value.trim() || "Studio Jaqueline Mendanha";
+    state.settings.logoUrl = elLogo?.value.trim() || "";
+    state.settings.corPrimaria = elP?.value || "#7B2CBF";
+    state.settings.corAcento = elA?.value || "#F72585";
+    state.settings.studioWpp = elW?.value.trim() || "";
     saveSoft();
     applyTheme();
     alert("Config salva ✅");
     scheduleSync();
-  };
+  });
 }
 
 /* =================== BOOT =================== */
-renderProcedimentos();
-renderClientes();
-renderAgendaHard();
-renderMateriaisHard();
-renderAtendimentosHard();
-renderDespesas();
-bindWppUI();
-bindConfigUI();
-renderWppQueue();
-renderDashboard();
-scheduleSync();
+function boot(){
+  try{
+    // garante consistência
+    enforceAgendaRecebidoRules();
+    syncAgendaToAtendimentos();
+    state.materiais.forEach(calcularMaterial);
+    state.atendimentos.forEach(calcularAtendimento);
 
-/* ======= PWA: service worker ======= */
+    // render
+    renderAllHard();
+    scheduleSync();
+  }catch(e){
+    console.error("BOOT ERROR:", e);
+    alert("Erro ao iniciar o app. Abra o console (F12) e me mande o erro.");
+  }
+}
+boot();
+
+/* =================== PWA: service worker =================== */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
