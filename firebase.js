@@ -19,7 +19,6 @@ const firebaseConfig = {
   storageBucket: "SEU_STORAGE_BUCKET",
   messagingSenderId: "SEU_SENDER_ID",
   appId: "SEU_APP_ID",
-  // measurementId é opcional
 };
 
 const app = initializeApp(firebaseConfig);
@@ -46,12 +45,31 @@ async function login(){
 /** evita re-push quando a mudança veio da nuvem */
 let ignoreNextPush = false;
 
+/** controla quando é seguro enviar (cloud-first) */
+let readyForPush = false;
+
+/** existe estado remoto real? (se existir, nunca vamos sobrescrever com o local no boot) */
+let hadRemoteState = false;
+
+/** guarda mudanças locais feitas antes da nuvem responder */
+let pendingState = null;
+
 /** evita re-aplicar o mesmo estado sem necessidade */
 let lastRemoteHash = "";
 
 function hashState(obj){
   try { return JSON.stringify(obj); }
   catch { return String(Date.now()); }
+}
+
+async function push(uid, state){
+  lastRemoteHash = hashState(state);
+
+  await setDoc(
+    userDoc(uid),
+    { state, updatedAt: Date.now() },
+    { merge:true }
+  );
 }
 
 function subscribe(uid){
@@ -66,28 +84,37 @@ function subscribe(uid){
     }
 
     const remote = snap.data()?.state;
-    if(!remote) return;
 
-    const h = hashState(remote);
-    if(h === lastRemoteHash) return;
-    lastRemoteHash = h;
+    // Se veio algo válido da nuvem, aplica
+    if(remote){
+      hadRemoteState = true;
 
-    ignoreNextPush = true;
+      const h = hashState(remote);
+      if(h !== lastRemoteHash){
+        lastRemoteHash = h;
+        ignoreNextPush = true;
 
-    if (typeof window.__SJM_SET_STATE_FROM_CLOUD === "function") {
-      window.__SJM_SET_STATE_FROM_CLOUD(remote);
+        if (typeof window.__SJM_SET_STATE_FROM_CLOUD === "function") {
+          window.__SJM_SET_STATE_FROM_CLOUD(remote);
+        }
+      }
+    }
+
+    // ✅ Libera push somente depois do primeiro snapshot
+    readyForPush = true;
+    window.__SJM_CLOUD_READY = true;
+
+    // ✅ Se não havia estado remoto e o usuário mexeu antes da nuvem responder, sobe UMA vez
+    if(!hadRemoteState && pendingState){
+      const toSeed = pendingState;
+      pendingState = null;
+      try{
+        await push(uid, toSeed);
+      }catch(e){
+        console.error("Erro ao semear nuvem:", e);
+      }
     }
   });
-}
-
-async function push(uid, state){
-  lastRemoteHash = hashState(state);
-
-  await setDoc(
-    userDoc(uid),
-    { state, updatedAt: Date.now() },
-    { merge:true }
-  );
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -98,9 +125,18 @@ onAuthStateChanged(auth, async (user) => {
 
   subscribe(user.uid);
 
+  window.__SJM_CLOUD_READY = false;
+
   window.__SJM_PUSH_TO_CLOUD = async (state) => {
+    // se veio da nuvem, não reenvia
     if(ignoreNextPush){
       ignoreNextPush = false;
+      return;
+    }
+
+    // ainda não está pronto? só guarda (não pisa na nuvem)
+    if(!readyForPush){
+      pendingState = state;
       return;
     }
 
