@@ -201,18 +201,26 @@ function load(){
 }
 
 let state = load();
+// ✅ Flag para saber se a nuvem já respondeu ao menos 1 vez
+window.__SJM_CLOUD_READY = window.__SJM_CLOUD_READY || false;
 
 /* =================== CLOUD SYNC (Firebase Bridge) =================== */
 let cloudTimer = null;
 function scheduleCloudPush(){
   if(typeof window.__SJM_PUSH_TO_CLOUD !== "function") return;
+
   if(cloudTimer) clearTimeout(cloudTimer);
   cloudTimer = setTimeout(async ()=>{
     cloudTimer = null;
-    try{ await window.__SJM_PUSH_TO_CLOUD(state); }
-    catch(e){ console.error("Cloud push falhou:", e); }
+    try{
+      // ✅ se a nuvem ainda não respondeu, o firebase.js vai segurar em pendingState
+      await window.__SJM_PUSH_TO_CLOUD(state);
+    }catch(e){
+      console.error("Cloud push falhou:", e);
+    }
   }, 350);
 }
+
 
 function saveSoft(){
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.warn("localStorage cheio?", e); }
