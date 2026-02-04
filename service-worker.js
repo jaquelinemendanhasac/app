@@ -1,8 +1,9 @@
-// service-worker.js (SJM FIX - GitHub Pages friendly)
+// service-worker.js (SJM FIX - GitHub Pages friendly / HARD REFRESH)
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v10"; // <-- MUDE AQUI a cada deploy (v9, v10...)
+const CACHE_VERSION = "v10"; // <-- MUDE AQUI a cada deploy (v11, v12...)
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
+// ✅ Cache-bust para forçar baixar arquivo novo do servidor
 const ASSETS = [
   "./",
   "./index.html",
@@ -20,9 +21,9 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
 
-    // Força baixar do servidor (evita pegar arquivo velho do HTTP cache)
+    // ✅ Força baixar do servidor (e não do cache HTTP)
     await cache.addAll(
-      ASSETS.map((u) => new Request(u, { cache: "reload" }))
+      ASSETS.map((u) => new Request(`${u}?v=${CACHE_VERSION}`, { cache: "no-store" }))
     );
 
     await self.skipWaiting();
@@ -31,7 +32,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    // Remove qualquer cache antigo do app (mesmo se nome mudou)
+    // ✅ Remove caches antigos
     const keys = await caches.keys();
     await Promise.all(
       keys.map((k) => (k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME) ? caches.delete(k) : null)
@@ -47,7 +48,7 @@ function isSameOrigin(url) {
 
 function isAssetPath(pathname) {
   return (
-    pathname.endsWith("/") ||
+    pathname === "/" ||
     pathname.endsWith("/index.html") ||
     pathname.endsWith("/styles.css") ||
     pathname.endsWith("/app.js") ||
@@ -57,48 +58,42 @@ function isAssetPath(pathname) {
   );
 }
 
-// Stale-While-Revalidate (rápido + atualiza em background)
+// ✅ Stale-While-Revalidate
 async function staleWhileRevalidate(req) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(req);
 
-  const fetchPromise = fetch(req).then((res) => {
-    // Só cacheia se veio OK
-    if (res && res.status === 200) cache.put(req, res.clone());
-    return res;
-  }).catch(() => null);
+  const fetchPromise = fetch(req, { cache: "no-store" })
+    .then((res) => {
+      if (res && res.status === 200) cache.put(req, res.clone());
+      return res;
+    })
+    .catch(() => null);
 
-  // Se tem cache, devolve cache na hora e atualiza em background
   if (cached) {
     eventWaitUntilSafe(fetchPromise);
     return cached;
   }
 
-  // Se não tem cache, tenta rede
   const fresh = await fetchPromise;
   return fresh || new Response("Offline", { status: 503 });
 }
 
-// Cache-first com atualização em background (bom pro index.html)
-async function cacheFirstWithUpdate(req) {
+// ✅ Network-first para HTML (pega sempre o mais novo; cai no cache se offline)
+async function networkFirst(req) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(req);
 
-  const fetchPromise = fetch(req).then((res) => {
-    if (res && res.status === 200) cache.put(req, res.clone());
-    return res;
-  }).catch(() => null);
-
-  if (cached) {
-    eventWaitUntilSafe(fetchPromise);
-    return cached;
+  try {
+    const fresh = await fetch(req, { cache: "no-store" });
+    if (fresh && fresh.status === 200) cache.put(req, fresh.clone());
+    return fresh;
+  } catch {
+    const cached = await cache.match(req);
+    return cached || new Response("Offline", { status: 503 });
   }
-
-  const fresh = await fetchPromise;
-  return fresh || new Response("Offline", { status: 503 });
 }
 
-// Helper: evita erro se usado fora do handler
+// Helper
 function eventWaitUntilSafe(promise) {
   try { self.__lastEvent?.waitUntil?.(promise); } catch {}
 }
@@ -107,38 +102,23 @@ self.addEventListener("fetch", (event) => {
   self.__lastEvent = event;
 
   const req = event.request;
-
-  // Só GET
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-
-  // Não cachear outros domínios (Firebase CDN etc)
   if (!isSameOrigin(url)) return;
 
-  // Navegação (quando abre /app/ ou recarrega página) -> sempre index.html
+  // ✅ Navegação sempre tenta rede primeiro (pra não ficar preso em HTML velho)
   if (req.mode === "navigate") {
-    event.respondWith((async () => {
-      // tenta rede pra pegar HTML novo, mas se falhar, cai no cache
-      return cacheFirstWithUpdate("./index.html");
-    })());
+    event.respondWith(networkFirst(new Request("./index.html")));
     return;
   }
 
-  // Ícones e assets do app
+  // ✅ Assets do app
   if (isAssetPath(url.pathname)) {
-    // index.html: cache-first + update
-    if (url.pathname.endsWith("/") || url.pathname.endsWith("/index.html")) {
-      event.respondWith(cacheFirstWithUpdate(req));
-      return;
-    }
-
-    // css/js/manifest/icons: stale-while-revalidate
     event.respondWith(staleWhileRevalidate(req));
     return;
   }
 
-  // Demais: rede normal, sem cache forçado
+  // Demais
   event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
-
