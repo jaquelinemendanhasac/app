@@ -107,11 +107,13 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (!isSameOrigin(url)) return;
 
-  // ✅ Navegação sempre tenta rede primeiro (pra não ficar preso em HTML velho)
-  if (req.mode === "navigate") {
-    event.respondWith(networkFirst(new Request("./index.html")));
-    return;
-  }
+ if (req.mode === "navigate") {
+  event.respondWith((async () => {
+    return cacheFirstWithUpdate(new Request("./index.html", { cache: "reload" }));
+  })());
+  return;
+}
+
 
   // ✅ Assets do app
   if (isAssetPath(url.pathname)) {
@@ -122,4 +124,5 @@ self.addEventListener("fetch", (event) => {
   // Demais
   event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
+
 
