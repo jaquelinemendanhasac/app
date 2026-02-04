@@ -44,7 +44,8 @@ async function login(){
 function userDoc(uid){
   return doc(db, "users", uid, "app", "state");
 }
-
+let lastRemoteUpdatedAt = 0;
+let lastLocalPushedAt = 0;
 let ignoreNextPush = false;
 let readyForPush = false;
 let hadRemoteState = false;
@@ -57,18 +58,40 @@ function hashState(obj){
 }
 
 async function push(uid, state){
+  const now = Date.now();
+  lastLocalPushedAt = now;
   lastRemoteHash = hashState(state);
-  await setDoc(userDoc(uid), { state, updatedAt: Date.now() }, { merge:true });
+  await setDoc(userDoc(uid), { state, updatedAt: now }, { merge:true });
 }
+
 
 function subscribe(uid){
   onSnapshot(userDoc(uid), async (snap)=>{
+    // ✅ 1) Se for o próprio write local ainda pendente, não reaplica (evita re-render)
+    if (snap.metadata && snap.metadata.hasPendingWrites) return;
+
     if(!snap.exists()){
       await setDoc(userDoc(uid), { state:null, updatedAt:Date.now() }, { merge:true });
       return;
     }
 
-    const remote = snap.data()?.state;
+    const data = snap.data() || {};
+    const remote = data.state;
+    const remoteUpdatedAt = Number(data.updatedAt || 0);
+
+    // ✅ 2) Se o update é o mesmo (ou mais antigo) do que já vimos, ignora
+    if (remoteUpdatedAt && remoteUpdatedAt <= lastRemoteUpdatedAt) {
+      readyForPush = true;
+      return;
+    }
+    lastRemoteUpdatedAt = remoteUpdatedAt;
+
+    // ✅ 3) Se esse update foi gerado por ESTE aparelho (eco), ignora
+    if (remoteUpdatedAt && remoteUpdatedAt === lastLocalPushedAt) {
+      readyForPush = true;
+      return;
+    }
+
     if(remote){
       hadRemoteState = true;
       const h = hashState(remote);
@@ -88,6 +111,7 @@ function subscribe(uid){
     }
   });
 }
+
 
 onAuthStateChanged(auth, async (user)=>{
   if(!user){
