@@ -222,9 +222,20 @@ function scheduleCloudPush(){
 }
 
 
+let saveTimer = null;
+
 function saveSoft(){
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.warn("localStorage cheio?", e); }
-  scheduleCloudPush();
+
+  // ✅ NÃO chamar sync/render durante digitação
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    saveTimer = null;
+    scheduleCloudPush();   // manda pra nuvem
+    scheduleSync();        // recalcula + atualiza células automáticas
+  }, 250);
+}
+
 }
 
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
@@ -1481,4 +1492,5 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
   });
 }
+
 
