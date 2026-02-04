@@ -94,6 +94,8 @@ onAuthStateChanged(auth, async (user)=>{
     await login();
     return;
   }
+// ✅ pega o estado local atual (se existir) para semear a nuvem, se ela estiver vazia
+pendingState = window.__SJM_GET_STATE?.() || pendingState;
 
   subscribe(user.uid);
 
@@ -109,3 +111,4 @@ onAuthStateChanged(auth, async (user)=>{
     await push(user.uid, state);
   };
 });
+
