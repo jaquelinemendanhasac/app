@@ -1,6 +1,6 @@
 // service-worker.js (SJM FIX - GitHub Pages friendly)
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v9"; // <-- MUDE AQUI a cada deploy (v9, v10...)
+const CACHE_VERSION = "v10"; // <-- MUDE AQUI a cada deploy (v9, v10...)
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -141,3 +141,4 @@ self.addEventListener("fetch", (event) => {
   // Demais: rede normal, sem cache forçado
   event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
+
