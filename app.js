@@ -201,6 +201,10 @@ function load(){
 }
 
 let state = load();
+// ✅ usado pelo firebase.js para ler o estado atual local
+window.__SJM_GET_STATE = () => state;
+
+
 // ✅ Flag para saber se a nuvem já respondeu ao menos 1 vez
 window.__SJM_CLOUD_READY = window.__SJM_CLOUD_READY || false;
 
@@ -221,11 +225,19 @@ function scheduleCloudPush(){
   }, 350);
 }
 
+// ✅ Anti-loop: evita saveSoft -> scheduleSync -> syncDerivedAndUI -> saveSoft infinito
+let __SJM_IS_SYNCING = false;
 
 let saveTimer = null;
 
 function saveSoft(){
   try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.warn("localStorage cheio?", e); }
+
+  // ✅ Se estiver rodando syncDerivedAndUI, NÃO agenda outro scheduleSync (anti-loop)
+  if(__SJM_IS_SYNCING){
+    scheduleCloudPush(); // pode mandar pra nuvem
+    return;
+  }
 
   // ✅ NÃO chamar sync/render durante digitação
   if(saveTimer) clearTimeout(saveTimer);
@@ -236,7 +248,7 @@ function saveSoft(){
   }, 250);
 }
 
-}
+
 
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   state = sanitizeState(remoteState);
@@ -593,17 +605,23 @@ function drawLine(canvas, points){
 
 /* =================== SYNC ENGINE =================== */
 function syncDerivedAndUI(){
-  enforceAgendaRecebidoRules();
-  syncAgendaToAtendimentos();
-  state.materiais.forEach(calcularMaterial);
-  state.atendimentos.forEach(calcularAtendimento);
+  __SJM_IS_SYNCING = true;
+  try{
+    enforceAgendaRecebidoRules();
+    syncAgendaToAtendimentos();
+    state.materiais.forEach(calcularMaterial);
+    state.atendimentos.forEach(calcularAtendimento);
 
-  updateAgendaAutoCells();
-  updateAtendimentosAutoCells();
-  updateDashboardKPIs();
+    updateAgendaAutoCells();
+    updateAtendimentosAutoCells();
+    updateDashboardKPIs();
 
-  saveSoft();
+    saveSoft();
+  } finally {
+    __SJM_IS_SYNCING = false;
+  }
 }
+
 
 /* =================== RENDER HARD =================== */
 function renderAllHard(){
@@ -1492,5 +1510,3 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
   });
 }
-
-
