@@ -1467,6 +1467,13 @@ function boot(){
   }
 }
 boot();
+// ✅ se o firebase já estiver pronto, força um push inicial
+setTimeout(() => {
+  if (typeof window.__SJM_PUSH_TO_CLOUD === "function") {
+    try { window.__SJM_PUSH_TO_CLOUD(state); } catch {}
+  }
+}, 800);
+
 
 /* =================== PWA: service worker =================== */
 if ("serviceWorker" in navigator) {
@@ -1474,3 +1481,4 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
   });
 }
+
