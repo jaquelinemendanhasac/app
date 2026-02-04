@@ -111,4 +111,3 @@ pendingState = window.__SJM_GET_STATE?.() || pendingState;
     await push(user.uid, state);
   };
 });
-
