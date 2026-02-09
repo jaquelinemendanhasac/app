@@ -41,7 +41,7 @@
     <!-- DASHBOARD -->
     <section class="panel" data-route="dashboard">
       <div class="panel__head">
-        <h2>Dashboard</h2>
+        <h2>Dashboard</h2> 
         <p>Resumo do estúdio (atualiza automaticamente).</p>
       </div>
 
@@ -74,6 +74,45 @@
           <h3>Receita por mês</h3>
           <canvas id="chartLine" height="180"></canvas>
           <small class="hint">Crescimento mensal</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- ✅ CALENDÁRIO (ADICIONADO, SEM REMOVER NADA) -->
+    <section class="panel" data-route="calendario">
+      <div class="panel__head">
+        <h2>Calendário</h2>
+        <p>Visão mensal da agenda. Clique em um dia para ver os agendamentos.</p>
+      </div>
+
+      <div class="calTop">
+        <div class="calNav">
+          <button class="btn btn--ghost" id="calPrev">◀</button>
+          <div class="calTitle" id="calTitle">Mês/Ano</div>
+          <button class="btn btn--ghost" id="calNext">▶</button>
+        </div>
+
+        <div class="calActions">
+          <button class="btn btn--ghost" id="calToday">Hoje</button>
+          <button class="btn" id="calNew">+ Novo agendamento</button>
+        </div>
+      </div>
+
+      <div class="calWrap">
+        <div class="calBox">
+          <div class="calWeek">
+            <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+          </div>
+          <div class="calGrid" id="calGrid"></div>
+          <small class="hint">Badges: total de agendamentos do dia / valor recebido (Realizado). Conflitos ficam destacados.</small>
+        </div>
+
+        <div class="calSide">
+          <div class="box">
+            <h3 id="calDayTitle">Dia</h3>
+            <div id="calDayResumo" class="calResumo"></div>
+            <div id="calDayList"></div>
+          </div>
         </div>
       </div>
     </section>
