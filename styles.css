@@ -320,3 +320,192 @@ pre{
     padding:12px;
   }
 }
+
+/* =========================================================
+   ✅ CALENDÁRIO (ADICIONADO)
+   ========================================================= */
+.calTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin:10px 0 12px;
+}
+
+.calNav{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.calTitle{
+  font-weight:1100;
+  font-size:16px;
+  padding:8px 10px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:999px;
+  min-width:180px;
+  text-align:center;
+}
+
+.calActions{ display:flex; gap:10px; flex-wrap:wrap; }
+
+.calWrap{
+  display:grid;
+  grid-template-columns: 1.2fr .8fr;
+  gap:12px;
+  align-items:start;
+}
+.calBox{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:0 6px 18px rgba(16,24,40,.06);
+}
+
+.calWeek{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:8px;
+  margin-bottom:8px;
+  font-weight:1000;
+  color:#3b2b5f;
+  font-size:12px;
+  opacity:.9;
+}
+.calWeek > div{
+  padding:6px 8px;
+  border-radius:10px;
+  background:linear-gradient(135deg, var(--soft2), var(--soft));
+  border:1px solid #eee;
+  text-align:center;
+}
+
+.calGrid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:8px;
+}
+
+.calDay{
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:#fff;
+  min-height:86px;
+  padding:8px;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  box-shadow:0 4px 10px rgba(16,24,40,.05);
+}
+.calDay:hover{ transform:translateY(-1px); }
+.calDay.isOther{ opacity:.45; }
+.calDay.isToday{
+  border-color:transparent;
+  background:linear-gradient(135deg, var(--soft2), var(--soft));
+}
+.calDay.isSelected{
+  outline:3px solid rgba(247,37,133,.22);
+  border-color:rgba(247,37,133,.55);
+}
+
+.calDayTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.calNum{
+  font-weight:1100;
+  font-size:13px;
+}
+.calBadges{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.calBadge{
+  font-size:11px;
+  font-weight:1100;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+}
+.calBadge.ok{
+  background:#e7fff0;
+  border-color:#b4ffd0;
+}
+.calBadge.danger{
+  background:#ffe7e7;
+  border-color:#ffb4b4;
+}
+
+.calMiniList{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-top:2px;
+}
+.calMiniItem{
+  font-size:11px;
+  font-weight:1000;
+  color:#2B2D42;
+  opacity:.9;
+  border-left:3px solid rgba(123,44,191,.55);
+  padding-left:6px;
+}
+
+.calSide .box{ height:100%; }
+.calResumo{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:6px 0 10px;
+}
+.calChip{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-weight:1100;
+  font-size:12px;
+}
+
+.calListItem{
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:10px;
+}
+.calListItem.danger{
+  background:#ffe7e7;
+  border-color:#ffb4b4;
+}
+.calListHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.calListHead b{ font-size:13px; }
+.calListMeta{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:900;
+}
+
+@media (max-width: 900px){
+  .calWrap{ grid-template-columns: 1fr; }
+}
