@@ -64,7 +64,6 @@ async function push(uid, state){
   await setDoc(userDoc(uid), { state, updatedAt: now }, { merge:true });
 }
 
-
 function subscribe(uid){
   onSnapshot(userDoc(uid), async (snap)=>{
     // ✅ 1) Se for o próprio write local ainda pendente, não reaplica (evita re-render)
@@ -112,14 +111,13 @@ function subscribe(uid){
   });
 }
 
-
 onAuthStateChanged(auth, async (user)=>{
   if(!user){
     await login();
     return;
   }
-// ✅ pega o estado local atual (se existir) para semear a nuvem, se ela estiver vazia
-pendingState = window.__SJM_GET_STATE?.() || pendingState;
+  // ✅ pega o estado local atual (se existir) para semear a nuvem, se ela estiver vazia
+  pendingState = window.__SJM_GET_STATE?.() || pendingState;
 
   subscribe(user.uid);
 
