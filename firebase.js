@@ -8,7 +8,8 @@ import {
   getFirestore,
   doc,
   setDoc,
-  onSnapshot
+  onSnapshot,
+  enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 /* ✅ CONFIG REAL DO SEU PROJETO */
@@ -25,6 +26,14 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+/* (Opcional, mas ajuda MUITO no celular/PC offline e evita “sumir sync”) */
+try {
+  await enableIndexedDbPersistence(db);
+} catch (e) {
+  // Se der "failed-precondition" (múltiplas abas) ou "unimplemented" (browser antigo), tudo bem.
+  console.warn("persistence:", e.code || e.message);
+}
 
 /* ===== LOGIN ===== */
 async function login(){
@@ -44,11 +53,11 @@ async function login(){
 function userDoc(uid){
   return doc(db, "users", uid, "app", "state");
 }
+
 let lastRemoteUpdatedAt = 0;
 let lastLocalPushedAt = 0;
 let ignoreNextPush = false;
 let readyForPush = false;
-let hadRemoteState = false;
 let pendingState = null;
 let lastRemoteHash = "";
 
@@ -61,14 +70,20 @@ async function push(uid, state){
   const now = Date.now();
   lastLocalPushedAt = now;
   lastRemoteHash = hashState(state);
-  await setDoc(userDoc(uid), { state, updatedAt: now }, { merge:true });
+
+  await setDoc(
+    userDoc(uid),
+    { state, updatedAt: now },
+    { merge:true }
+  );
 }
 
 function subscribe(uid){
   onSnapshot(userDoc(uid), async (snap)=>{
-    // ✅ 1) Se for o próprio write local ainda pendente, não reaplica (evita re-render)
+    // ✅ 1) Se for write local pendente, não reaplica (evita “pisar” na digitação)
     if (snap.metadata && snap.metadata.hasPendingWrites) return;
 
+    // ✅ Se ainda não existe doc, cria
     if(!snap.exists()){
       await setDoc(userDoc(uid), { state:null, updatedAt:Date.now() }, { merge:true });
       return;
@@ -78,21 +93,21 @@ function subscribe(uid){
     const remote = data.state;
     const remoteUpdatedAt = Number(data.updatedAt || 0);
 
-    // ✅ 2) Se o update é o mesmo (ou mais antigo) do que já vimos, ignora
+    // ✅ 2) Se é update antigo, ignora
     if (remoteUpdatedAt && remoteUpdatedAt <= lastRemoteUpdatedAt) {
       readyForPush = true;
       return;
     }
     lastRemoteUpdatedAt = remoteUpdatedAt;
 
-    // ✅ 3) Se esse update foi gerado por ESTE aparelho (eco), ignora
+    // ✅ 3) Se foi eco do mesmo aparelho, ignora
     if (remoteUpdatedAt && remoteUpdatedAt === lastLocalPushedAt) {
       readyForPush = true;
       return;
     }
 
+    // ✅ 4) Aplica estado remoto se mudou (sem forçar re-render durante edição)
     if(remote){
-      hadRemoteState = true;
       const h = hashState(remote);
       if(h !== lastRemoteHash){
         lastRemoteHash = h;
@@ -103,7 +118,8 @@ function subscribe(uid){
 
     readyForPush = true;
 
-    if(!hadRemoteState && pendingState){
+    // ✅ 5) Se tinha estado local guardado e a nuvem estava “vazia”, empurra depois que ficar pronto
+    if(pendingState && (!remote || remote === null)){
       const seed = pendingState;
       pendingState = null;
       await push(uid, seed);
@@ -116,11 +132,13 @@ onAuthStateChanged(auth, async (user)=>{
     await login();
     return;
   }
-  // ✅ pega o estado local atual (se existir) para semear a nuvem, se ela estiver vazia
+
+  // pega o estado local atual (se existir) para semear a nuvem se precisar
   pendingState = window.__SJM_GET_STATE?.() || pendingState;
 
   subscribe(user.uid);
 
+  // ✅ função única pra app.js chamar quando quiser salvar
   window.__SJM_PUSH_TO_CLOUD = async (state)=>{
     if(ignoreNextPush){
       ignoreNextPush = false;
