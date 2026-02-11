@@ -12,7 +12,7 @@ import {
   enableIndexedDbPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-/* ✅ CONFIG REAL DO SEU PROJETO */
+/* CONFIG */
 const firebaseConfig = {
   apiKey: "AIzaSyCk7zPsYE5FRZ0K1Uuju1ASz3LZebz4oGU",
   authDomain: "app-studio-jaqueline-mendanha.firebaseapp.com",
@@ -22,54 +22,36 @@ const firebaseConfig = {
   appId: "1:851024289589:web:595cdaa7a44535220e367c",
 };
 
-/* INIT */
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-/* (Opcional, mas ajuda MUITO no celular/PC offline e evita “sumir sync”) */
+/* 🔥 IMPORTANTE */
 try {
   await enableIndexedDbPersistence(db);
-} catch (e) {
-  // Se der "failed-precondition" (múltiplas abas) ou "unimplemented" (browser antigo), tudo bem.
-  console.warn("persistence:", e.code || e.message);
-}
+} catch {}
 
-/* ===== LOGIN ===== */
-async function login(){
-  const email = (prompt("Email do sistema:") || "").trim();
-  const pass  = (prompt("Senha:") || "").trim();
-  if(!email || !pass) return;
-
-  try{
-    await signInWithEmailAndPassword(auth, email, pass);
-  }catch(e){
-    console.error(e);
-    alert("Falha no login: " + (e.code || e.message));
-  }
-}
-
-/* ===== CLOUD STATE ===== */
 function userDoc(uid){
   return doc(db, "users", uid, "app", "state");
 }
 
-let lastRemoteUpdatedAt = 0;
-let lastLocalPushedAt = 0;
-let ignoreNextPush = false;
-let readyForPush = false;
-let pendingState = null;
-let lastRemoteHash = "";
+let lastLocalWrite = 0;
+let ready = false;
+let applyingRemote = false;
 
-function hashState(obj){
-  try { return JSON.stringify(obj); }
-  catch { return String(Date.now()); }
+/* LOGIN */
+async function login(){
+  const email = prompt("Email do sistema:");
+  const pass  = prompt("Senha:");
+  if(!email || !pass) return;
+
+  await signInWithEmailAndPassword(auth, email.trim(), pass.trim());
 }
 
+/* PUSH */
 async function push(uid, state){
   const now = Date.now();
-  lastLocalPushedAt = now;
-  lastRemoteHash = hashState(state);
+  lastLocalWrite = now;
 
   await setDoc(
     userDoc(uid),
@@ -78,76 +60,46 @@ async function push(uid, state){
   );
 }
 
+/* SUBSCRIBE */
 function subscribe(uid){
-  onSnapshot(userDoc(uid), async (snap)=>{
-    // ✅ 1) Se for write local pendente, não reaplica (evita “pisar” na digitação)
-    if (snap.metadata && snap.metadata.hasPendingWrites) return;
 
-    // ✅ Se ainda não existe doc, cria
-    if(!snap.exists()){
-      await setDoc(userDoc(uid), { state:null, updatedAt:Date.now() }, { merge:true });
-      return;
-    }
+  onSnapshot(userDoc(uid), (snap)=>{
 
-    const data = snap.data() || {};
+    if(!snap.exists()) return;
+
+    const data = snap.data();
     const remote = data.state;
-    const remoteUpdatedAt = Number(data.updatedAt || 0);
+    const updatedAt = Number(data.updatedAt || 0);
 
-    // ✅ 2) Se é update antigo, ignora
-    if (remoteUpdatedAt && remoteUpdatedAt <= lastRemoteUpdatedAt) {
-      readyForPush = true;
-      return;
-    }
-    lastRemoteUpdatedAt = remoteUpdatedAt;
+    // 🔥 ignora eco do próprio aparelho
+    if(updatedAt === lastLocalWrite) return;
 
-    // ✅ 3) Se foi eco do mesmo aparelho, ignora
-    if (remoteUpdatedAt && remoteUpdatedAt === lastLocalPushedAt) {
-      readyForPush = true;
-      return;
-    }
+    if(!remote) return;
 
-    // ✅ 4) Aplica estado remoto se mudou (sem forçar re-render durante edição)
-    if(remote){
-      const h = hashState(remote);
-      if(h !== lastRemoteHash){
-        lastRemoteHash = h;
-        ignoreNextPush = true;
-        window.__SJM_SET_STATE_FROM_CLOUD?.(remote);
-      }
-    }
+    applyingRemote = true;
 
-    readyForPush = true;
+    window.__SJM_SET_STATE_FROM_CLOUD?.(remote);
 
-    // ✅ 5) Se tinha estado local guardado e a nuvem estava “vazia”, empurra depois que ficar pronto
-    if(pendingState && (!remote || remote === null)){
-      const seed = pendingState;
-      pendingState = null;
-      await push(uid, seed);
-    }
+    applyingRemote = false;
+
+    ready = true;
   });
+
 }
 
+/* AUTH */
 onAuthStateChanged(auth, async (user)=>{
   if(!user){
     await login();
     return;
   }
 
-  // pega o estado local atual (se existir) para semear a nuvem se precisar
-  pendingState = window.__SJM_GET_STATE?.() || pendingState;
-
   subscribe(user.uid);
 
-  // ✅ função única pra app.js chamar quando quiser salvar
   window.__SJM_PUSH_TO_CLOUD = async (state)=>{
-    if(ignoreNextPush){
-      ignoreNextPush = false;
-      return;
-    }
-    if(!readyForPush){
-      pendingState = state;
-      return;
-    }
+    if(!ready) return;
+    if(applyingRemote) return;
+
     await push(user.uid, state);
   };
 });
