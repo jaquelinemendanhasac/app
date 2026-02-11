@@ -1,6 +1,6 @@
 // service-worker.js (SJM FIX - GitHub Pages friendly / HARD REFRESH)
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v13"; // <-- MUDE AQUI a cada deploy (v11, v12...)
+const CACHE_VERSION = "v14"; // <-- MUDE AQUI a cada deploy (v11, v12...)
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 // ✅ Cache-bust para forçar baixar arquivo novo do servidor
@@ -146,3 +146,4 @@ self.addEventListener("fetch", (event) => {
   // Demais
   event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
+
