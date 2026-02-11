@@ -233,23 +233,18 @@ let __SJM_IS_SYNCING = false;
 
 let saveTimer = null;
 
-function saveSoft(){
-  try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.warn("localStorage cheio?", e); }
-
-  // ✅ Se estiver rodando syncDerivedAndUI, NÃO agenda outro scheduleSync (anti-loop)
-  if(__SJM_IS_SYNCING){
-    scheduleCloudPush(); // pode mandar pra nuvem
-    return;
+ function saveSoft(){
+  try{ 
+    localStorage.setItem(KEY, JSON.stringify(state)); 
+  }catch(e){ 
+    console.warn("localStorage cheio?", e); 
   }
 
-  // ✅ NÃO chamar sync/render durante digitação
-  if(saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(()=>{
-    saveTimer = null;
-    scheduleCloudPush();   // manda pra nuvem
-    scheduleSync();        // recalcula + atualiza células automáticas
-  }, 250);
+  if (typeof window.__SJM_PUSH_TO_CLOUD === "function") {
+    try { window.__SJM_PUSH_TO_CLOUD(state); } catch {}
+  }
 }
+
 
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   state = sanitizeState(remoteState);
