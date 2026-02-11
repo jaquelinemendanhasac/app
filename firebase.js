@@ -31,13 +31,47 @@ try {
   await enableIndexedDbPersistence(db);
 } catch {}
 
+/* ✅ DOCUMENTO ÚNICO (substitui o userDoc sem apagar a ideia de “doc”) */
 function userDoc(uid){
-  return doc(db, "users", uid, "app", "state");
+  // uid fica só para compatibilidade (não faz mais diferença)
+  return doc(db, "studio", "globalState");
 }
 
 let lastLocalWrite = 0;
 let ready = false;
 let applyingRemote = false;
+
+/* ✅ fila para não quebrar digitação */
+let queuedRemote = null;
+window.__SJM_IS_EDITING = window.__SJM_IS_EDITING || false;
+
+(function installEditGuards(){
+  document.addEventListener("focusin", (e)=>{
+    const t = e.target;
+    if(t && (t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT")){
+      window.__SJM_IS_EDITING = true;
+    }
+  }, true);
+
+  document.addEventListener("focusout", (e)=>{
+    const t = e.target;
+    if(t && (t.tagName==="INPUT" || t.tagName==="TEXTAREA" || t.tagName==="SELECT")){
+      setTimeout(()=>{
+        const a = document.activeElement;
+        const still = a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.tagName==="SELECT");
+        window.__SJM_IS_EDITING = !!still;
+
+        // aplica remoto pendente assim que parar de editar
+        if(!window.__SJM_IS_EDITING && queuedRemote){
+          const r = queuedRemote;
+          queuedRemote = null;
+          applyingRemote = true;
+          try { window.__SJM_SET_STATE_FROM_CLOUD?.(r); } finally { applyingRemote = false; }
+        }
+      }, 80);
+    }
+  }, true);
+})();
 
 /* LOGIN */
 async function login(){
@@ -63,26 +97,45 @@ async function push(uid, state){
 /* SUBSCRIBE */
 function subscribe(uid){
 
-  onSnapshot(userDoc(uid), (snap)=>{
+  onSnapshot(userDoc(uid), async (snap)=>{
 
-    if(!snap.exists()) return;
+    /* ✅ se não existe, cria e já libera o push */
+    if(!snap.exists()){
+      const local = window.__SJM_GET_STATE?.() || null;
+      await setDoc(userDoc(uid), { state: local, updatedAt: Date.now() }, { merge:true });
+      ready = true;
+      return;
+    }
 
-    const data = snap.data();
+    const data = snap.data() || {};
     const remote = data.state;
     const updatedAt = Number(data.updatedAt || 0);
+
+    /* ✅ assim que o primeiro snapshot chega, libera o push */
+    ready = true;
 
     // 🔥 ignora eco do próprio aparelho
     if(updatedAt === lastLocalWrite) return;
 
-    if(!remote) return;
+    // ✅ se a nuvem estiver vazia, semeia com o local
+    if(!remote){
+      const local = window.__SJM_GET_STATE?.() || null;
+      if(local) await push(uid, local);
+      return;
+    }
+
+    // ✅ não aplica remoto no meio da digitação
+    if(window.__SJM_IS_EDITING){
+      queuedRemote = remote;
+      return;
+    }
 
     applyingRemote = true;
-
-    window.__SJM_SET_STATE_FROM_CLOUD?.(remote);
-
-    applyingRemote = false;
-
-    ready = true;
+    try{
+      window.__SJM_SET_STATE_FROM_CLOUD?.(remote);
+    } finally {
+      applyingRemote = false;
+    }
   });
 
 }
@@ -97,9 +150,18 @@ onAuthStateChanged(auth, async (user)=>{
   subscribe(user.uid);
 
   window.__SJM_PUSH_TO_CLOUD = async (state)=>{
+    // ✅ não trava mais para sempre: ready libera no primeiro snapshot
     if(!ready) return;
     if(applyingRemote) return;
 
     await push(user.uid, state);
   };
+
+  // ✅ garante um push inicial caso o app já tenha estado local
+  setTimeout(()=>{
+    try{
+      const local = window.__SJM_GET_STATE?.();
+      if(local) window.__SJM_PUSH_TO_CLOUD(local);
+    }catch{}
+  }, 600);
 });
