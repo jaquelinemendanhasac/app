@@ -259,10 +259,10 @@ window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   state.materiais.forEach(calcularMaterial);
   state.atendimentos.forEach(calcularAtendimento);
 
-  saveSoft();
+  localStorage.setItem(KEY, JSON.stringify(state));
+
   applyTheme();
   renderAllHard();
-  scheduleSync();
 };
 
 /* =================== CONFIRM DELETE =================== */
