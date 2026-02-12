@@ -1,6 +1,5 @@
-// service-worker.js (SJM FIX - GitHub Pages friendly / HARD REFRESH)
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v15"; // <-- MUDE AQUI a cada deploy (v11, v12...)
+const CACHE_VERSION = "v16";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -19,11 +18,9 @@ const ASSETS = [
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-
     await cache.addAll(
       ASSETS.map((u) => new Request(`${u}?v=${CACHE_VERSION}`, { cache: "no-store" }))
     );
-
     await self.skipWaiting();
   })());
 });
@@ -34,106 +31,47 @@ self.addEventListener("activate", (event) => {
     await Promise.all(
       keys.map((k) => (k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME) ? caches.delete(k) : null)
     );
-
     await self.clients.claim();
   })());
 });
 
-function isSameOrigin(url) {
-  return url.origin === self.location.origin;
-}
-
-function isAssetPath(pathname) {
-  return (
-    pathname === "/" ||
-    pathname.endsWith("/index.html") ||
-    pathname.endsWith("/styles.css") ||
-    pathname.endsWith("/app.js") ||
-    pathname.endsWith("/firebase.js") ||
-    pathname.endsWith("/manifest.json") ||
-    pathname.includes("/icons/")
-  );
-}
-
-// ✅ Stale-While-Revalidate
-async function staleWhileRevalidate(req) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(req);
-
-  const fetchPromise = fetch(req, { cache: "no-store" })
-    .then((res) => {
-      if (res && res.status === 200) cache.put(req, res.clone());
-      return res;
-    })
-    .catch(() => null);
-
-  if (cached) {
-    eventWaitUntilSafe(fetchPromise);
-    return cached;
-  }
-
-  const fresh = await fetchPromise;
-  return fresh || new Response("Offline", { status: 503 });
-}
-
-// ✅ Network-first para HTML
-async function networkFirst(req) {
-  const cache = await caches.open(CACHE_NAME);
-
-  try {
-    const fresh = await fetch(req, { cache: "no-store" });
-    if (fresh && fresh.status === 200) cache.put(req, fresh.clone());
-    return fresh;
-  } catch {
-    const cached = await cache.match(req);
-    return cached || new Response("Offline", { status: 503 });
-  }
-}
-
-function eventWaitUntilSafe(promise) {
-  try { self.__lastEvent?.waitUntil?.(promise); } catch {}
-}
-
-async function cacheFirstWithUpdate(req) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(req);
-
-  const fetchPromise = fetch(req, { cache: "no-store" })
-    .then((res) => {
-      if (res && res.status === 200) cache.put(req, res.clone());
-      return res;
-    })
-    .catch(() => null);
-
-  if (cached) {
-    eventWaitUntilSafe(fetchPromise);
-    return cached;
-  }
-
-  const fresh = await fetchPromise;
-  return fresh || new Response("Offline", { status: 503 });
-}
-
 self.addEventListener("fetch", (event) => {
-  self.__lastEvent = event;
-
   const req = event.request;
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  if (!isSameOrigin(url)) return;
+  if (url.origin !== self.location.origin) return;
 
+  // ✅ HTML: network-first
   if (req.mode === "navigate") {
     event.respondWith((async () => {
-      return networkFirst(new Request("./index.html?v=" + CACHE_VERSION, { cache: "no-store" }));
+      try {
+        return await fetch("./index.html?v=" + CACHE_VERSION, { cache: "no-store" });
+      } catch {
+        const cache = await caches.open(CACHE_NAME);
+        return (await cache.match("./index.html?v=" + CACHE_VERSION)) || new Response("Offline", { status: 503 });
+      }
     })());
     return;
   }
 
-  if (isAssetPath(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(req));
-    return;
-  }
+  // ✅ Assets: stale-while-revalidate
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req);
 
-  event.respondWith(fetch(req).catch(() => caches.match(req)));
+    const fetchPromise = fetch(req, { cache: "no-store" })
+      .then((res) => {
+        if (res && res.status === 200) cache.put(req, res.clone());
+        return res;
+      })
+      .catch(() => null);
+
+    if (cached) {
+      event.waitUntil(fetchPromise);
+      return cached;
+    }
+
+    return (await fetchPromise) || new Response("Offline", { status: 503 });
+  })());
 });
