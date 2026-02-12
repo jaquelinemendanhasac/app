@@ -1,9 +1,8 @@
 // service-worker.js (SJM FIX - GitHub Pages friendly / HARD REFRESH)
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v14"; // <-- MUDE AQUI a cada deploy (v11, v12...)
+const CACHE_VERSION = "v15"; // <-- MUDE AQUI a cada deploy (v11, v12...)
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
-// ✅ Cache-bust para forçar baixar arquivo novo do servidor
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,7 +20,6 @@ self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
 
-    // ✅ Força baixar do servidor (e não do cache HTTP)
     await cache.addAll(
       ASSETS.map((u) => new Request(`${u}?v=${CACHE_VERSION}`, { cache: "no-store" }))
     );
@@ -32,7 +30,6 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    // ✅ Remove caches antigos
     const keys = await caches.keys();
     await Promise.all(
       keys.map((k) => (k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME) ? caches.delete(k) : null)
@@ -79,7 +76,7 @@ async function staleWhileRevalidate(req) {
   return fresh || new Response("Offline", { status: 503 });
 }
 
-// ✅ Network-first para HTML (pega sempre o mais novo; cai no cache se offline)
+// ✅ Network-first para HTML
 async function networkFirst(req) {
   const cache = await caches.open(CACHE_NAME);
 
@@ -93,12 +90,10 @@ async function networkFirst(req) {
   }
 }
 
-// Helper
 function eventWaitUntilSafe(promise) {
   try { self.__lastEvent?.waitUntil?.(promise); } catch {}
 }
 
-// ✅ Função faltando (para não quebrar no navigate)
 async function cacheFirstWithUpdate(req) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(req);
@@ -128,22 +123,17 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (!isSameOrigin(url)) return;
 
-  // ✅ IMPORTANTE: HTML sempre mais novo (resolve o “sumiu Calendário” após deploy)
   if (req.mode === "navigate") {
     event.respondWith((async () => {
-      // pega SEMPRE o mais novo; se offline cai no cache
       return networkFirst(new Request("./index.html?v=" + CACHE_VERSION, { cache: "no-store" }));
     })());
     return;
   }
 
-  // ✅ Assets do app
   if (isAssetPath(url.pathname)) {
     event.respondWith(staleWhileRevalidate(req));
     return;
   }
 
-  // Demais
   event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
-
