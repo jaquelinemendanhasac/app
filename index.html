@@ -38,7 +38,7 @@
             <h2>Dashboard</h2>
             <p>Resumo do estúdio (atualiza automaticamente).</p>
           </div>
-          <img id="dashLogo" class="dashLogo isHidden" alt="Logo do Studio no Dashboard" />
+          <img id="dashLogo" class="dashLogo isHidden" alt="Logo do Studio" />
         </div>
       </div>
 
@@ -75,7 +75,7 @@
       </div>
     </section>
 
-    <!-- ✅ CALENDÁRIO (ADICIONADO, SEM REMOVER NADA) -->
+    <!-- ✅ CALENDÁRIO -->
     <section class="panel" data-route="calendario">
       <div class="panel__head">
         <h2>Calendário</h2>
@@ -101,7 +101,7 @@
             <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
           </div>
           <div class="calGrid" id="calGrid"></div>
-          <small class="hint">Badges: total de agendamentos do dia / valor recebido (Realizado). Conflitos ficam destacados.</small>
+          <small class="hint">Badges: total do dia / valor recebido (Realizado). Conflitos ficam destacados.</small>
         </div>
 
         <div class="calSide">
@@ -118,7 +118,7 @@
     <section class="panel" data-route="agenda">
       <div class="panel__head">
         <h2>Agenda</h2>
-        <p>Status “Realizado” + Recebido cria/atualiza Atendimentos automaticamente.</p>
+        <p>Status “Realizado” cria/atualiza Atendimentos automaticamente. Status “Bloqueio” é folga/compromisso.</p>
       </div>
 
       <div class="actions">
@@ -279,7 +279,7 @@
           <thead>
             <tr>
               <th>Cliente</th><th>WhatsApp</th><th>Telefone</th><th>Nasc.</th><th>Alergia</th><th>Quais</th>
-              <th>Gestante</th><th>Molde</th><th>N° do Molde</th><th>Obs.</th><th></th>
+              <th>Gestante</th><th>N° do molde</th><th>Obs.</th><th></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -318,7 +318,7 @@
       </div>
 
       <small class="hint">
-        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml. Se usar 1 ml por cliente → 120 clientes e custo por cliente = 0,15.
+        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml. Se usar 0,01 ml por cliente → 12.000 clientes e custo por cliente = 0,0015.
       </small>
     </section>
 
@@ -397,11 +397,12 @@
   </main>
 
   <footer class="footer">
-    <small>Dados salvos no seu aparelho (localStorage). Use backup para não perder.</small>
+    <small id="buildInfo">v16 • Dados salvos no seu aparelho (localStorage).</small>
+    <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
   </footer>
 
-  <!-- ✅ Export/Import fixo no canto inferior direito -->
-  <div class="backupDock" aria-label="Backup">
+  <!-- Dock de backup no canto inferior direito -->
+  <div class="backupDock">
     <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
     <label class="btn btn--ghost fileBtn">
       Importar backup
@@ -409,7 +410,7 @@
     </label>
   </div>
 
-  <!-- ✅ IMPORTANTE: firebase.js ANTES do app.js -->
+  <!-- ✅ firebase antes do app -->
   <script type="module" src="./firebase.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
