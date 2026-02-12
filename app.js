@@ -112,7 +112,6 @@ Total recebido: {total}`
       { id: uid(), nome:"Manutenção", preco:90, reajuste:"", duracaoMin: 120 },
       { id: uid(), nome:"Remoção + Nova Aplicação", preco:160, reajuste:"", duracaoMin: 150 },
       { id: uid(), nome:"Remoção de Alongamento", preco:60, reajuste:"", duracaoMin: 60 },
-      
     ],
 
     clientes: [],
@@ -168,6 +167,32 @@ function sanitizeState(parsed){
     }
   });
 
+  // ✅ migração: clientes (SAÚDE -> MOLDE, MEDS -> N° DO MOLDE)
+  s.clientes.forEach(c=>{
+    if(c && typeof c==="object"){
+      if(c.nome === undefined) c.nome = "";
+      if(c.wpp === undefined) c.wpp = "";
+      if(c.tel === undefined) c.tel = "";
+      if(c.nasc === undefined) c.nasc = "";
+      if(c.alergia === undefined) c.alergia = "N";
+      if(c.quais === undefined) c.quais = "";
+      if(c.gestante === undefined) c.gestante = "N";
+      if(c.obs === undefined) c.obs = "";
+
+      // migra valores antigos sem perder dados
+      if(c.molde === undefined){
+        c.molde = (c.saude !== undefined) ? String(c.saude || "") : "";
+      }
+      if(c.nMolde === undefined){
+        c.nMolde = (c.meds !== undefined) ? String(c.meds || "") : "";
+      }
+
+      // remove campos antigos (não obrigatório, mas evita confusão no JSON)
+      if(c.saude !== undefined) delete c.saude;
+      if(c.meds !== undefined) delete c.meds;
+    }
+  });
+
   // migração: materiais
   s.materiais.forEach(m=>{
     if(m && typeof m==="object"){
@@ -220,7 +245,6 @@ function scheduleCloudPush(){
   cloudTimer = setTimeout(async ()=>{
     cloudTimer = null;
     try{
-      // ✅ se a nuvem ainda não respondeu, o firebase.js vai segurar em pendingState
       await window.__SJM_PUSH_TO_CLOUD(state);
     }catch(e){
       console.error("Cloud push falhou:", e);
@@ -231,20 +255,15 @@ function scheduleCloudPush(){
 // ✅ Anti-loop: evita saveSoft -> scheduleSync -> syncDerivedAndUI -> saveSoft infinito
 let __SJM_IS_SYNCING = false;
 
-let saveTimer = null;
-
- function saveSoft(){
-  try{ 
-    localStorage.setItem(KEY, JSON.stringify(state)); 
-  }catch(e){ 
-    console.warn("localStorage cheio?", e); 
+function saveSoft(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }catch(e){
+    console.warn("localStorage cheio?", e);
   }
-
-  if (typeof window.__SJM_PUSH_TO_CLOUD === "function") {
-    try { window.__SJM_PUSH_TO_CLOUD(state); } catch {}
-  }
+  // ✅ push com debounce (mais estável entre celular/pc)
+  scheduleCloudPush();
 }
-
 
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
   state = sanitizeState(remoteState);
@@ -273,15 +292,28 @@ function applyTheme(){
 
   safeText("studioTitle", state.settings.studioNome || "Studio Jaqueline Mendanha");
 
+  const url = (state.settings.logoUrl||"").trim();
+
   const img = byId("logoImg");
   if(img){
-    const url = (state.settings.logoUrl||"").trim();
     if(url){
       img.src = url;
       img.classList.remove("isHidden");
     }else{
       img.removeAttribute("src");
       img.classList.add("isHidden");
+    }
+  }
+
+  // ✅ logo no Dashboard também
+  const dash = byId("dashLogo");
+  if(dash){
+    if(url){
+      dash.src = url;
+      dash.classList.remove("isHidden");
+    }else{
+      dash.removeAttribute("src");
+      dash.classList.add("isHidden");
     }
   }
 }
@@ -417,18 +449,10 @@ function isConflictByDuration(index){
   });
 }
 
-/* =================== updateConflictUI (SAFE) ===================
-   (Se você já tiver uma função real, pode apagar essa.
-    Essa aqui só evita tela branca.)
-*/
-function updateConflictUI(){
-  // no-op seguro (mantém seu código funcionando sem quebrar)
-}
+/* =================== updateConflictUI (SAFE) =================== */
+function updateConflictUI(){}
 
-/* =================== REGRA DO ESTÚDIO ===================
-   - Realizado => recebido = preço do procedimento (sempre)
-   - Cancelado/Remarcado => recebido = 0
-*/
+/* =================== REGRA DO ESTÚDIO =================== */
 function enforceAgendaRecebidoRules(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
@@ -652,9 +676,8 @@ function monthTitle(d){
   return `${m.charAt(0).toUpperCase()+m.slice(1)} / ${y}`;
 }
 function startGridDate(cursor){
-  // Domingo antes (ou o próprio 1º se já for domingo)
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const dow = first.getDay(); // 0..6
+  const dow = first.getDay();
   const start = new Date(first);
   start.setDate(first.getDate() - dow);
   return start;
@@ -742,8 +765,8 @@ function renderCalendar(){
   grid.querySelectorAll(".calDay").forEach(el=>{
     el.addEventListener("click", ()=>{
       __CAL_SELECTED_ISO = el.dataset.iso;
-      renderCalendar();     // atualiza seleção
-      renderCalendarDay();  // lista lateral
+      renderCalendar();
+      renderCalendarDay();
     });
   });
 
@@ -780,7 +803,6 @@ function renderCalendarDay(){
     const rec = num(a.recebido);
     const val = procPrice(a.procedimento);
 
-    // marca se ESTE item conflita com outro no dia
     const idx = state.agenda.findIndex(x=>x && x.id===a.id);
     const conflita = (idx >= 0) ? isConflictByDuration(idx) : false;
 
@@ -812,7 +834,6 @@ function bindCalendarUI(){
     renderCalendar();
   });
   onClick("calNew", ()=>{
-    // usa o mesmo botão da agenda, mas já joga pro dia selecionado
     const iso = __CAL_SELECTED_ISO || todayISO();
     const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
     state.agenda.unshift({
@@ -835,7 +856,6 @@ function bindCalendarUI(){
 }
 
 function updateCalendarAuto(){
-  // usado pelo syncDerivedAndUI para refletir mudanças na agenda
   renderCalendar();
 }
 
@@ -852,7 +872,6 @@ function syncDerivedAndUI(){
     updateAtendimentosAutoCells();
     updateDashboardKPIs();
 
-    // ✅ calendário acompanha tudo automaticamente
     updateCalendarAuto();
 
     saveSoft();
@@ -874,7 +893,6 @@ function renderAllHard(){
   renderDashboard();
   renderWppQueue();
 
-  // ✅ calendário (hard)
   bindCalendarUI();
   renderCalendar();
 }
@@ -938,7 +956,7 @@ function renderAgendaHard(){
   tblAgendaBody.innerHTML = state.agenda.map((a,i)=>{
     const val = procPrice(a.procedimento);
     const conflict = isConflict(i);
-    const conflictDur = isConflictByDuration(i); // ✅ agora existe (fix)
+    const conflictDur = isConflictByDuration(i);
 
     const wpp = clientWpp(a.cliente);
     const rec = num(a.recebido);
@@ -1025,7 +1043,6 @@ function renderAgendaHard(){
     inpRec?.addEventListener("input", ()=>{
       a.recebido = num(inpRec.value);
 
-      // trava a regra
       if((a.status||"Agendado") === "Realizado"){
         a.recebido = procPrice(a.procedimento);
         inpRec.value = num(a.recebido).toFixed(2);
@@ -1064,7 +1081,6 @@ function renderAgendaHard(){
 
     updateConflictUI();
 
-    // ✅ agora conflictDur funciona aqui (fix de escopo)
     const conflictDurHere = isConflictByDuration(idx);
     if(agendaNotice && conflictDurHere){
       agendaNotice.hidden = false;
@@ -1158,7 +1174,8 @@ const tblCliBody = $("#tblCli tbody");
 onClick("btnAddCliente", ()=>{
   state.clientes.unshift({
     id:uid(), nome:"", wpp:"", tel:"", nasc:"",
-    alergia:"N", quais:"", gestante:"N", saude:"", meds:"", obs:""
+    alergia:"N", quais:"", gestante:"N",
+    molde:"", nMolde:"", obs:""
   });
   saveSoft();
   renderClientes();
@@ -1178,8 +1195,8 @@ function renderClientes(){
       <td>${inputHTML({value:c.alergia, options: sn})}</td>
       <td>${inputHTML({value:c.quais})}</td>
       <td>${inputHTML({value:c.gestante, options: sn})}</td>
-      <td>${inputHTML({value:c.saude})}</td>
-      <td>${inputHTML({value:c.meds})}</td>
+      <td>${inputHTML({value:c.molde})}</td>
+      <td>${inputHTML({value:c.nMolde})}</td>
       <td>${inputHTML({value:c.obs})}</td>
       <td><button class="iconBtn" data-del title="Excluir">✕</button></td>
     </tr>
@@ -1198,8 +1215,8 @@ function renderClientes(){
       c.alergia = getInp(getCell(tr,4)).value;
       c.quais = getInp(getCell(tr,5)).value;
       c.gestante = getInp(getCell(tr,6)).value;
-      c.saude = getInp(getCell(tr,7)).value;
-      c.meds = getInp(getCell(tr,8)).value;
+      c.molde = getInp(getCell(tr,7)).value;
+      c.nMolde = getInp(getCell(tr,8)).value;
       c.obs = getInp(getCell(tr,9)).value;
       saveSoft();
       scheduleSync();
@@ -1719,13 +1736,11 @@ function bindConfigUI(){
 /* =================== BOOT =================== */
 function boot(){
   try{
-    // garante consistência
     enforceAgendaRecebidoRules();
     syncAgendaToAtendimentos();
     state.materiais.forEach(calcularMaterial);
     state.atendimentos.forEach(calcularAtendimento);
 
-    // render
     renderAllHard();
     scheduleSync();
   }catch(e){
