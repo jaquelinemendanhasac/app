@@ -52,6 +52,8 @@ body{
 .brand__title{ font-weight:1000; font-size:18px; letter-spacing:.2px; }
 .brand__subtitle{ opacity:.9; font-size:12px; margin-top:2px; }
 
+.topbar__right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
 /* TABS */
 .tabs{
   display:flex;
@@ -86,25 +88,6 @@ body{
 
 .panel__head h2{ margin:8px 0 2px; font-size:20px; }
 .panel__head p{ margin:0 0 12px; color:var(--muted); }
-
-/* ✅ DASH LOGO */
-.dashHead{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-  flex-wrap:wrap;
-}
-.dashLogo{
-  width:64px;
-  height:64px;
-  border-radius:18px;
-  object-fit:cover;
-  border:1px solid var(--line);
-  background:#fff;
-  box-shadow:0 6px 18px rgba(16,24,40,.06);
-}
-.dashLogo.isHidden{ display:none; }
 
 .cards{
   display:grid;
@@ -260,7 +243,24 @@ pre{
   border:1px solid #eee;
 }
 
-/* ✅ Backup dock fixo canto inferior direito */
+/* DASHBOARD logo */
+.dashHead{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+}
+.dashLogo{
+  width:64px;
+  height:64px;
+  border-radius:18px;
+  object-fit:cover;
+  border:1px solid rgba(0,0,0,.08);
+  background:#fff;
+}
+.dashLogo.isHidden{ display:none; }
+
+/* Dock do Backup */
 .backupDock{
   position:fixed;
   right:16px;
@@ -287,6 +287,14 @@ pre{
     align-items:flex-start;
     gap:10px;
   }
+
+  .topbar__right{
+    width:100%;
+    justify-content:flex-start;
+    gap:8px;
+  }
+
+  .topbar__right .btn{ width:auto; }
 
   .brand__title{ font-size:16px; }
   .brand__subtitle{ font-size:11px; }
@@ -340,20 +348,17 @@ pre{
     padding:12px;
   }
 
-  /* ✅ backup dock no mobile vira coluna */
   .backupDock{
     left:10px;
     right:10px;
     bottom:10px;
     justify-content:stretch;
   }
-  .backupDock .btn{
-    width:100%;
-  }
+  .backupDock .btn{ width:100%; }
 }
 
 /* =========================================================
-   ✅ CALENDÁRIO (ADICIONADO)
+   ✅ CALENDÁRIO
    ========================================================= */
 .calTop{
   display:flex;
