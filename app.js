@@ -1,13 +1,17 @@
-/* Studio Jaqueline Mendanha — Gestão Completa (SYNC PRO / FIXED)
+/* Studio Jaqueline Mendanha — Gestão Completa (SYNC PRO / FIXED v16)
    - Blindado contra tela branca (elementos ausentes não quebram)
    - Sincronização total (derived + UI)
    - Regra do estúdio: Realizado => Recebido = preço do procedimento (sempre)
    - Agenda cria/remove Atendimentos automaticamente
+   - Status "Bloqueio" (Folga/Compromisso) não cria atendimento e não tem valor
+   - Clientes: N° do molde (substitui Saúde/Medicamentos)
 */
+
+const APP_BUILD = "v16";
 
 const ROUTES = [
   { id:"dashboard", label:"Dashboard" },
-  { id:"calendario", label:"Calendário" }, // ✅ ADICIONADO (sem remover nada)
+  { id:"calendario", label:"Calendário" },
   { id:"agenda", label:"Agenda" },
   { id:"whatsapp", label:"WhatsApp" },
   { id:"atendimentos", label:"Atendimentos" },
@@ -48,12 +52,17 @@ function onInput(id, fn){
 
 const money = (n)=> (Number(n||0)).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 
+/* ✅ num() mais resistente (aceita 0,01 / 0.01 / 00001) */
 const num = (v)=> {
   if (v === null || v === undefined) return 0;
   const s = String(v).trim();
   if (!s) return 0;
-  let clean = s;
-  if (clean.includes(",")) clean = clean.replace(/\./g,"").replace(",",".");
+
+  // remove espaços
+  let clean = s.replace(/\s+/g,"");
+
+  // se tiver vírgula, trata pt-BR: 1.234,56 -> 1234.56
+  if (clean.includes(",")) clean = clean.replace(/\./g,"").replace(",", ".");
 
   const x = Number(clean);
   return Number.isFinite(x) ? x : 0;
@@ -153,6 +162,32 @@ function sanitizeState(parsed){
     }
   });
 
+  // migração: clientes (remove saude/meds e usa molde)
+  s.clientes.forEach(c=>{
+    if(c && typeof c==="object"){
+      if(c.nome === undefined) c.nome = "";
+      if(c.wpp === undefined) c.wpp = "";
+      if(c.tel === undefined) c.tel = "";
+      if(c.nasc === undefined) c.nasc = "";
+      if(c.alergia === undefined) c.alergia = "N";
+      if(c.quais === undefined) c.quais = "";
+      if(c.gestante === undefined) c.gestante = "N";
+      // ✅ novo campo
+      if(c.molde === undefined){
+        // tenta aproveitar dados antigos
+        const oldSaude = (c.saude !== undefined) ? String(c.saude||"").trim() : "";
+        const oldMeds  = (c.meds !== undefined) ? String(c.meds||"").trim() : "";
+        const join = [oldSaude, oldMeds].filter(Boolean).join(" / ");
+        c.molde = join || "";
+      }
+      if(c.obs === undefined) c.obs = "";
+
+      // limpa campos antigos
+      if(c.saude !== undefined) delete c.saude;
+      if(c.meds !== undefined) delete c.meds;
+    }
+  });
+
   // migração: atendimentos
   s.atendimentos.forEach(a=>{
     if(a && typeof a==="object"){
@@ -164,32 +199,6 @@ function sanitizeState(parsed){
       if(a.foto === undefined) a.foto = "";
       if(a.fromAgendaId === undefined) a.fromAgendaId = "";
       if(a.auto === undefined) a.auto = !!a.fromAgendaId;
-    }
-  });
-
-  // ✅ migração: clientes (SAÚDE -> MOLDE, MEDS -> N° DO MOLDE)
-  s.clientes.forEach(c=>{
-    if(c && typeof c==="object"){
-      if(c.nome === undefined) c.nome = "";
-      if(c.wpp === undefined) c.wpp = "";
-      if(c.tel === undefined) c.tel = "";
-      if(c.nasc === undefined) c.nasc = "";
-      if(c.alergia === undefined) c.alergia = "N";
-      if(c.quais === undefined) c.quais = "";
-      if(c.gestante === undefined) c.gestante = "N";
-      if(c.obs === undefined) c.obs = "";
-
-      // migra valores antigos sem perder dados
-      if(c.molde === undefined){
-        c.molde = (c.saude !== undefined) ? String(c.saude || "") : "";
-      }
-      if(c.nMolde === undefined){
-        c.nMolde = (c.meds !== undefined) ? String(c.meds || "") : "";
-      }
-
-      // remove campos antigos (não obrigatório, mas evita confusão no JSON)
-      if(c.saude !== undefined) delete c.saude;
-      if(c.meds !== undefined) delete c.meds;
     }
   });
 
@@ -230,11 +239,15 @@ function load(){
 }
 
 let state = load();
-// ✅ usado pelo firebase.js para ler o estado atual local
 window.__SJM_GET_STATE = () => state;
-
-// ✅ Flag para saber se a nuvem já respondeu ao menos 1 vez
 window.__SJM_CLOUD_READY = window.__SJM_CLOUD_READY || false;
+
+/* ✅ status de sync no rodapé */
+window.__SJM_SET_SYNC_STATUS = (msg)=>{
+  const el = byId("syncInfo");
+  if(el) el.textContent = msg;
+};
+window.__SJM_SET_SYNC_STATUS("Sync: aguardando…");
 
 /* =================== CLOUD SYNC (Firebase Bridge) =================== */
 let cloudTimer = null;
@@ -248,11 +261,11 @@ function scheduleCloudPush(){
       await window.__SJM_PUSH_TO_CLOUD(state);
     }catch(e){
       console.error("Cloud push falhou:", e);
+      window.__SJM_SET_SYNC_STATUS("Sync: erro ao enviar ❌");
     }
   }, 350);
 }
 
-// ✅ Anti-loop: evita saveSoft -> scheduleSync -> syncDerivedAndUI -> saveSoft infinito
 let __SJM_IS_SYNCING = false;
 
 function saveSoft(){
@@ -261,7 +274,8 @@ function saveSoft(){
   }catch(e){
     console.warn("localStorage cheio?", e);
   }
-  // ✅ push com debounce (mais estável entre celular/pc)
+
+  // push com debounce (mais estável)
   scheduleCloudPush();
 }
 
@@ -291,6 +305,7 @@ function applyTheme(){
   r.style.setProperty("--a", state.settings.corAcento || "#F72585");
 
   safeText("studioTitle", state.settings.studioNome || "Studio Jaqueline Mendanha");
+  safeText("buildInfo", `${APP_BUILD} • Dados salvos no seu aparelho (localStorage).`);
 
   const url = (state.settings.logoUrl||"").trim();
 
@@ -305,7 +320,6 @@ function applyTheme(){
     }
   }
 
-  // ✅ logo no Dashboard também
   const dash = byId("dashLogo");
   if(dash){
     if(url){
@@ -338,9 +352,7 @@ applyTheme();
     history.replaceState({}, "", `#${route}`);
   }
 
-  // expose
   window.__SJM_SET_ROUTE = setRoute;
-
   setRoute(location.hash.replace("#","") || "dashboard");
 })();
 
@@ -425,13 +437,15 @@ function clientWpp(name){
 /* =================== DURAÇÃO PROCEDIMENTO =================== */
 function procDuracao(nome){
   const p = state.procedimentos.find(x => x.nome === nome);
-  return p?.duracaoMin || 60; // padrão 1h
+  return p?.duracaoMin || 60;
 }
 
-/* =================== CONFLITO POR DURAÇÃO (FIX) =================== */
+/* =================== CONFLITO POR DURAÇÃO =================== */
 function isConflictByDuration(index){
   const a = state.agenda[index];
   if(!a?.data || !a?.hora) return false;
+  if((a.status||"Agendado")==="Cancelado") return false;
+  if((a.status||"Agendado")==="Bloqueio") return false;
 
   const inicioA = new Date(`${a.data}T${a.hora}`);
   const fimA = new Date(inicioA.getTime() + procDuracao(a.procedimento) * 60000);
@@ -439,6 +453,7 @@ function isConflictByDuration(index){
   return state.agenda.some((b, i) => {
     if(i === index) return false;
     if((b.status||"Agendado") === "Cancelado") return false;
+    if((b.status||"Agendado") === "Bloqueio") return false;
     if(b.data !== a.data) return false;
     if(!b.hora) return false;
 
@@ -449,13 +464,19 @@ function isConflictByDuration(index){
   });
 }
 
-/* =================== updateConflictUI (SAFE) =================== */
 function updateConflictUI(){}
 
 /* =================== REGRA DO ESTÚDIO =================== */
 function enforceAgendaRecebidoRules(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
+
+    if(status === "Bloqueio"){
+      ag.procedimento = "—";
+      ag.recebido = 0;
+      return;
+    }
+
     if(status === "Realizado"){
       ag.recebido = procPrice(ag.procedimento);
     }else if(status === "Cancelado" || status === "Remarcado"){
@@ -553,6 +574,14 @@ function removeAtendimentoFromAgenda(agendaId){
 function syncAgendaToAtendimentos(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
+
+    if(status === "Bloqueio"){
+      ag.procedimento = "—";
+      ag.recebido = 0;
+      removeAtendimentoFromAgenda(ag.id);
+      return;
+    }
+
     if(status === "Realizado"){
       ag.recebido = procPrice(ag.procedimento);
 
@@ -658,9 +687,9 @@ function drawLine(canvas, points){
   ctx.stroke();
 }
 
-/* =================== ✅ CALENDÁRIO (ADICIONADO) =================== */
-let __CAL_CURSOR = new Date();           // mês em exibição
-let __CAL_SELECTED_ISO = todayISO();     // dia selecionado
+/* =================== ✅ CALENDÁRIO =================== */
+let __CAL_CURSOR = new Date();
+let __CAL_SELECTED_ISO = todayISO();
 
 function pad2(n){ return String(n).padStart(2,"0"); }
 function isoFromDate(d){
@@ -692,11 +721,13 @@ function agendaOfDay(iso){
 }
 
 function conflictsInDay(iso){
-  const items = agendaOfDay(iso).map((a)=> {
-    const inicio = new Date(`${a.data}T${a.hora||"00:00"}`);
-    const fim = new Date(inicio.getTime() + procDuracao(a.procedimento)*60000);
-    return { a, inicio, fim };
-  });
+  const items = agendaOfDay(iso)
+    .filter(x => (x.status||"Agendado") !== "Bloqueio")
+    .map((a)=> {
+      const inicio = new Date(`${a.data}T${a.hora||"00:00"}`);
+      const fim = new Date(inicio.getTime() + procDuracao(a.procedimento)*60000);
+      return { a, inicio, fim };
+    });
   for(let i=0;i<items.length;i++){
     for(let j=i+1;j<items.length;j++){
       if(items[i].inicio < items[j].fim && items[i].fim > items[j].inicio){
@@ -742,7 +773,8 @@ function renderCalendar(){
     const hasConflict = conflictsInDay(iso);
 
     const mini = agendaOfDay(iso).slice(0,2).map(a=>{
-      return `<div class="calMiniItem">${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}</div>`;
+      const label = (a.status==="Bloqueio") ? "BLOQUEIO" : ((a.cliente||"").trim() || "Sem nome");
+      return `<div class="calMiniItem">${a.hora || ""} — ${label}</div>`;
     }).join("");
 
     const badgeAg = totalAg ? `<span class="calBadge">${totalAg}x</span>` : "";
@@ -801,18 +833,22 @@ function renderCalendarDay(){
   box.innerHTML = itens.map((a)=>{
     const st = (a.status||"Agendado");
     const rec = num(a.recebido);
-    const val = procPrice(a.procedimento);
+    const val = (st==="Bloqueio") ? 0 : procPrice(a.procedimento);
 
     const idx = state.agenda.findIndex(x=>x && x.id===a.id);
     const conflita = (idx >= 0) ? isConflictByDuration(idx) : false;
 
+    const titulo = (st==="Bloqueio")
+      ? `${a.hora || ""} — BLOQUEIO`
+      : `${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}`;
+
     return `
       <div class="calListItem ${conflita ? "danger" : ""}">
         <div class="calListHead">
-          <b>${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}</b>
+          <b>${titulo}</b>
           <span class="calListMeta">${st}</span>
         </div>
-        <div class="calListMeta">Procedimento: ${a.procedimento || ""} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
+        <div class="calListMeta">Procedimento: ${a.procedimento || "—"} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
         ${a.obs ? `<div class="calListMeta">Obs: ${String(a.obs)}</div>` : ``}
       </div>
     `;
@@ -933,6 +969,7 @@ onClick("btnReportToday", ()=> sendReportToday());
 function isConflict(i){
   const a = state.agenda[i];
   if(!a?.data || !a?.hora) return false;
+  if((a.status||"Agendado")==="Bloqueio") return false;
   const key = `${a.data}|${a.hora}`;
   const active = (x)=> (x.status||"Agendado") !== "Cancelado";
   return state.agenda.some((x,idx)=> idx!==i && active(x) && active(a) && `${x.data}|${x.hora}` === key);
@@ -949,32 +986,35 @@ function renderAgendaHard(){
   }
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
-  const statuses = ["Agendado","Realizado","Cancelado","Remarcado"];
+  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
 
   enforceAgendaRecebidoRules();
 
   tblAgendaBody.innerHTML = state.agenda.map((a,i)=>{
-    const val = procPrice(a.procedimento);
-    const conflict = isConflict(i);
-    const conflictDur = isConflictByDuration(i);
+    const isBlock = (a.status==="Bloqueio");
+    const val = isBlock ? 0 : procPrice(a.procedimento);
+    const conflict = isBlock ? false : isConflict(i);
+    const conflictDur = isBlock ? false : isConflictByDuration(i);
 
     const wpp = clientWpp(a.cliente);
     const rec = num(a.recebido);
+    const procValue = isBlock ? "—" : a.procedimento;
+
     return `
       <tr data-id="${a.id}" class="${(conflict || conflictDur) ? "danger" : ""}">
         <td>${inputHTML({value:a.data, type:"date"})}</td>
         <td>${inputHTML({value:a.hora, type:"time", step:"60"})}</td>
         <td>${inputHTML({value:a.cliente})}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:a.procedimento, options: procNames.length?procNames:["Alongamento"]})}</td>
+        <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:["Alongamento"]), readonly:isBlock})}</td>
         <td>${inputHTML({value:val.toFixed(2), type:"text", cls:"money", readonly:true})}</td>
         <td>${inputHTML({value:a.status, options: statuses})}</td>
-        <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
+        <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly:isBlock})}</td>
         <td>${inputHTML({value:a.obs})}</td>
         <td>
           <div class="iconRow">
-            <button class="iconBtn" data-conf title="Confirmação">📩</button>
-            <button class="iconBtn" data-lem title="Lembrete">⏰</button>
+            <button class="iconBtn" data-conf title="Confirmação" ${isBlock?"disabled":""}>📩</button>
+            <button class="iconBtn" data-lem title="Lembrete" ${isBlock?"disabled":""}>⏰</button>
           </div>
         </td>
         <td><button class="iconBtn" data-del title="Excluir">✕</button></td>
@@ -984,6 +1024,7 @@ function renderAgendaHard(){
 
   tblAgendaBody.querySelectorAll("tr").forEach((tr,idx)=>{
     const a = state.agenda[idx];
+    const isBlock = (a.status==="Bloqueio");
 
     const tdData = getCell(tr,0);
     const tdHora = getCell(tr,1);
@@ -1015,6 +1056,7 @@ function renderAgendaHard(){
     });
 
     getInp(tdProc)?.addEventListener("change", ()=>{
+      if(isBlock) return;
       a.procedimento = getInp(tdProc).value;
       const preco = procPrice(a.procedimento);
       if(inpVal) inpVal.value = preco.toFixed(2);
@@ -1029,10 +1071,15 @@ function renderAgendaHard(){
     getInp(tdSta)?.addEventListener("change", ()=>{
       a.status = getInp(tdSta).value;
 
-      if(a.status === "Realizado"){
+      if(a.status === "Bloqueio"){
+        a.procedimento = "—";
+        a.recebido = 0;
+        if(inpRec) inpRec.value = "0.00";
+        if(inpVal) inpVal.value = "0.00";
+      } else if(a.status === "Realizado"){
         a.recebido = procPrice(a.procedimento);
         if(inpRec) inpRec.value = num(a.recebido).toFixed(2);
-      }else if(a.status === "Cancelado" || a.status === "Remarcado"){
+      } else if(a.status === "Cancelado" || a.status === "Remarcado"){
         a.recebido = 0;
         if(inpRec) inpRec.value = "0.00";
       }
@@ -1041,6 +1088,13 @@ function renderAgendaHard(){
     });
 
     inpRec?.addEventListener("input", ()=>{
+      if((a.status||"Agendado")==="Bloqueio"){
+        a.recebido = 0;
+        inpRec.value = "0.00";
+        saveSoft(); scheduleSync();
+        return;
+      }
+
       a.recebido = num(inpRec.value);
 
       if((a.status||"Agendado") === "Realizado"){
@@ -1057,6 +1111,7 @@ function renderAgendaHard(){
     });
 
     tr.querySelector("[data-conf]")?.addEventListener("click", ()=>{
+      if((a.status||"Agendado")==="Bloqueio") return;
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplConfirmacao, a);
@@ -1064,6 +1119,7 @@ function renderAgendaHard(){
     });
 
     tr.querySelector("[data-lem]")?.addEventListener("click", ()=>{
+      if((a.status||"Agendado")==="Bloqueio") return;
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplLembrete, a);
@@ -1081,7 +1137,7 @@ function renderAgendaHard(){
 
     updateConflictUI();
 
-    const conflictDurHere = isConflictByDuration(idx);
+    const conflictDurHere = isBlock ? false : isConflictByDuration(idx);
     if(agendaNotice && conflictDurHere){
       agendaNotice.hidden = false;
       agendaNotice.textContent =
@@ -1100,9 +1156,12 @@ function updateAgendaAutoCells(){
     const a = state.agenda.find(x=>x.id===id);
     if(!a) return;
 
-    if((a.status||"Agendado") === "Realizado"){
+    if((a.status||"Agendado") === "Bloqueio"){
+      a.procedimento = "—";
+      a.recebido = 0;
+    } else if((a.status||"Agendado") === "Realizado"){
       a.recebido = procPrice(a.procedimento);
-    }else if(a.status === "Cancelado" || a.status === "Remarcado"){
+    } else if(a.status === "Cancelado" || a.status === "Remarcado"){
       a.recebido = 0;
     }
 
@@ -1111,7 +1170,7 @@ function updateAgendaAutoCells(){
     const inpRec = getInp(getCell(tr,7));
 
     if(inpWpp) inpWpp.value = clientWpp(a.cliente);
-    if(inpVal) inpVal.value = procPrice(a.procedimento).toFixed(2);
+    if(inpVal) inpVal.value = ((a.status==="Bloqueio")?0:procPrice(a.procedimento)).toFixed(2);
     if(inpRec) inpRec.value = num(a.recebido).toFixed(2);
   });
 }
@@ -1175,7 +1234,7 @@ onClick("btnAddCliente", ()=>{
   state.clientes.unshift({
     id:uid(), nome:"", wpp:"", tel:"", nasc:"",
     alergia:"N", quais:"", gestante:"N",
-    molde:"", nMolde:"", obs:""
+    molde:"", obs:""
   });
   saveSoft();
   renderClientes();
@@ -1196,7 +1255,6 @@ function renderClientes(){
       <td>${inputHTML({value:c.quais})}</td>
       <td>${inputHTML({value:c.gestante, options: sn})}</td>
       <td>${inputHTML({value:c.molde})}</td>
-      <td>${inputHTML({value:c.nMolde})}</td>
       <td>${inputHTML({value:c.obs})}</td>
       <td><button class="iconBtn" data-del title="Excluir">✕</button></td>
     </tr>
@@ -1216,8 +1274,7 @@ function renderClientes(){
       c.quais = getInp(getCell(tr,5)).value;
       c.gestante = getInp(getCell(tr,6)).value;
       c.molde = getInp(getCell(tr,7)).value;
-      c.nMolde = getInp(getCell(tr,8)).value;
-      c.obs = getInp(getCell(tr,9)).value;
+      c.obs = getInp(getCell(tr,8)).value;
       saveSoft();
       scheduleSync();
     });
@@ -1293,6 +1350,7 @@ function renderMateriaisHard(){
 
     tr.addEventListener("input", recompute);
     tr.addEventListener("change", recompute);
+    tr.addEventListener("blur", recompute, true);
 
     tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este material")) return;
@@ -1305,82 +1363,66 @@ function renderMateriaisHard(){
 }
 
 /* =================== ATENDIMENTOS =================== */
-const tblAtendBody = $("#tblAtend tbody");
+const tblAtBody = $("#tblAtend tbody");
+
 onClick("btnAddAtendimento", ()=>{
-  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
   state.atendimentos.unshift({
-    id:uid(), data:todayISO(),
-    cliente:"", procedimento:firstProc,
-    valor: procPrice(firstProc),
-    recebido:0,
-    custoMaterial: custoMateriaisPorCliente(),
-    maoObra:0,
-    custoTotal:0,
-    lucro:0,
-    foto:"",
+    id:uid(),
     fromAgendaId:"",
-    auto:false
+    auto:false,
+    data: todayISO(),
+    cliente:"",
+    procedimento: (state.procedimentos?.[0]?.nome || "Alongamento"),
+    valor: 0,
+    recebido: 0,
+    custoMaterial: 0,
+    maoObra: 0,
+    custoTotal: 0,
+    lucro: 0,
+    foto: ""
   });
+  state.atendimentos.forEach(calcularAtendimento);
   saveSoft();
   renderAtendimentosHard();
   scheduleSync();
 });
 
-function fileToDataURL(file){
-  return new Promise((resolve,reject)=>{
-    const reader = new FileReader();
-    reader.onload = ()=> resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
 function renderAtendimentosHard(){
-  if(!tblAtendBody) return;
+  if(!tblAtBody) return;
 
-  const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
   state.atendimentos.forEach(calcularAtendimento);
+  const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
 
-  tblAtendBody.innerHTML = state.atendimentos.map(a=>{
-    const wpp = clientWpp(a.cliente);
-    const lucroCls = (a.lucro||0) < 0 ? "danger" : "ok";
-    const tag = a.fromAgendaId ? ` <span style="font-size:11px;opacity:.7;">(Agenda)</span>` : "";
-    return `
-      <tr data-id="${a.id}">
-        <td>${inputHTML({value:a.data, type:"date"})}</td>
-        <td>${inputHTML({value:a.cliente})}${tag}</td>
-        <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:a.procedimento, options: procNames.length?procNames:["Alongamento"]})}</td>
-        <td>${inputHTML({value:(a.valor||0).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
-        <td>${inputHTML({value:num(a.recebido).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
-        <td>${inputHTML({value:(a.custoMaterial||0).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
-        <td>${inputHTML({value:num(a.maoObra).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
-        <td>${inputHTML({value:(a.custoTotal||0).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
-        <td>${inputHTML({value:(a.lucro||0).toFixed(2), type:"text", cls:`money ${lucroCls}`, readonly:true})}</td>
+  tblAtBody.innerHTML = state.atendimentos.map(a=>`
+    <tr data-id="${a.id}">
+      <td>${inputHTML({value:a.data, type:"date"})}</td>
+      <td>${inputHTML({value:a.cliente})}</td>
+      <td>${inputHTML({value:clientWpp(a.cliente) || a.whats || "", readonly:true})}</td>
+      <td>${inputHTML({value:a.procedimento, options: procNames.length?procNames:["Alongamento"]})}</td>
+      <td>${inputHTML({value:num(a.valor).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
+      <td>${inputHTML({value:num(a.recebido).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
+      <td>${inputHTML({value:num(a.custoMaterial).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
+      <td>${inputHTML({value:num(a.maoObra).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
+      <td>${inputHTML({value:num(a.custoTotal).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
+      <td>${inputHTML({value:num(a.lucro).toFixed(2), type:"text", cls:"money", readonly:true})}</td>
+      <td>
+        <div class="iconRow">
+          <button class="iconBtn" data-foto title="Adicionar foto">📷</button>
+          <input type="file" accept="image/*" data-file hidden />
+        </div>
+      </td>
+      <td>
+        <div class="iconRow">
+          <button class="iconBtn" data-wpp title="WhatsApp">📩</button>
+        </div>
+      </td>
+      <td>
+        <button class="iconBtn" data-del title="Excluir">✕</button>
+      </td>
+    </tr>
+  `).join("");
 
-        <td>
-          <div class="iconRow">
-            <label class="iconBtn" title="Adicionar foto">
-              📷
-              <input type="file" accept="image/*" data-photo hidden />
-            </label>
-            <button class="iconBtn" data-openphoto title="Abrir foto">🖼️</button>
-          </div>
-        </td>
-
-        <td>
-          <div class="iconRow">
-            <button class="iconBtn" data-thx title="Agradecimento (texto)">💜</button>
-            <button class="iconBtn" data-sendphoto title="WhatsApp: mensagem + abrir foto">📷➡️</button>
-          </div>
-        </td>
-
-        <td><button class="iconBtn" data-del title="Excluir">✕</button></td>
-      </tr>
-    `;
-  }).join("");
-
-  tblAtendBody.querySelectorAll("tr").forEach((tr)=>{
+  tblAtBody.querySelectorAll("tr").forEach((tr)=>{
     const id = tr.dataset.id;
     const a = state.atendimentos.find(x=>x.id===id);
     if(!a) return;
@@ -1391,90 +1433,93 @@ function renderAtendimentosHard(){
     const tdProc = getCell(tr,3);
     const tdVal  = getCell(tr,4);
     const tdRec  = getCell(tr,5);
-    const tdMao  = getCell(tr,7);
+    const tdCM   = getCell(tr,6);
+    const tdMO   = getCell(tr,7);
+    const tdCT   = getCell(tr,8);
+    const tdLu   = getCell(tr,9);
 
     const inpWpp = getInp(tdWpp);
     const inpVal = getInp(tdVal);
+    const inpRec = getInp(tdRec);
+    const inpCM  = getInp(tdCM);
+    const inpMO  = getInp(tdMO);
+    const inpCT  = getInp(tdCT);
+    const inpLu  = getInp(tdLu);
+
+    const refreshRow = ()=>{
+      calcularAtendimento(a);
+      if(inpWpp) inpWpp.value = clientWpp(a.cliente) || "";
+      if(inpVal) inpVal.value = num(a.valor).toFixed(2);
+      if(inpCM)  inpCM.value  = num(a.custoMaterial).toFixed(2);
+      if(inpCT)  inpCT.value  = num(a.custoTotal).toFixed(2);
+      if(inpLu)  inpLu.value  = num(a.lucro).toFixed(2);
+    };
 
     getInp(tdData)?.addEventListener("change", ()=>{
       a.data = getInp(tdData).value;
-      saveSoft();
-      scheduleSync();
+      saveSoft(); scheduleSync();
     });
 
     getInp(tdCli)?.addEventListener("input", ()=>{
       a.cliente = getInp(tdCli).value;
-      if(inpWpp) inpWpp.value = clientWpp(a.cliente);
-      saveSoft();
-      scheduleSync();
+      refreshRow();
+      saveSoft(); scheduleSync();
     });
 
     getInp(tdProc)?.addEventListener("change", ()=>{
       a.procedimento = getInp(tdProc).value;
-      if(inpVal) inpVal.value = procPrice(a.procedimento).toFixed(2);
-      saveSoft();
-      scheduleSync();
+      refreshRow();
+      saveSoft(); scheduleSync();
     });
 
-    getInp(tdRec)?.addEventListener("input", ()=>{
-      a.recebido = num(getInp(tdRec).value);
-      saveSoft();
-      scheduleSync();
+    inpRec?.addEventListener("input", ()=>{
+      a.recebido = num(inpRec.value);
+      refreshRow();
+      saveSoft(); scheduleSync();
     });
 
-    getInp(tdMao)?.addEventListener("input", ()=>{
-      a.maoObra = num(getInp(tdMao).value);
-      saveSoft();
-      scheduleSync();
+    inpMO?.addEventListener("input", ()=>{
+      a.maoObra = num(inpMO.value);
+      refreshRow();
+      saveSoft(); scheduleSync();
     });
 
-    const photoInput = tr.querySelector("[data-photo]");
-    if(photoInput){
-      photoInput.onchange = async ()=>{
-        const file = photoInput.files?.[0];
-        if(!file) return;
-        a.foto = await fileToDataURL(file);
-        saveSoft();
-        alert("Foto salva ✅");
-        photoInput.value = "";
-      };
+    // Foto (localStorage)
+    const btnFoto = tr.querySelector("[data-foto]");
+    const fileInp = tr.querySelector("[data-file]");
+    if(btnFoto && fileInp){
+      btnFoto.addEventListener("click", ()=> fileInp.click());
+      fileInp.addEventListener("change", async ()=>{
+        const f = fileInp.files?.[0];
+        if(!f) return;
+        const reader = new FileReader();
+        reader.onload = ()=>{
+          a.foto = String(reader.result || "");
+          saveSoft();
+          alert("Foto salva no aparelho ✅");
+        };
+        reader.readAsDataURL(f);
+        fileInp.value = "";
+      });
     }
 
-    tr.querySelector("[data-openphoto]")?.addEventListener("click", ()=>{
-      if(!a.foto){ alert("Sem foto nesse atendimento."); return; }
-      const w = window.open("", "_blank");
-      w.document.write(`<img src="${a.foto}" style="max-width:100%;height:auto;"/>`);
-    });
-
-    tr.querySelector("[data-thx]")?.addEventListener("click", async ()=>{
+    // WhatsApp msg + foto (abre link; foto fica pro envio manual)
+    tr.querySelector("[data-wpp]")?.addEventListener("click", async ()=>{
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
-      const fake = { data:a.data, hora:"", cliente:a.cliente, procedimento:a.procedimento };
-      const txt = fillTpl(state.wpp.tplAgradecimento, fake);
-      await copyToClipboardSafe(txt);
+      const studio = state.settings.studioNome || "Studio";
+      const txt =
+`Olá ${a.cliente || ""}! 💜
+Obrigada por vir no ${studio}.
+Procedimento: ${a.procedimento}
+Recebido: ${money(a.recebido)}
+
+(Se quiser, me mande uma foto/feedback 🙏)`;
       window.open(waLink(phone, txt), "_blank");
-    });
-
-    tr.querySelector("[data-sendphoto]")?.addEventListener("click", async ()=>{
-      const phone = clientWpp(a.cliente);
-      if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
-      if(!a.foto){ alert("Esse atendimento não tem foto. Clique no 📷 e adicione."); return; }
-
-      const fake = { data:a.data, hora:"", cliente:a.cliente, procedimento:a.procedimento };
-      const txt = fillTpl(state.wpp.tplAgradecimento, fake);
-      await copyToClipboardSafe(txt);
-
-      window.open(waLink(phone, txt), "_blank");
-
-      const w = window.open("", "_blank");
-      w.document.write(`
-        <title>Foto do atendimento</title>
-        <div style="font-family:system-ui;padding:12px">
-          <h3>Foto do atendimento</h3>
-          <p>Volte no WhatsApp e clique no 📎 para anexar esta foto.</p>
-          <img src="${a.foto}" style="max-width:100%;height:auto;border-radius:12px;border:1px solid #eee"/>
-        </div>
-      `);
+      if(a.foto){
+        const ok = await copyToClipboardSafe(a.foto);
+        if(ok) alert("Foto está em base64 no clipboard (pode ser pesada). Melhor enviar a imagem manualmente no WhatsApp.");
+      }
     });
 
     tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
@@ -1484,42 +1529,42 @@ function renderAtendimentosHard(){
       renderAtendimentosHard();
       scheduleSync();
     });
+
+    refreshRow();
   });
 }
 
 function updateAtendimentosAutoCells(){
-  if(!tblAtendBody) return;
-
-  const rows = tblAtendBody.querySelectorAll("tr");
-  rows.forEach((tr)=>{
+  const body = $("#tblAtend tbody");
+  if(!body) return;
+  body.querySelectorAll("tr").forEach((tr)=>{
     const id = tr.dataset.id;
     const a = state.atendimentos.find(x=>x.id===id);
     if(!a) return;
-
     calcularAtendimento(a);
 
     const inpWpp = getInp(getCell(tr,2));
     const inpVal = getInp(getCell(tr,4));
+    const inpRec = getInp(getCell(tr,5));
     const inpCM  = getInp(getCell(tr,6));
+    const inpMO  = getInp(getCell(tr,7));
     const inpCT  = getInp(getCell(tr,8));
-    const inpLuc = getInp(getCell(tr,9));
+    const inpLu  = getInp(getCell(tr,9));
 
-    if(inpWpp) inpWpp.value = clientWpp(a.cliente);
-    if(inpVal) inpVal.value = (a.valor||0).toFixed(2);
-    if(inpCM)  inpCM.value  = (a.custoMaterial||0).toFixed(2);
-    if(inpCT)  inpCT.value  = (a.custoTotal||0).toFixed(2);
-    if(inpLuc){
-      inpLuc.value = (a.lucro||0).toFixed(2);
-      inpLuc.classList.toggle("danger", (a.lucro||0) < 0);
-      inpLuc.classList.toggle("ok", (a.lucro||0) >= 0);
-    }
+    if(inpWpp) inpWpp.value = clientWpp(a.cliente) || "";
+    if(inpVal) inpVal.value = num(a.valor).toFixed(2);
+    if(inpRec) inpRec.value = num(a.recebido).toFixed(2);
+    if(inpCM)  inpCM.value  = num(a.custoMaterial).toFixed(2);
+    if(inpMO)  inpMO.value  = num(a.maoObra).toFixed(2);
+    if(inpCT)  inpCT.value  = num(a.custoTotal).toFixed(2);
+    if(inpLu)  inpLu.value  = num(a.lucro).toFixed(2);
   });
 }
 
 /* =================== DESPESAS =================== */
 const tblDespBody = $("#tblDesp tbody");
 onClick("btnAddDespesa", ()=>{
-  state.despesas.unshift({ id:uid(), data:todayISO(), tipo:"Fixa", valor:0, desc:"" });
+  state.despesas.unshift({ id:uid(), data: todayISO(), tipo:"Fixa", valor:0, desc:"" });
   saveSoft();
   renderDespesas();
   scheduleSync();
@@ -1563,203 +1608,195 @@ function renderDespesas(){
   });
 }
 
-/* =================== KPI / DASH =================== */
-function updateDashboardKPIs(){
-  const { receita, custos, despesas, lucro } = calcResumo();
+/* =================== WHATSAPP UI =================== */
+function bindWppUI(){
+  safeValue("wppHoraLembrete", state.wpp.horaLembrete);
+  safeValue("wppHoraRelatorio", state.wpp.horaRelatorio);
+  safeValue("tplConfirmacao", state.wpp.tplConfirmacao);
+  safeValue("tplLembrete", state.wpp.tplLembrete);
+  safeValue("tplAgradecimento", state.wpp.tplAgradecimento);
+  safeValue("tplRelatorio", state.wpp.tplRelatorio);
 
-  safeText("kpiReceita", money(receita));
-  safeText("kpiCustos", money(custos));
-  safeText("kpiDespesas", money(despesas));
-  safeText("kpiLucro", money(lucro));
+  onClick("btnSaveWpp", ()=>{
+    state.wpp.horaLembrete = byId("wppHoraLembrete")?.value || state.wpp.horaLembrete;
+    state.wpp.horaRelatorio= byId("wppHoraRelatorio")?.value || state.wpp.horaRelatorio;
+    state.wpp.tplConfirmacao = byId("tplConfirmacao")?.value || state.wpp.tplConfirmacao;
+    state.wpp.tplLembrete = byId("tplLembrete")?.value || state.wpp.tplLembrete;
+    state.wpp.tplAgradecimento = byId("tplAgradecimento")?.value || state.wpp.tplAgradecimento;
+    state.wpp.tplRelatorio = byId("tplRelatorio")?.value || state.wpp.tplRelatorio;
+    saveSoft();
+    scheduleSync();
+    alert("WhatsApp salvo ✅");
+  });
 
-  const bars = byId("chartBars");
-  drawBars(bars, ["Receita","Lucro","Despesas"], [receita, lucro, despesas]);
-
-  const line = byId("chartLine");
-  const monthly = calcMonthlyRevenue();
-  drawLine(line, monthly.length ? monthly : [{k:"-",v:0},{k:"-",v:0}]);
-}
-function renderDashboard(){ updateDashboardKPIs(); }
-
-/* =================== WHATSAPP PAGE =================== */
-function reportTodayText(){
-  const data = todayISO();
-  const lista = state.agenda
-    .filter(a => a.data === data && (a.status||"Agendado") !== "Cancelado")
-    .sort((x,y)=> (x.hora||"").localeCompare(y.hora||""))
-    .map(a => `• ${a.hora} — ${a.cliente} — ${a.procedimento} (${money(procPrice(a.procedimento))}) [${a.status||"Agendado"}]`)
-    .join("\n");
-
-  const total = state.agenda
-    .filter(a => a.data === data && (a.status||"Agendado") === "Realizado")
-    .reduce((s,a)=> s + num(a.recebido), 0);
-
-  return (state.wpp.tplRelatorio||"")
-    .replaceAll("{data}", fmtBRDate(data))
-    .replaceAll("{studio}", state.settings.studioNome || "Studio")
-    .replaceAll("{lista}", lista || "(sem agendamentos)")
-    .replaceAll("{total}", money(total));
-}
-function sendReportToday(){
-  const myWpp = state.settings.studioWpp;
-  if(!myWpp){
-    alert("Defina seu WhatsApp em Config.");
-    setRoute("config");
-    return;
-  }
-  window.open(waLink(myWpp, reportTodayText()), "_blank");
+  onClick("btnQueueTomorrow", ()=> buildQueueTomorrow());
+  onClick("btnSendReport", ()=> sendReportToday());
 }
 
 function renderWppQueue(){
   const box = byId("wppQueue");
   if(!box) return;
 
-  const q = state.wppQueue || [];
-  if(!q.length){
-    box.innerHTML = `<div class="hint">Sem mensagens na fila.</div>`;
+  if(!state.wppQueue.length){
+    box.innerHTML = `<div class="hint">Sem itens na fila.</div>`;
     return;
   }
 
-  box.innerHTML = q.map((m,i)=>`
-    <div style="display:flex; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eee;">
-      <div style="flex:1;">
-        <div style="font-weight:900;">${m.type}</div>
-        <div style="font-size:12px; opacity:.8;">Para: ${m.phone || "(sem número)"}</div>
-        <pre>${m.text}</pre>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        <button class="btn" data-send="${i}" ${m.phone ? "" : "disabled"}>Enviar</button>
-        <button class="btn btn--ghost" data-del="${i}">Remover</button>
+  box.innerHTML = state.wppQueue.map((q,idx)=>`
+    <div class="box" style="margin:10px 0;">
+      <b>${q.title || "Mensagem"}</b>
+      <div class="hint">${q.when || ""}</div>
+      <div style="margin-top:8px;">
+        <button class="btn btn--ghost" data-open="${idx}">Abrir WhatsApp</button>
+        <button class="btn btn--ghost" data-del="${idx}">Remover</button>
       </div>
     </div>
   `).join("");
 
-  box.querySelectorAll("[data-send]").forEach(btn=>{
-    btn.onclick = ()=>{
-      const idx = Number(btn.dataset.send);
-      const m = state.wppQueue[idx];
-      if(!m?.phone){
-        alert("Sem WhatsApp. Preencha em Clientes.");
-        return;
-      }
-      window.open(waLink(m.phone, m.text), "_blank");
-    };
+  box.querySelectorAll("[data-open]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const i = Number(btn.dataset.open);
+      const q = state.wppQueue[i];
+      if(!q) return;
+      window.open(waLink(q.phone, q.text), "_blank");
+    });
   });
-
   box.querySelectorAll("[data-del]").forEach(btn=>{
-    btn.onclick = ()=>{
-      if(!confirmDel("esta mensagem da fila")) return;
-      const idx = Number(btn.dataset.del);
-      state.wppQueue.splice(idx,1);
+    btn.addEventListener("click", ()=>{
+      const i = Number(btn.dataset.del);
+      state.wppQueue.splice(i,1);
       saveSoft();
       renderWppQueue();
+      scheduleSync();
+    });
+  });
+}
+
+function buildQueueTomorrow(){
+  const tomorrow = addDaysISO(todayISO(), 1);
+  const list = state.agenda
+    .filter(a => a.data === tomorrow && (a.status||"Agendado")==="Agendado")
+    .filter(a => (a.status||"Agendado") !== "Bloqueio");
+
+  state.wppQueue = list.map(a=>{
+    const phone = clientWpp(a.cliente);
+    return {
+      id: uid(),
+      when: `Amanhã ${fmtBRDate(tomorrow)} ${a.hora || ""}`,
+      title: `Lembrete — ${a.cliente || "Sem nome"}`,
+      phone,
+      text: fillTpl(state.wpp.tplLembrete, a)
     };
-  });
+  }).filter(x=>x.phone);
+
+  saveSoft();
+  renderWppQueue();
+  scheduleSync();
+  alert(`Fila gerada ✅ (${state.wppQueue.length})`);
 }
 
-function bindWppUI(){
-  const hL = byId("wppHoraLembrete");
-  const hR = byId("wppHoraRelatorio");
-  const tC = byId("tplConfirmacao");
-  const tL = byId("tplLembrete");
-  const tA = byId("tplAgradecimento");
-  const tRel = byId("tplRelatorio");
+function sendReportToday(){
+  const iso = todayISO();
+  const studio = state.settings.studioNome || "Studio";
+  const phone = state.settings.studioWpp || "";
+  if(!phone){ alert("Configure seu WhatsApp do Studio em Config."); setRoute("config"); return; }
 
-  if(hL) hL.value = state.wpp.horaLembrete || "09:00";
-  if(hR) hR.value = state.wpp.horaRelatorio || "20:00";
-  if(tC) tC.value = state.wpp.tplConfirmacao || "";
-  if(tL) tL.value = state.wpp.tplLembrete || "";
-  if(tA) tA.value = state.wpp.tplAgradecimento || "";
-  if(tRel) tRel.value = state.wpp.tplRelatorio || "";
+  const items = state.agenda
+    .filter(a => a.data === iso)
+    .filter(a => (a.status||"Agendado") === "Realizado")
+    .filter(a => (a.status||"Agendado") !== "Bloqueio")
+    .slice()
+    .sort((x,y)=> (x.hora||"").localeCompare(y.hora||""));
 
-  onClick("btnSaveWpp", ()=>{
-    state.wpp.horaLembrete = hL?.value || "09:00";
-    state.wpp.horaRelatorio = hR?.value || "20:00";
-    state.wpp.tplConfirmacao = tC?.value ?? state.wpp.tplConfirmacao;
-    state.wpp.tplLembrete = tL?.value ?? state.wpp.tplLembrete;
-    state.wpp.tplAgradecimento = tA?.value ?? state.wpp.tplAgradecimento;
-    state.wpp.tplRelatorio = tRel?.value ?? state.wpp.tplRelatorio;
-    saveSoft();
-    alert("WhatsApp salvo ✅");
-    renderWppQueue();
-  });
+  const lines = items.map(a=>{
+    return `• ${a.hora} — ${a.cliente || "Sem nome"} — ${a.procedimento} — ${money(a.recebido)}`;
+  }).join("\n");
 
-  onClick("btnQueueTomorrow", ()=>{
-    const tomorrow = addDaysISO(todayISO(), 1);
-    const itens = state.agenda
-      .filter(a => a.data === tomorrow && (a.status||"Agendado") !== "Cancelado")
-      .sort((x,y)=> (x.hora||"").localeCompare(y.hora||""));
+  const total = items.reduce((s,a)=> s + num(a.recebido), 0);
 
-    state.wppQueue = itens
-      .map(a=>{
-        const phone = clientWpp(a.cliente);
-        const txt = fillTpl(state.wpp.tplLembrete, a);
-        return { id:uid(), type:`Lembrete (amanhã ${fmtBRDate(tomorrow)})`, phone, text: txt };
-      })
-      .filter(m => m.phone);
+  const tpl = state.wpp.tplRelatorio || "";
+  const text = tpl
+    .replaceAll("{data}", fmtBRDate(iso))
+    .replaceAll("{studio}", studio)
+    .replaceAll("{lista}", lines || "Sem realizados.")
+    .replaceAll("{total}", money(total));
 
-    saveSoft();
-    setRoute("whatsapp");
-    renderWppQueue();
-  });
-
-  onClick("btnSendReport", ()=> sendReportToday());
+  window.open(waLink(phone, text), "_blank");
 }
 
-/* =================== CONFIG =================== */
+/* =================== CONFIG UI =================== */
 function bindConfigUI(){
-  const elNome = byId("cfgStudioNome");
-  const elLogo = byId("cfgLogoUrl");
-  const elP = byId("cfgCorPrimaria");
-  const elA = byId("cfgCorAcento");
-  const elW = byId("cfgStudioWpp");
-
-  if(elNome) elNome.value = state.settings.studioNome || "Studio Jaqueline Mendanha";
-  if(elLogo) elLogo.value = state.settings.logoUrl || "";
-  if(elP) elP.value = state.settings.corPrimaria || "#7B2CBF";
-  if(elA) elA.value = state.settings.corAcento || "#F72585";
-  if(elW) elW.value = state.settings.studioWpp || "";
+  safeValue("cfgStudioNome", state.settings.studioNome);
+  safeValue("cfgLogoUrl", state.settings.logoUrl);
+  safeValue("cfgCorPrimaria", state.settings.corPrimaria);
+  safeValue("cfgCorAcento", state.settings.corAcento);
+  safeValue("cfgStudioWpp", state.settings.studioWpp);
 
   onClick("btnSaveConfig", ()=>{
-    state.settings.studioNome = elNome?.value.trim() || "Studio Jaqueline Mendanha";
-    state.settings.logoUrl = elLogo?.value.trim() || "";
-    state.settings.corPrimaria = elP?.value || "#7B2CBF";
-    state.settings.corAcento = elA?.value || "#F72585";
-    state.settings.studioWpp = elW?.value.trim() || "";
-    saveSoft();
+    state.settings.studioNome = byId("cfgStudioNome")?.value || state.settings.studioNome;
+    state.settings.logoUrl = byId("cfgLogoUrl")?.value || "";
+    state.settings.corPrimaria = byId("cfgCorPrimaria")?.value || "#7B2CBF";
+    state.settings.corAcento = byId("cfgCorAcento")?.value || "#F72585";
+    state.settings.studioWpp = byId("cfgStudioWpp")?.value || "";
+
     applyTheme();
-    alert("Config salva ✅");
+    saveSoft();
     scheduleSync();
+    alert("Config salva ✅");
   });
+}
+
+/* =================== DASHBOARD =================== */
+function renderDashboard(){
+  updateDashboardKPIs();
+
+  const bars = byId("chartBars");
+  const line = byId("chartLine");
+
+  const { receita, despesas, lucro } = calcResumo();
+  drawBars(bars, ["Receita","Lucro","Despesas"], [receita, lucro, despesas]);
+
+  const monthly = calcMonthlyRevenue();
+  drawLine(line, monthly);
+}
+
+function updateDashboardKPIs(){
+  const k1 = byId("kpiReceita");
+  const k2 = byId("kpiCustos");
+  const k3 = byId("kpiDespesas");
+  const k4 = byId("kpiLucro");
+  if(!k1 || !k2 || !k3 || !k4) return;
+
+  const { receita, custos, despesas, lucro } = calcResumo();
+  k1.textContent = money(receita);
+  k2.textContent = money(custos);
+  k3.textContent = money(despesas);
+  k4.textContent = money(lucro);
 }
 
 /* =================== BOOT =================== */
-function boot(){
+function renderAllOnce(){
+  renderAllHard();
+  renderDashboard();
+}
+
+renderAllOnce();
+
+/* =================== SERVICE WORKER =================== */
+(async function registerSW(){
   try{
-    enforceAgendaRecebidoRules();
-    syncAgendaToAtendimentos();
-    state.materiais.forEach(calcularMaterial);
-    state.atendimentos.forEach(calcularAtendimento);
-
-    renderAllHard();
-    scheduleSync();
+    if("serviceWorker" in navigator){
+      await navigator.serviceWorker.register("./service-worker.js");
+    }
   }catch(e){
-    console.error("BOOT ERROR:", e);
-    alert("Erro ao iniciar o app. Abra o console (F12) e me mande o erro.");
+    console.warn("SW falhou:", e);
   }
-}
-boot();
+})();
 
-// ✅ se o firebase já estiver pronto, força um push inicial
-setTimeout(() => {
-  if (typeof window.__SJM_PUSH_TO_CLOUD === "function") {
-    try { window.__SJM_PUSH_TO_CLOUD(state); } catch {}
-  }
-}, 800);
-
-/* =================== PWA: service worker =================== */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
-  });
-}
+/* =================== FINAL SYNC =================== */
+enforceAgendaRecebidoRules();
+syncAgendaToAtendimentos();
+state.materiais.forEach(calcularMaterial);
+state.atendimentos.forEach(calcularAtendimento);
+saveSoft();
+scheduleSync();
