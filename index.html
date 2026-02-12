@@ -25,14 +25,6 @@
         </div>
       </div>
     </div>
-
-    <div class="topbar__right">
-      <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
-      <label class="btn btn--ghost fileBtn">
-        Importar backup
-        <input type="file" id="fileImport" accept="application/json" hidden />
-      </label>
-    </div>
   </header>
 
   <nav class="tabs" id="tabs"></nav>
@@ -41,8 +33,13 @@
     <!-- DASHBOARD -->
     <section class="panel" data-route="dashboard">
       <div class="panel__head">
-        <h2>Dashboard</h2> 
-        <p>Resumo do estúdio (atualiza automaticamente).</p>
+        <div class="dashHead">
+          <div>
+            <h2>Dashboard</h2>
+            <p>Resumo do estúdio (atualiza automaticamente).</p>
+          </div>
+          <img id="dashLogo" class="dashLogo isHidden" alt="Logo do Studio no Dashboard" />
+        </div>
       </div>
 
       <div class="cards">
@@ -282,7 +279,7 @@
           <thead>
             <tr>
               <th>Cliente</th><th>WhatsApp</th><th>Telefone</th><th>Nasc.</th><th>Alergia</th><th>Quais</th>
-              <th>Gestante</th><th>Saúde</th><th>Medicamentos</th><th>Obs.</th><th></th>
+              <th>Gestante</th><th>Molde</th><th>N° do Molde</th><th>Obs.</th><th></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -403,8 +400,17 @@
     <small>Dados salvos no seu aparelho (localStorage). Use backup para não perder.</small>
   </footer>
 
-  <!-- IMPORTANTE: firebase.js ANTES do app.js -->
+  <!-- ✅ Export/Import fixo no canto inferior direito -->
+  <div class="backupDock" aria-label="Backup">
+    <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
+    <label class="btn btn--ghost fileBtn">
+      Importar backup
+      <input type="file" id="fileImport" accept="application/json" hidden />
+    </label>
+  </div>
+
+  <!-- ✅ IMPORTANTE: firebase.js ANTES do app.js -->
+  <script type="module" src="./firebase.js"></script>
   <script type="module" src="./app.js"></script>
-<script type="module" src="./firebase.js"></script>
 </body>
 </html>
