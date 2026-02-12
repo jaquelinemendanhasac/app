@@ -52,8 +52,6 @@ body{
 .brand__title{ font-weight:1000; font-size:18px; letter-spacing:.2px; }
 .brand__subtitle{ opacity:.9; font-size:12px; margin-top:2px; }
 
-.topbar__right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-
 /* TABS */
 .tabs{
   display:flex;
@@ -63,7 +61,7 @@ body{
   background:#fff;
   border-bottom:1px solid var(--line);
   position:sticky;
-  top:66px; /* ✅ abaixo do header sticky */
+  top:66px;
   z-index:20;
 }
 .tab{
@@ -88,6 +86,25 @@ body{
 
 .panel__head h2{ margin:8px 0 2px; font-size:20px; }
 .panel__head p{ margin:0 0 12px; color:var(--muted); }
+
+/* ✅ DASH LOGO */
+.dashHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.dashLogo{
+  width:64px;
+  height:64px;
+  border-radius:18px;
+  object-fit:cover;
+  border:1px solid var(--line);
+  background:#fff;
+  box-shadow:0 6px 18px rgba(16,24,40,.06);
+}
+.dashLogo.isHidden{ display:none; }
 
 .cards{
   display:grid;
@@ -152,7 +169,7 @@ body{
 .field{ display:flex; flex-direction:column; gap:6px; min-width:240px; }
 .field span{ font-weight:1000; font-size:12px; color:#3b2b5f; }
 
-/* ✅ inputs normais brancos (mais limpo) */
+/* ✅ inputs normais brancos */
 input, select, textarea{
   border:1px solid var(--line);
   border-radius:12px;
@@ -193,7 +210,7 @@ textarea{ resize:vertical; }
   vertical-align:top;
 }
 
-/* ✅ inputs de tabela (mini) continuam com azul edit */
+/* ✅ inputs de tabela (mini) */
 .mini{
   width:100%;
   min-width:120px;
@@ -243,6 +260,19 @@ pre{
   border:1px solid #eee;
 }
 
+/* ✅ Backup dock fixo canto inferior direito */
+.backupDock{
+  position:fixed;
+  right:16px;
+  bottom:16px;
+  z-index:80;
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+.backupDock .btn{ width:auto; }
+
 /* DESKTOP */
 @media (min-width: 900px){
   .grid2{ grid-template-columns:1fr 1fr; }
@@ -257,15 +287,6 @@ pre{
     align-items:flex-start;
     gap:10px;
   }
-
-  .topbar__right{
-    width:100%;
-    justify-content:flex-start;
-    gap:8px;
-  }
-
-  /* ✅ no header, botões não precisam ser 100% */
-  .topbar__right .btn{ width:auto; }
 
   .brand__title{ font-size:16px; }
   .brand__subtitle{ font-size:11px; }
@@ -309,7 +330,6 @@ pre{
     padding:8px;
   }
 
-  /* ✅ canvas com altura fixa pra não quebrar o draw do JS */
   canvas{
     width:100% !important;
     height:180px !important;
@@ -318,6 +338,17 @@ pre{
   .footer{
     font-size:12px;
     padding:12px;
+  }
+
+  /* ✅ backup dock no mobile vira coluna */
+  .backupDock{
+    left:10px;
+    right:10px;
+    bottom:10px;
+    justify-content:stretch;
+  }
+  .backupDock .btn{
+    width:100%;
   }
 }
 
