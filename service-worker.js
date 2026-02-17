@@ -18,7 +18,6 @@ const ASSETS = [
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    // ✅ sem querystring aqui, senão o match quebra
     await cache.addAll(ASSETS);
     await self.skipWaiting();
   })());
@@ -44,14 +43,13 @@ self.addEventListener("fetch", (event) => {
   // ✅ HTML: network-first (cai pro cache se offline)
   if (req.mode === "navigate") {
     event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
       try {
-        const res = await fetch("./index.html", { cache: "no-store" });
-        const cache = await caches.open(CACHE_NAME);
-        cache.put("./index.html", res.clone());
+        const res = await fetch(req, { cache: "no-store" });
+        cache.put(req, res.clone());
         return res;
       } catch {
-        const cache = await caches.open(CACHE_NAME);
-        return (await cache.match("./index.html")) || new Response("Offline", { status: 503 });
+        return (await cache.match(req)) || (await cache.match("./index.html")) || new Response("Offline", { status: 503 });
       }
     })());
     return;
