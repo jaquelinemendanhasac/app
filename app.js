@@ -764,21 +764,12 @@ function syncAgendaToAtendimentos(){
 
 /* =================== DASH =================== */
 function calcResumo(){
-  // ✅ RESUMO DO MÊS ATUAL (não soma histórico inteiro)
-  const nowKey = monthKey(todayISO());
-
-  const atendMes = state.atendimentos.filter(a => monthKey(a.data) === nowKey);
-  const despMes  = state.despesas.filter(d => monthKey(d.data) === nowKey);
-
-  const receita = atendMes.reduce((s,a)=> s + num(a.recebido), 0);
-  const custos  = atendMes.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
-  const despesas= despMes.reduce((s,d)=> s + num(d.valor), 0);
+  const receita = state.atendimentos.reduce((s,a)=> s + num(a.recebido), 0);
+  const custos  = state.atendimentos.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
+  const despesas= state.despesas.reduce((s,d)=> s + num(d.valor), 0);
   const lucro   = receita - custos - despesas;
-
   return { receita, custos, despesas, lucro };
 }
-
-
 function monthKey(iso){
   if(!iso) return "";
   const [y,m] = iso.split("-");
@@ -793,6 +784,56 @@ function calcMonthlyRevenue(){
   }
   const keys = Array.from(map.keys()).sort();
   return keys.map(k => ({ k, v: map.get(k) }));
+}
+
+/* =========================================================
+   ✅ NOVO: Comparativos MoM (mês anterior) e YoY (ano anterior)
+   ========================================================= */
+function revenueByMonthKey(k){
+  return state.atendimentos
+    .filter(a => monthKey(a.data) === k)
+    .reduce((s,a)=> s + num(a.recebido), 0);
+}
+
+function monthKeyAdd(k, deltaMonths){
+  const [y,m] = (k||"").split("-").map(Number);
+  const d = new Date((y||1970), (m||1)-1, 1);
+  d.setMonth(d.getMonth() + deltaMonths);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+function pctDiff(cur, prev){
+  if(prev === 0 && cur === 0) return 0;
+  if(prev === 0) return 100;
+  return ((cur - prev) / prev) * 100;
+}
+
+function updateRevenueComparisons(){
+  const nowK = monthKey(todayISO());
+  const prevK = monthKeyAdd(nowK, -1);
+  const lastYearK = monthKeyAdd(nowK, -12);
+
+  const cur = revenueByMonthKey(nowK);
+  const prev = revenueByMonthKey(prevK);
+  const lastYear = revenueByMonthKey(lastYearK);
+
+  const momR = cur - prev;
+  const momP = pctDiff(cur, prev);
+
+  const yoyR = cur - lastYear;
+  const yoyP = pctDiff(cur, lastYear);
+
+  const elMoM = byId("hintMoM");
+  const elYoY = byId("hintYoY");
+
+  if(elMoM){
+    elMoM.textContent =
+      `Mês atual (${nowK}) vs mês anterior (${prevK}): ${money(momR)} (${momP.toFixed(1)}%)`;
+  }
+  if(elYoY){
+    elYoY.textContent =
+      `Mês atual (${nowK}) vs ano anterior (${lastYearK}): ${money(yoyR)} (${yoyP.toFixed(1)}%)`;
+  }
 }
 
 /* ======= Charts (no libs) ======= */
@@ -1937,6 +1978,9 @@ function renderDashboard(){
 
   const monthly = calcMonthlyRevenue();
   drawLine(line, monthly);
+
+  // ✅ NOVO: atualiza os comparativos no Dashboard
+  updateRevenueComparisons();
 }
 
 function updateDashboardKPIs(){
