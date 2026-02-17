@@ -402,9 +402,10 @@ pre{
   box-shadow:0 6px 18px rgba(16,24,40,.06);
 }
 
+/* ✅ FIX: garante que a linha da semana e a grade usem exatamente o mesmo grid */
 .calWeek{
   display:grid;
-  grid-template-columns:repeat(7,1fr);
+  grid-template-columns:repeat(7, minmax(0,1fr)); /* ✅ FIX */
   gap:8px;
   margin-bottom:8px;
   font-weight:1000;
@@ -413,6 +414,7 @@ pre{
   opacity:.9;
 }
 .calWeek > div{
+  min-width:0; /* ✅ FIX */
   padding:6px 8px;
   border-radius:10px;
   background:linear-gradient(135deg, var(--soft2), var(--soft));
@@ -422,11 +424,12 @@ pre{
 
 .calGrid{
   display:grid;
-  grid-template-columns:repeat(7,1fr);
+  grid-template-columns:repeat(7, minmax(0,1fr)); /* ✅ FIX */
   gap:8px;
 }
 
 .calDay{
+  min-width:0; /* ✅ FIX */
   border:1px solid var(--line);
   border-radius:14px;
   background:#fff;
