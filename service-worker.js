@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v17";
+const CACHE_VERSION = "v18";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -75,4 +75,5 @@ self.addEventListener("fetch", (event) => {
     return (await fetchPromise) || new Response("Offline", { status: 503 });
   })());
 });
+
 
