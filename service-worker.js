@@ -18,9 +18,8 @@ const ASSETS = [
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(
-      ASSETS.map((u) => new Request(`${u}?v=${CACHE_VERSION}`, { cache: "no-store" }))
-    );
+    // ✅ sem querystring aqui, senão o match quebra
+    await cache.addAll(ASSETS);
     await self.skipWaiting();
   })());
 });
@@ -42,14 +41,17 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // ✅ HTML: network-first
+  // ✅ HTML: network-first (cai pro cache se offline)
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       try {
-        return await fetch("./index.html?v=" + CACHE_VERSION, { cache: "no-store" });
+        const res = await fetch("./index.html", { cache: "no-store" });
+        const cache = await caches.open(CACHE_NAME);
+        cache.put("./index.html", res.clone());
+        return res;
       } catch {
         const cache = await caches.open(CACHE_NAME);
-        return (await cache.match("./index.html?v=" + CACHE_VERSION)) || new Response("Offline", { status: 503 });
+        return (await cache.match("./index.html")) || new Response("Offline", { status: 503 });
       }
     })());
     return;
@@ -58,8 +60,8 @@ self.addEventListener("fetch", (event) => {
   // ✅ Assets: stale-while-revalidate
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(req);
 
+    const cached = await cache.match(req);
     const fetchPromise = fetch(req, { cache: "no-store" })
       .then((res) => {
         if (res && res.status === 200) cache.put(req, res.clone());
@@ -75,5 +77,3 @@ self.addEventListener("fetch", (event) => {
     return (await fetchPromise) || new Response("Offline", { status: 503 });
   })());
 });
-
-
