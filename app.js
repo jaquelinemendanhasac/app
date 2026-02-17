@@ -1970,3 +1970,4 @@ state.materiais.forEach(calcularMaterial);
 state.atendimentos.forEach(calcularAtendimento);
 saveSoft();
 scheduleSync();
+
