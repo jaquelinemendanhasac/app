@@ -1,3 +1,4 @@
+<!-- index.html (COMPLETO, com a única alteração no Dashboard) -->
 <!doctype html>
 <html lang="pt-br">
 <head>
@@ -70,7 +71,10 @@
         <div class="box">
           <h3>Receita por mês</h3>
           <canvas id="chartLine" height="180"></canvas>
-          <small class="hint">Crescimento mensal</small>
+
+          <!-- ✅ ALTERAÇÃO AQUI (no lugar do "Crescimento mensal") -->
+          <small class="hint" id="hintMoM">Mês atual vs mês anterior: —</small>
+          <small class="hint" id="hintYoY">Mês atual vs ano anterior: —</small>
         </div>
       </div>
     </section>
@@ -397,7 +401,7 @@
   </main>
 
   <footer class="footer">
-    <small id="buildInfo">v17 • Dados salvos no seu aparelho (localStorage).</small>
+    <small id="buildInfo">v16 • Dados salvos no seu aparelho (localStorage).</small>
     <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
   </footer>
 
