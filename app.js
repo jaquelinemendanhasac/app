@@ -764,12 +764,21 @@ function syncAgendaToAtendimentos(){
 
 /* =================== DASH =================== */
 function calcResumo(){
-  const receita = state.atendimentos.reduce((s,a)=> s + num(a.recebido), 0);
-  const custos  = state.atendimentos.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
-  const despesas= state.despesas.reduce((s,d)=> s + num(d.valor), 0);
+  // ✅ RESUMO DO MÊS ATUAL (não soma histórico inteiro)
+  const nowKey = monthKey(todayISO());
+
+  const atendMes = state.atendimentos.filter(a => monthKey(a.data) === nowKey);
+  const despMes  = state.despesas.filter(d => monthKey(d.data) === nowKey);
+
+  const receita = atendMes.reduce((s,a)=> s + num(a.recebido), 0);
+  const custos  = atendMes.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
+  const despesas= despMes.reduce((s,d)=> s + num(d.valor), 0);
   const lucro   = receita - custos - despesas;
+
   return { receita, custos, despesas, lucro };
 }
+
+
 function monthKey(iso){
   if(!iso) return "";
   const [y,m] = iso.split("-");
@@ -1970,4 +1979,3 @@ state.materiais.forEach(calcularMaterial);
 state.atendimentos.forEach(calcularAtendimento);
 saveSoft();
 scheduleSync();
-
