@@ -690,6 +690,10 @@ async function copyToClipboardSafe(text){
   try{ await navigator.clipboard.writeText(text); return true; }
   catch{ return false; }
 }
+// ✅ compatibilidade: se algum trecho chamar fillTemplate, não quebra
+function fillTemplate(tpl, a){
+  return fillTpl(tpl, a);
+}
 
 /* =================== MATERIAIS =================== */
 function calcularMaterial(m){
@@ -1176,6 +1180,7 @@ function isConflict(i){
   return state.agenda.some((x,idx)=> idx!==i && active(x) && active(a) && `${x.data}|${x.hora}` === key);
 }
 
+/* ✅✅✅ FIX PRINCIPAL: renderAgendaHard sem HTML inválido e sem JS dentro da string */
 function renderAgendaHard(){
   const tblAgendaBody = getAgendaTbody();
   const agendaNotice = getAgendaNotice();
@@ -1212,22 +1217,27 @@ function renderAgendaHard(){
         <td>${inputHTML({value:a.status, options: statuses})}</td>
         <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly:isBlock})}</td>
         <td>${inputHTML({value:a.obs})}</td>
+
         <td>
-          <td class="iconRow">
-  <button class="iconBtn btnConfirm" title="Confirmação">📩</button>
-  <button class="iconBtn btnLembrete" title="Lembrete">⏰</button>
-  <button class="iconBtn btnAgradecimento" title="Agradecimento">🙏</button>
-</td>
+          <div class="iconRow">
+            <button class="iconBtn" data-conf title="Confirmação">📩</button>
+            <button class="iconBtn" data-lem title="Lembrete">⏰</button>
+            <button class="iconBtn" data-agr title="Agradecimento">🙏</button>
+          </div>
+        </td>
 
-row.querySelector(".btnAgradecimento")?.addEventListener("click", () => {
-  const msg = fillTemplate(state.whatsapp.tplAgradecimento, ag, state.config.studioNome);
-  window.open(waLink(ag.whatsapp, msg), "_blank");
-});
-
+        <td>
+          <button class="iconBtn" data-del title="Excluir">✕</button>
+        </td>
+      </tr>
     `;
   }).join("");
 
-  tblAgendaBody.querySelectorAll("tr").forEach((tr,idx)=>{
+  tblAgendaBody.querySelectorAll("tr").forEach((tr)=>{
+    const id = tr.dataset.id;
+    const idx = state.agenda.findIndex(x => x && x.id === id);
+    if(idx < 0) return;
+
     const a = state.agenda[idx];
     const isBlock = (a.status==="Bloqueio");
 
@@ -1331,6 +1341,14 @@ row.querySelector(".btnAgradecimento")?.addEventListener("click", () => {
       window.open(waLink(phone, txt), "_blank");
     });
 
+    tr.querySelector("[data-agr]")?.addEventListener("click", ()=>{
+      if((a.status||"Agendado")==="Bloqueio") return;
+      const phone = clientWpp(a.cliente);
+      if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
+      const txt = fillTpl(state.wpp.tplAgradecimento, a);
+      window.open(waLink(phone, txt), "_blank");
+    });
+
     tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
       if(!confirmDel("este agendamento")) return;
       removeAtendimentoFromAgenda(a.id);
@@ -1382,13 +1400,7 @@ function updateAgendaAutoCells(){
   });
 }
 
-/* ... (resto do arquivo original continua exatamente igual ao que você enviou) ... */
-
-// =======================================================
-// ✅ RESTO DO APP (tabelas + binds) — ADICIONADO para NÃO quebrar
-// (Mantém seus IDs. Só completa as funções que faltavam.)
-// =======================================================
-
+/* ... (resto do seu arquivo continua do jeito que você enviou) ... */
 /* =================== PROCEDIMENTOS =================== */
 function renderProcedimentos(){
   const body = document.querySelector('#tblProc tbody');
@@ -2021,8 +2033,6 @@ function updateRevenueComparisons(){
   hintYoY.textContent = `Mês atual vs ano anterior: ${money(cur)} vs ${money(yoy)} (${fmtPct(yoyPct)})`;
 }
 
-
-
 /* =================== DASHBOARD =================== */
 function updateDashboardKPIs(){
   const k1 = byId("kpiReceita");
@@ -2093,7 +2103,7 @@ renderAllOnce();
 (async function registerSW(){
   try{
     if("serviceWorker" in navigator){
-      await navigator.serviceWorker.register("./service-worker.js");
+      await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
     }
   }catch(e){
     console.warn("SW falhou:", e);
