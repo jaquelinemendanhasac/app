@@ -667,9 +667,14 @@ function normalizePhoneBR(p){
 }
 function waLink(phoneDigits, text){
   const p = normalizePhoneBR(phoneDigits);
-  const msg = encodeURIComponent(text || "");
+
+  // ✅ FIX: normaliza unicode (evita � em emojis no WhatsApp)
+  const safeText = String(text || "").normalize("NFC");
+
+  const msg = encodeURIComponent(safeText);
   return `https://wa.me/${p}?text=${msg}`;
 }
+
 function fillTpl(tpl, a){
   const studio = state.settings.studioNome || "Studio";
   const valor = money(procPrice(a.procedimento));
@@ -1208,13 +1213,17 @@ function renderAgendaHard(){
         <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly:isBlock})}</td>
         <td>${inputHTML({value:a.obs})}</td>
         <td>
-          <div class="iconRow">
-            <button class="iconBtn" data-conf title="Confirmação" ${isBlock?"disabled":""}>📩</button>
-            <button class="iconBtn" data-lem title="Lembrete" ${isBlock?"disabled":""}>⏰</button>
-          </div>
-        </td>
-        <td><button class="iconBtn" data-del title="Excluir">✕</button></td>
-      </tr>
+          <td class="iconRow">
+  <button class="iconBtn btnConfirm" title="Confirmação">📩</button>
+  <button class="iconBtn btnLembrete" title="Lembrete">⏰</button>
+  <button class="iconBtn btnAgradecimento" title="Agradecimento">🙏</button>
+</td>
+
+row.querySelector(".btnAgradecimento")?.addEventListener("click", () => {
+  const msg = fillTemplate(state.whatsapp.tplAgradecimento, ag, state.config.studioNome);
+  window.open(waLink(ag.whatsapp, msg), "_blank");
+});
+
     `;
   }).join("");
 
