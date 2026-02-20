@@ -548,3 +548,18 @@ pre{
 @media (max-width: 900px){
   .calWrap{ grid-template-columns: 1fr; }
 }
+
+
+/* =========================================================
+   ✅ DIFERENÇA VISUAL: Agenda x Atendimentos
+   ========================================================= */
+#tblAgenda thead th{ background:linear-gradient(90deg, var(--p), #5a189a); }
+#tblAtend thead th{ background:linear-gradient(90deg, var(--a), var(--p)); }
+#tblProc thead th{ background:linear-gradient(90deg, #2B2D42, #1f2230); }
+
+/* Botões rápidos do calendário: não estourar o card */
+#calDayList .actions{ margin:6px 0 0; }
+#calDayList .actions .btn{ width:auto; }
+@media (max-width:768px){
+  #calDayList .actions .btn{ width:100%; }
+}
