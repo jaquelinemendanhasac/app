@@ -138,7 +138,12 @@ const num = (v)=> {
 };
 
 const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(2,6);
-const todayISO = ()=> new Date().toISOString().slice(0,10);
+const todayISO = ()=> {
+  // ✅ FIX: usa data LOCAL (evita virar 1 dia antes por fuso)
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,10);
+};
 
 function fmtBRDate(iso){
   if(!iso) return "";
@@ -668,7 +673,7 @@ function normalizePhoneBR(p){
 function waLink(phoneDigits, text){
   const p = normalizePhoneBR(phoneDigits);
 
-  // ✅ FIX: normaliza unicode (evita � em emojis no WhatsApp)
+  // ✅ FIX: normaliza unicode (evita   em emojis no WhatsApp)
   const safeText = String(text || "").normalize("NFC");
 
   const msg = encodeURIComponent(safeText);
@@ -1051,10 +1056,47 @@ function renderCalendarDay(){
           <span class="calListMeta">${st}</span>
         </div>
         <div class="calListMeta">Procedimento: ${a.procedimento || "—"} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
+                <div class="actions" style="margin:6px 0 0;gap:8px;">
+          <button class="btn btn--ghost" data-act="realizado" data-id="${a.id}">Marcar Realizado</button>
+          <button class="btn btn--ghost" data-act="agendado" data-id="${a.id}">Voltar p/ Agendado</button>
+          <button class="btn btn--ghost" data-act="cancelado" data-id="${a.id}">Cancelar</button>
+        </div>
         ${a.obs ? `<div class="calListMeta">Obs: ${String(a.obs)}</div>` : ``}
       </div>
     `;
   }).join("");
+
+  // ✅ ações rápidas no Calendário (sem sair da tela)
+  box.onclick = (e)=>{
+    const btn = e.target.closest('button[data-act]');
+    if(!btn) return;
+    const act = btn.getAttribute('data-act');
+    const id = btn.getAttribute('data-id');
+    const ag = state.agenda.find(x=>x && x.id===id);
+    if(!ag) return;
+
+    if(act === 'realizado'){
+      ag.status = 'Realizado';
+      ag.recebido = procPrice(ag.procedimento);
+    }else if(act === 'agendado'){
+      ag.status = 'Agendado';
+      ag.recebido = 0;
+    }else if(act === 'cancelado'){
+      ag.status = 'Cancelado';
+      ag.recebido = 0;
+    }
+
+    // atualiza tudo imediatamente
+    enforceAgendaRecebidoRules();
+    syncAgendaToAtendimentos();
+    state.atendimentos.forEach(calcularAtendimento);
+
+    saveSoft();
+    renderAgendaHard();
+    renderAtendimentosHard();
+    renderCalendar();
+    scheduleSync();
+  };
 }
 
 function bindCalendarUI(){
