@@ -1,14 +1,17 @@
-<!-- index.html (COMPLETO, com CRM no lugar de Atendimentos) -->
+<!-- index.html (COMPLETO, com CRM) -->
 <!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Studio Jaqueline Mendanha — Gestão</title>
+
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#7B2CBF">
+
   <link rel="icon" href="./icons/icon-192.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -23,7 +26,9 @@
       </div>
     </div>
   </header>
+
   <nav class="tabs" id="tabs"></nav>
+
   <main class="wrap" role="main">
     <!-- DASHBOARD -->
     <section class="panel" data-route="dashboard">
@@ -36,6 +41,7 @@
           <img id="dashLogo" class="dashLogo isHidden" alt="Logo do Studio" />
         </div>
       </div>
+
       <div class="cards">
         <div class="card card--accent">
           <div class="card__label">Receita (Recebidos)</div>
@@ -54,6 +60,7 @@
           <div class="card__value" id="kpiLucro">R$ 0,00</div>
         </div>
       </div>
+
       <div class="grid2">
         <div class="box">
           <h3>Métricas</h3>
@@ -68,23 +75,26 @@
         </div>
       </div>
     </section>
+
     <!-- CALENDÁRIO -->
     <section class="panel" data-route="calendario">
       <div class="panel__head">
         <h2>Calendário</h2>
         <p>Visão mensal da agenda. Clique em um dia para ver os agendamentos.</p>
       </div>
+
       <div class="calTop">
         <div class="calNav">
-          <button class="btn btn--ghost" id="calPrev"> </button>
+          <button class="btn btn--ghost" id="calPrev" aria-label="Mês anterior">◀</button>
           <div class="calTitle" id="calTitle">Mês/Ano</div>
-          <button class="btn btn--ghost" id="calNext"> </button>
+          <button class="btn btn--ghost" id="calNext" aria-label="Próximo mês">▶</button>
         </div>
         <div class="calActions">
           <button class="btn btn--ghost" id="calToday">Hoje</button>
           <button class="btn" id="calNew">+ Novo agendamento</button>
         </div>
       </div>
+
       <div class="calWrap">
         <div class="calBox">
           <div class="calWeek">
@@ -93,6 +103,7 @@
           <div class="calGrid" id="calGrid"></div>
           <small class="hint">Badges: total do dia / valor recebido (Realizado). Conflitos ficam destacados.</small>
         </div>
+
         <div class="calSide">
           <div class="box">
             <h3 id="calDayTitle">Dia</h3>
@@ -102,18 +113,22 @@
         </div>
       </div>
     </section>
+
     <!-- AGENDA -->
     <section class="panel" data-route="agenda">
       <div class="panel__head">
         <h2>Agenda</h2>
         <p>Status “Realizado” cria/atualiza Atendimentos automaticamente. Status “Bloqueio” é folga/compromisso.</p>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnAddAgenda">+ Novo agendamento</button>
         <button class="btn btn--ghost" id="btnClearAgenda">Limpar agenda (somente agenda)</button>
         <button class="btn btn--ghost" id="btnReportToday">Relatório de hoje (WhatsApp)</button>
       </div>
+
       <div class="notice" id="agendaNotice" hidden></div>
+
       <div class="tableWrap">
         <table class="table" id="tblAgenda">
           <thead>
@@ -135,12 +150,14 @@
         </table>
       </div>
     </section>
+
     <!-- WHATSAPP -->
     <section class="panel" data-route="whatsapp">
       <div class="panel__head">
         <h2>WhatsApp (templates)</h2>
         <p>Edite textos e horários. Envio é com 1 clique.</p>
       </div>
+
       <div class="grid2">
         <div class="box">
           <h3>Horários</h3>
@@ -154,12 +171,15 @@
               <input id="wppHoraRelatorio" type="time" step="60" />
             </label>
           </div>
+
           <div class="actions" style="margin-top:10px;">
             <button class="btn btn--ghost" id="btnQueueTomorrow">Gerar fila de lembretes (para amanhã)</button>
             <button class="btn btn--ghost" id="btnSendReport">Enviar relatório de hoje (WhatsApp)</button>
           </div>
+
           <small class="hint">Variáveis: {cliente}, {data}, {hora}, {procedimento}, {valor}, {studio}</small>
         </div>
+
         <div class="box">
           <h3>Templates editáveis</h3>
           <label class="field">
@@ -178,22 +198,26 @@
             <span>Relatório diário (para você)</span>
             <textarea id="tplRelatorio" rows="3"></textarea>
           </label>
+
           <div class="actions">
             <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
           </div>
         </div>
       </div>
+
       <div class="box" style="margin-top:12px;">
         <h3>Fila de envio (1 clique)</h3>
         <div id="wppQueue"></div>
       </div>
     </section>
-    <!--  CLIENTES (CRM / REMARKETING) — no lugar de Atendimentos -->
-    <section class="panel" data-route="atendimentos">
+
+    <!-- ✅ CRM (ROTA CORRIGIDA PARA "CRM") -->
+    <section class="panel" data-route="CRM">
       <div class="panel__head">
         <h2>Clientes (CRM / Remarketing)</h2>
         <p>Controle de manutenção, clientes em dia, e remarketing (45+ dias sem voltar).</p>
       </div>
+
       <div class="cards">
         <div class="card card--accent">
           <div class="card__label">Clientes com atendimento</div>
@@ -212,12 +236,14 @@
           <div class="card__value" id="crmKpiRisk">0</div>
         </div>
       </div>
+
       <div class="grid2">
         <div class="box">
           <h3>Gráfico (situação de clientes)</h3>
           <canvas id="crmChart" height="180"></canvas>
           <small class="hint">Buckets por dias desde o último atendimento.</small>
         </div>
+
         <div class="box">
           <h3>Mensagem de remarketing</h3>
           <div class="crmRow">
@@ -242,8 +268,9 @@
               <button class="btn btn--ghost" id="btnCrmClearQueue">Limpar fila</button>
             </div>
           </div>
+
           <label class="field" style="margin-top:10px;">
-            <span>Template (editável) — você pode colocar emojis aqui </span>
+            <span>Template (editável)</span>
             <textarea id="crmTpl" rows="4"></textarea>
           </label>
           <div class="actions">
@@ -252,10 +279,12 @@
           <small class="hint">Variáveis: {cliente}, {dias}, {ultima}, {studio}</small>
         </div>
       </div>
+
       <div class="box" style="margin-top:12px;">
         <h3>Fila de remarketing (1 clique)</h3>
         <div id="crmQueue"></div>
       </div>
+
       <div class="tableWrap" style="margin-top:12px;">
         <table class="table" id="tblCRM">
           <thead>
@@ -271,18 +300,22 @@
           <tbody></tbody>
         </table>
       </div>
-      <small class="hint">Dica: “Em dia” = até 30 dias. “Remarketing” = 46–90 dias. “Antigos” = 90+ dias.</small>
+
+      <small class="hint">“Em dia” = até 30 dias. “Remarketing” = 46–90 dias. “Antigos” = 90+ dias.</small>
     </section>
+
     <!-- PROCEDIMENTOS -->
     <section class="panel" data-route="procedimentos">
       <div class="panel__head">
         <h2>Procedimentos (reajuste)</h2>
         <p>Altere preço e data. Agenda e Atendimentos atualizam automaticamente.</p>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnAddProc">+ Adicionar procedimento</button>
         <button class="btn btn--ghost" id="btnResetProc">Restaurar padrão</button>
       </div>
+
       <div class="tableWrap">
         <table class="table" id="tblProc">
           <thead>
@@ -298,15 +331,18 @@
         </table>
       </div>
     </section>
+
     <!-- CLIENTES -->
     <section class="panel" data-route="clientes">
       <div class="panel__head">
         <h2>Clientes + Anamnese</h2>
         <p>Campos essenciais.</p>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnAddCliente">+ Nova cliente</button>
       </div>
+
       <div class="tableWrap">
         <table class="table" id="tblCli">
           <thead>
@@ -319,15 +355,18 @@
         </table>
       </div>
     </section>
+
     <!-- MATERIAIS -->
     <section class="panel" data-route="materiais">
       <div class="panel__head">
         <h2>Materiais (ml / L / g / kg / un)</h2>
-        <p>Você coloca quanto comprou, valor e quanto usa por cliente. O custo sai automático (correto).</p>
+        <p>Você coloca quanto comprou, valor e quanto usa por cliente. O custo sai automático.</p>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnAddMat">+ Novo material</button>
       </div>
+
       <div class="tableWrap">
         <table class="table" id="tblMat">
           <thead>
@@ -346,20 +385,23 @@
           <tbody></tbody>
         </table>
       </div>
+
       <small class="hint">
-        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml. Se usar 0,01 ml por cliente → 12.000 clientes
-        e custo por cliente = 0,0015.
+        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml.
       </small>
     </section>
+
     <!-- DESPESAS -->
     <section class="panel" data-route="despesas">
       <div class="panel__head">
         <h2>Despesas</h2>
         <p>Fixa/Variável.</p>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnAddDespesa">+ Nova despesa</button>
       </div>
+
       <div class="tableWrap">
         <table class="table" id="tblDesp">
           <thead>
@@ -371,12 +413,14 @@
         </table>
       </div>
     </section>
+
     <!-- CONFIG -->
     <section class="panel" data-route="config">
       <div class="panel__head">
         <h2>Configurações</h2>
         <p>Logo, cores e WhatsApp do estúdio.</p>
       </div>
+
       <div class="grid2">
         <div class="box">
           <h3>Identidade</h3>
@@ -391,6 +435,7 @@
             </label>
           </div>
         </div>
+
         <div class="box">
           <h3>Cores</h3>
           <div class="row">
@@ -405,6 +450,7 @@
           </div>
         </div>
       </div>
+
       <div class="box" style="margin-top:12px;">
         <h3>WhatsApp do Studio (para relatório)</h3>
         <label class="field">
@@ -412,16 +458,18 @@
           <input id="cfgStudioWpp" placeholder="5517..." />
         </label>
       </div>
+
       <div class="actions">
         <button class="btn" id="btnSaveConfig">Salvar Config</button>
       </div>
     </section>
   </main>
+
   <footer class="footer">
     <small id="buildInfo">v18 • Dados salvos no seu aparelho (localStorage).</small>
     <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
   </footer>
-  <!-- Dock de backup no canto inferior direito -->
+
   <div class="backupDock">
     <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
     <label class="btn btn--ghost fileBtn">
@@ -429,6 +477,7 @@
       <input type="file" id="fileImport" accept="application/json" hidden />
     </label>
   </div>
+
   <!-- firebase antes do app -->
   <script type="module" src="./firebase.js"></script>
   <script type="module" src="./app.js"></script>
