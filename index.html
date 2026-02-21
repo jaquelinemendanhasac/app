@@ -22,7 +22,9 @@
       </div>
     </div>
   </header>
+
   <nav class="tabs" id="tabs"></nav>
+
   <main class="wrap" role="main">
     <!-- DASHBOARD -->
     <section class="panel" data-route="dashboard">
@@ -67,6 +69,7 @@
         </div>
       </div>
     </section>
+
     <!-- CALENDÁRIO -->
     <section class="panel" data-route="calendario">
       <div class="panel__head">
@@ -101,6 +104,7 @@
         </div>
       </div>
     </section>
+
     <!-- AGENDA -->
     <section class="panel" data-route="agenda">
       <div class="panel__head">
@@ -134,6 +138,7 @@
         </table>
       </div>
     </section>
+
     <!-- WHATSAPP -->
     <section class="panel" data-route="whatsapp">
       <div class="panel__head">
@@ -187,6 +192,7 @@
         <div id="wppQueue"></div>
       </div>
     </section>
+
     <!-- CRM REMARKETING (rota atendimentos) -->
     <section class="panel" data-route="atendimentos">
       <div class="panel__head">
@@ -199,6 +205,7 @@
             <span>Buscar por nome</span>
             <input id="crmSearch" placeholder="Digite o nome da cliente..." />
           </label>
+
           <label class="field" style="min-width:220px;">
             <span>Segmento</span>
             <select id="crmSegment">
@@ -206,30 +213,34 @@
               <option value="A30">Até 30 dias</option>
               <option value="B31_45">31 a 45 dias</option>
               <option value="C46_90">46 a 90 dias</option>
-              <option value="OUT">Fora (sem última visita / >90)</option>
+              <option value="OUT">Fora (sem última visita / &gt;90)</option>
             </select>
           </label>
+
           <label class="field" style="min-width:220px;">
             <span>Status</span>
             <select id="crmReturned">
               <option value="ALL">Todos</option>
-              <option value="RETURNED">Voltaram 
-</option>
+              <option value="RETURNED">Voltaram</option>
               <option value="NOT_RETURNED">Não voltaram</option>
             </select>
           </label>
+
           <label class="field" style="min-width:200px;">
             <span>Referência (data base)</span>
             <input id="crmRefDate" type="date" />
           </label>
- Templates</button>
+
+          <!-- ✅ FIX: botões estavam quebrados no HTML -->
           <div class="actions" style="margin:0 0 2px; gap:8px;">
-            <button class="btn btn--ghost" id="btnCrmTemplates">
+            <button class="btn btn--ghost" id="btnCrmTemplates">Templates</button>
             <button class="btn btn--ghost" id="btnCrmClearLog">Limpar log</button>
             <button class="btn" id="btnCrmExportLog">Exportar log</button>
           </div>
         </div>
+
         <div class="crmSummary" id="crmSummary"></div>
+
         <div class="tableWrap" style="margin-top:10px;">
           <table class="table" id="tblCrm">
             <thead>
@@ -247,17 +258,18 @@
             <tbody></tbody>
           </table>
         </div>
+
         <small class="hint">
-          “Voltaram 
+          “Voltaram” aparece quando existir atendimento após o último disparo registrado no log.
         </small>
       </div>
-” aparece quando existir atendimento após o último disparo registrado no log.
+
       <!-- MODAL Templates -->
       <div class="crmModal" id="crmModal" hidden>
         <div class="crmModal__card">
           <div class="crmModal__head">
             <b>Templates CRM (editáveis)</b>
-            <button class="iconBtn" id="btnCrmClose"> </button>
+            <button class="iconBtn" id="btnCrmClose">X</button>
           </div>
           <small class="hint">Variáveis: {cliente}, {studio}, {dias}, {ultima}.</small>
           <label class="field">
@@ -281,6 +293,7 @@
           </div>
         </div>
       </div>
+
       <!-- LEGADO: Atendimentos (não removido) -->
       <section class="box" style="margin-top:12px;">
         <details>
@@ -304,6 +317,7 @@
         </details>
       </section>
     </section>
+
     <!-- PROCEDIMENTOS -->
     <section class="panel" data-route="procedimentos">
       <div class="panel__head">
@@ -329,6 +343,7 @@
         </table>
       </div>
     </section>
+
     <!-- CLIENTES -->
     <section class="panel" data-route="clientes">
       <div class="panel__head">
@@ -350,6 +365,7 @@
         </table>
       </div>
     </section>
+
     <!-- MATERIAIS -->
     <section class="panel" data-route="materiais">
       <div class="panel__head">
@@ -382,6 +398,7 @@
         e custo por cliente = 0,0015.
       </small>
     </section>
+
     <!-- DESPESAS -->
     <section class="panel" data-route="despesas">
       <div class="panel__head">
@@ -402,6 +419,7 @@
         </table>
       </div>
     </section>
+
     <!-- CONFIG -->
     <section class="panel" data-route="config">
       <div class="panel__head">
@@ -448,10 +466,12 @@
       </div>
     </section>
   </main>
+
   <footer class="footer">
     <small id="buildInfo">v18 • Dados salvos no seu aparelho (localStorage).</small>
     <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
   </footer>
+
   <!-- Dock de backup no canto inferior right -->
   <div class="backupDock">
     <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
@@ -460,6 +480,7 @@
       <input type="file" id="fileImport" accept="application/json" hidden />
     </label>
   </div>
+
   <!-- firebase antes do app -->
   <script type="module" src="./firebase.js"></script>
   <script type="module" src="./app.js"></script>
