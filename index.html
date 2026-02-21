@@ -1,4 +1,3 @@
-<!-- index.html (COMPLETO, com a única alteração no Dashboard) -->
 <!doctype html>
 <html lang="pt-br">
 <head>
@@ -63,15 +62,12 @@
         <div class="box">
           <h3>Receita por mês</h3>
           <canvas id="chartLine" height="180"></canvas>
-          <!-- 
- ALTERAÇÃO AQUI (no lugar do "Crescimento mensal") -->
           <small class="hint" id="hintMoM">Mês atual vs mês anterior: —</small>
           <small class="hint" id="hintYoY">Mês atual vs ano anterior: —</small>
         </div>
       </div>
     </section>
-    <!-- 
- CALENDÁRIO -->
+    <!-- CALENDÁRIO -->
     <section class="panel" data-route="calendario">
       <div class="panel__head">
         <h2>Calendário</h2>
@@ -79,9 +75,9 @@
       </div>
       <div class="calTop">
         <div class="calNav">
-          <button class="btn btn--ghost" id="calPrev"> </button>
+          <button class="btn btn--ghost" id="calPrev">‹</button>
           <div class="calTitle" id="calTitle">Mês/Ano</div>
-          <button class="btn btn--ghost" id="calNext"> </button>
+          <button class="btn btn--ghost" id="calNext">›</button>
         </div>
         <div class="calActions">
           <button class="btn btn--ghost" id="calToday">Hoje</button>
@@ -191,28 +187,122 @@
         <div id="wppQueue"></div>
       </div>
     </section>
-    <!-- ATENDIMENTOS -->
+    <!-- CRM REMARKETING (rota atendimentos) -->
     <section class="panel" data-route="atendimentos">
       <div class="panel__head">
-        <h2>Atendimentos</h2>
-        <p>Você informa o <b>Recebido</b>. O sistema calcula custo material e lucro automaticamente.</p>
+        <h2>CRM Remarketing</h2>
+        <p>Clientes por tempo sem voltar: até 30 dias, 31-45 dias, 46-90 dias. Envie mensagem com 1 clique via WhatsApp.</p>
       </div>
-      <div class="actions">
-        <button class="btn" id="btnAddAtendimento">+ Novo atendimento</button>
+      <div class="box">
+        <div class="row" style="align-items:flex-end;">
+          <label class="field" style="min-width:260px; flex:1;">
+            <span>Buscar por nome</span>
+            <input id="crmSearch" placeholder="Digite o nome da cliente..." />
+          </label>
+          <label class="field" style="min-width:220px;">
+            <span>Segmento</span>
+            <select id="crmSegment">
+              <option value="ALL">Todos</option>
+              <option value="A30">Até 30 dias</option>
+              <option value="B31_45">31 a 45 dias</option>
+              <option value="C46_90">46 a 90 dias</option>
+              <option value="OUT">Fora (sem última visita / >90)</option>
+            </select>
+          </label>
+          <label class="field" style="min-width:220px;">
+            <span>Status</span>
+            <select id="crmReturned">
+              <option value="ALL">Todos</option>
+              <option value="RETURNED">Voltaram 
+</option>
+              <option value="NOT_RETURNED">Não voltaram</option>
+            </select>
+          </label>
+          <label class="field" style="min-width:200px;">
+            <span>Referência (data base)</span>
+            <input id="crmRefDate" type="date" />
+          </label>
+ Templates</button>
+          <div class="actions" style="margin:0 0 2px; gap:8px;">
+            <button class="btn btn--ghost" id="btnCrmTemplates">
+            <button class="btn btn--ghost" id="btnCrmClearLog">Limpar log</button>
+            <button class="btn" id="btnCrmExportLog">Exportar log</button>
+          </div>
+        </div>
+        <div class="crmSummary" id="crmSummary"></div>
+        <div class="tableWrap" style="margin-top:10px;">
+          <table class="table" id="tblCrm">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>WhatsApp</th>
+                <th>Última visita</th>
+                <th>Dias</th>
+                <th>Segmento</th>
+                <th>Template</th>
+                <th>Ação</th>
+                <th>Voltaram</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <small class="hint">
+          “Voltaram 
+        </small>
       </div>
-      <div class="tableWrap">
-        <table class="table" id="tblAtend">
-          <thead>
-            <tr>
-              <th>Data</th><th>Cliente</th><th>WhatsApp</th><th>Procedimento</th><th>Valor</th><th>Recebido</th>
-              <th>Custo Material</th><th>Mão de obra</th><th>Custo Total</th><th>Lucro</th>
-              <th>Foto</th><th>WhatsApp (msg + foto)</th><th></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+” aparece quando existir atendimento após o último disparo registrado no log.
+      <!-- MODAL Templates -->
+      <div class="crmModal" id="crmModal" hidden>
+        <div class="crmModal__card">
+          <div class="crmModal__head">
+            <b>Templates CRM (editáveis)</b>
+            <button class="iconBtn" id="btnCrmClose"> </button>
+          </div>
+          <small class="hint">Variáveis: {cliente}, {studio}, {dias}, {ultima}.</small>
+          <label class="field">
+            <span>Até 30 dias</span>
+            <textarea id="crmTplA30" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>31 a 45 dias</span>
+            <textarea id="crmTplB31_45" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>46 a 90 dias</span>
+            <textarea id="crmTplC46_90" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Sem última visita / fora</span>
+            <textarea id="crmTplOUT" rows="3"></textarea>
+          </label>
+          <div class="actions">
+            <button class="btn" id="btnCrmSaveTpl">Salvar templates</button>
+          </div>
+        </div>
       </div>
-      <small class="hint">Foto fica salva no seu aparelho (localStorage). Evite fotos muito pesadas.</small>
+      <!-- LEGADO: Atendimentos (não removido) -->
+      <section class="box" style="margin-top:12px;">
+        <details>
+          <summary style="cursor:pointer; font-weight:1100;">Atendimentos (legado - somente consulta)</summary>
+          <div class="actions">
+            <button class="btn btn--ghost" id="btnAddAtendimento">+ Novo atendimento</button>
+          </div>
+          <div class="tableWrap">
+            <table class="table" id="tblAtend">
+              <thead>
+                <tr>
+                  <th>Data</th><th>Cliente</th><th>WhatsApp</th><th>Procedimento</th><th>Valor</th><th>Recebido</th>
+                  <th>Custo Material</th><th>Mão de obra</th><th>Custo Total</th><th>Lucro</th>
+                  <th>Foto</th><th>WhatsApp (msg + foto)</th><th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <small class="hint">Foto fica salva no seu aparelho (localStorage). Evite fotos muito pesadas.</small>
+        </details>
+      </section>
     </section>
     <!-- PROCEDIMENTOS -->
     <section class="panel" data-route="procedimentos">
@@ -224,8 +314,6 @@
         <button class="btn" id="btnAddProc">+ Adicionar procedimento</button>
         <button class="btn btn--ghost" id="btnResetProc">Restaurar padrão</button>
       </div>
-      <!-- 
- FIX: tabela completa (antes estava com tags faltando e quebrava a página) -->
       <div class="tableWrap">
         <table class="table" id="tblProc">
           <thead>
@@ -361,10 +449,10 @@
     </section>
   </main>
   <footer class="footer">
-    <small id="buildInfo">v16 • Dados salvos no seu aparelho (localStorage).</small>
+    <small id="buildInfo">v18 • Dados salvos no seu aparelho (localStorage).</small>
     <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
   </footer>
-  <!-- Dock de backup no canto inferior direito -->
+  <!-- Dock de backup no canto inferior right -->
   <div class="backupDock">
     <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
     <label class="btn btn--ghost fileBtn">
@@ -372,8 +460,7 @@
       <input type="file" id="fileImport" accept="application/json" hidden />
     </label>
   </div>
-  <!-- 
- firebase antes do app -->
+  <!-- firebase antes do app -->
   <script type="module" src="./firebase.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
