@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v18";
+const CACHE_VERSION = "v19"; // ✅ SUBIU pra forçar atualizar
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
@@ -40,7 +40,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // ✅ HTML: network-first (cai pro cache se offline)
+  // HTML: network-first
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -55,7 +55,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ✅ Assets: stale-while-revalidate
+  // Assets: stale-while-revalidate
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
 
