@@ -880,7 +880,7 @@ function drawLine(canvas, points){
   ctx.stroke();
 }
 
-/* =================== ✅ CALENDÁRIO =================== */
+/* =================== ✅ CALENDÁRIO (COM BOTÕES) =================== */
 let __CAL_CURSOR = new Date();
 let __CAL_SELECTED_ISO = todayISO();
 
@@ -939,6 +939,28 @@ function dayBadges(iso){
     .reduce((s,a)=> s + num(a.recebido), 0);
 
   return { totalAg, totalRec };
+}
+
+// ✅ helper para criar "Novo agendamento" no dia selecionado
+function calNewAtSelectedDay(){
+  const iso = __CAL_SELECTED_ISO || todayISO();
+  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
+  state.agenda.unshift({
+    id:uid(),
+    data: iso,
+    hora: "08:00",
+    cliente:"",
+    procedimento:firstProc,
+    status:"Agendado",
+    recebido: 0,
+    obs:"",
+    atendId:""
+  });
+  saveSoft();
+  renderAgendaHard();
+  renderCalendar();
+  scheduleSync();
+  setRoute("agenda");
 }
 
 function renderCalendar(){
@@ -1019,7 +1041,13 @@ function renderCalendarDay(){
   `;
 
   if(!itens.length){
-    box.innerHTML = `<div class="hint">Sem agendamentos neste dia.</div>`;
+    box.innerHTML = `
+      <div class="hint">Sem agendamentos neste dia.</div>
+      <div class="actions" style="margin-top:10px;">
+        <button class="btn" data-cal-act="new">+ Novo agendamento</button>
+      </div>
+    `;
+    box.querySelector('[data-cal-act="new"]')?.addEventListener('click', calNewAtSelectedDay);
     return;
   }
 
@@ -1035,6 +1063,17 @@ function renderCalendarDay(){
       ? `${a.hora || ""} — BLOQUEIO`
       : `${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}`;
 
+    const isBlock = (st==="Bloqueio");
+
+    // ✅ botões: Realizado / Cancelado / Editar (Agenda)
+    const buttons = isBlock ? `` : `
+      <div class="actions" style="margin-top:8px; gap:8px;">
+        <button class="btn btn--ghost" data-cal-act="done" data-id="${a.id}">Realizado</button>
+        <button class="btn btn--ghost" data-cal-act="cancel" data-id="${a.id}">Cancelado</button>
+        <button class="btn btn--ghost" data-cal-act="edit" data-id="${a.id}">Editar</button>
+      </div>
+    `;
+
     return `
       <div class="calListItem ${conflita ? "danger" : ""}">
         <div class="calListHead">
@@ -1043,9 +1082,48 @@ function renderCalendarDay(){
         </div>
         <div class="calListMeta">Procedimento: ${a.procedimento || "—"} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
         ${a.obs ? `<div class="calListMeta">Obs: ${String(a.obs)}</div>` : ``}
+        ${buttons}
       </div>
     `;
   }).join("");
+
+  // ✅ binds dos botões do dia
+  box.querySelectorAll('[data-cal-act]').forEach((btn)=>{
+    btn.addEventListener('click', ()=>{
+      const act = btn.getAttribute('data-cal-act');
+      if(act === 'new'){ calNewAtSelectedDay(); return; }
+
+      const id = btn.getAttribute('data-id');
+      const ag = state.agenda.find(x=>x && x.id===id);
+      if(!ag) return;
+
+      if(act === 'done'){
+        ag.status = "Realizado";
+        ag.recebido = procPrice(ag.procedimento);
+        saveSoft();
+        renderAgendaHard();
+        renderCalendar();
+        scheduleSync();
+        return;
+      }
+
+      if(act === 'cancel'){
+        ag.status = "Cancelado";
+        ag.recebido = 0;
+        removeAtendimentoFromAgenda(ag.id);
+        saveSoft();
+        renderAgendaHard();
+        renderCalendar();
+        scheduleSync();
+        return;
+      }
+
+      if(act === 'edit'){
+        setRoute("agenda");
+        return;
+      }
+    });
+  });
 }
 
 function bindCalendarUI(){
@@ -1062,26 +1140,7 @@ function bindCalendarUI(){
     __CAL_SELECTED_ISO = todayISO();
     renderCalendar();
   });
-  onClick("calNew", ()=>{
-    const iso = __CAL_SELECTED_ISO || todayISO();
-    const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
-    state.agenda.unshift({
-      id:uid(),
-      data: iso,
-      hora: "08:00",
-      cliente:"",
-      procedimento:firstProc,
-      status:"Agendado",
-      recebido: 0,
-      obs:"",
-      atendId:""
-    });
-    saveSoft();
-    renderAgendaHard();
-    renderCalendar();
-    scheduleSync();
-    setRoute("agenda");
-  });
+  onClick("calNew", calNewAtSelectedDay);
 }
 
 function updateCalendarAuto(){
@@ -1373,12 +1432,10 @@ function updateAgendaAutoCells(){
   });
 }
 
-/* ... (resto do arquivo original continua exatamente igual ao que você enviou) ... */
-
-// =======================================================
-// ✅ RESTO DO APP (tabelas + binds) — ADICIONADO para NÃO quebrar
-// (Mantém seus IDs. Só completa as funções que faltavam.)
-// =======================================================
+/* =======================================================
+   ✅ RESTO DO APP (tabelas + binds) — COMPLETO
+   (Mantém seus IDs. Só completa as funções que faltavam.)
+======================================================= */
 
 /* =================== PROCEDIMENTOS =================== */
 function renderProcedimentos(){
@@ -2011,8 +2068,6 @@ function updateRevenueComparisons(){
   hintMoM.textContent = `Mês atual vs mês anterior: ${money(cur)} vs ${money(prev)} (${fmtPct(momPct)})`;
   hintYoY.textContent = `Mês atual vs ano anterior: ${money(cur)} vs ${money(yoy)} (${fmtPct(yoyPct)})`;
 }
-
-
 
 /* =================== DASHBOARD =================== */
 function updateDashboardKPIs(){
