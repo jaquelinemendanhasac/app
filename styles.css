@@ -549,7 +549,6 @@ pre{
   .calWrap{ grid-template-columns: 1fr; }
 }
 
-
 /* =========================================================
    ✅ DIFERENÇA VISUAL: Agenda x Atendimentos
    ========================================================= */
@@ -562,4 +561,58 @@ pre{
 #calDayList .actions .btn{ width:auto; }
 @media (max-width:768px){
   #calDayList .actions .btn{ width:100%; }
+}
+
+/* =========================================================
+   ✅ CRM Remarketing
+   ========================================================= */
+#tblCrm thead th{
+  background:linear-gradient(90deg, #2B2D42, var(--p));
+}
+.crmSummary{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.crmPill{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-weight:1100;
+  font-size:12px;
+}
+.crmPill.a30{ background:linear-gradient(135deg, var(--soft2), var(--soft)); border-color:transparent; }
+.crmPill.b{ background:#fff7e6; border-color:#ffd7a8; }
+.crmPill.c{ background:#ffe7e7; border-color:#ffb4b4; }
+.crmPill.ok{ background:#e7fff0; border-color:#b4ffd0; }
+
+.crmModal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:200;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+}
+.crmModal[hidden]{ display:none; }
+.crmModal__card{
+  width:min(820px, 100%);
+  max-height:90vh;
+  overflow:auto;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:14px;
+  box-shadow:0 18px 50px rgba(0,0,0,.18);
+}
+.crmModal__head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
 }
