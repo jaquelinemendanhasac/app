@@ -616,3 +616,10 @@ pre{
   gap:10px;
   margin-bottom:8px;
 }
+/* ✅ FIX: ID correto da tabela CRM */
+#tblCRM thead th{
+  background:linear-gradient(90deg, #2B2D42, var(--p));
+}
+
+/* ✅ melhora estabilidade do hover do calendário */
+.calDay{ will-change: transform; }
