@@ -2028,7 +2028,8 @@ function classifyCRM(days){
   if(days === null) return { key:"NONE", label:"Sem histórico" };
   if(days <= 30)   return { key:"OK",   label:"Em dia (≤30)" };
   if(days <= 45)   return { key:"ATT",  label:"Atenção (31–45)" };
-  if(days <= 90)   return { key:"REM",  label:"Remarketing (46–90)" };
+  if(days <= 70)   return { key:"R1",   label:"Remarketing (46–70)" };
+  if(days <= 90)   return { key:"R2",   label:"Remarketing (71–90)" };
   return            { key:"OLD",  label:"Antigos (90+)" };
 }
 
@@ -2058,7 +2059,9 @@ function getCrmElements(){
     txtTpl:    byId("crmTpl")    || byId("crmTemplate") || byId("crmMensagem"),
 
     btnSaveTpl: byId("btnCrmSaveTpl") || byId("btnSaveCrmTpl") || byId("btnSaveCrmTemplate"),
-    // botões do seu HTML: btnCrmQueue45 / btnCrmQueue90
+    // botão novo (gera conforme o filtro selecionado)
+    btnGenSelected: byId("btnCrmQueueSelected") || byId("btnCrmGenSelected") || byId("btnCrmQueue"),
+    // legado: botões antigos 45+ / 90+ (se ainda existirem)
     btnGen45:   byId("btnCrmGen45")   || byId("btnCrmQueue45") || byId("btnCrm45"),
     btnGen90:   byId("btnCrmGen90")   || byId("btnCrmQueue90") || byId("btnCrm90"),
     btnClear:   byId("btnCrmClear")   || byId("btnCrmClearQueue") || byId("btnCrmClearQueue"),
@@ -2138,13 +2141,23 @@ function applyCrmFilter(rows){
 
   return rows.filter(r=>{
     if(busca && !normName(r.cliente).includes(busca)) return false;
+
     if(filtro === "ALL") return true;
     if(filtro === "OK") return r.situacaoKey === "OK";
+
     // aceita valores antigos e novos do <select> do HTML
     if(filtro === "ATT" || filtro === "WARN") return r.situacaoKey === "ATT";
-    if(filtro === "REM" || filtro === "REMARKETING") return r.situacaoKey === "REM";
+
+    // novos buckets
+    if(filtro === "R1") return r.situacaoKey === "R1";
+    if(filtro === "R2") return r.situacaoKey === "R2";
+
+    // legado (REM/REMARKETING) = soma dos dois remarketing
+    if(filtro === "REM" || filtro === "REMARKETING") return (r.situacaoKey === "R1" || r.situacaoKey === "R2");
+
     if(filtro === "OLD" || filtro === "WINBACK") return r.situacaoKey === "OLD";
     if(filtro === "NONE" || filtro === "NOHIST") return r.situacaoKey === "NONE";
+
     return true;
   });
 }
@@ -2158,7 +2171,9 @@ function renderCRM(){
   const withHist = allRows.filter(r=>r.situacaoKey !== "NONE");
   const cOk  = allRows.filter(r=>r.situacaoKey==="OK").length;
   const cAtt = allRows.filter(r=>r.situacaoKey==="ATT").length;
-  const cRem = allRows.filter(r=>r.situacaoKey==="REM").length;
+  const cR1  = allRows.filter(r=>r.situacaoKey==="R1").length;
+  const cR2  = allRows.filter(r=>r.situacaoKey==="R2").length;
+  const cRem = cR1 + cR2; // remarketing total (46–90)
   const cOld = allRows.filter(r=>r.situacaoKey==="OLD").length;
 
   if(el.kpiTotal) el.kpiTotal.textContent = String(withHist.length);
@@ -2240,11 +2255,73 @@ function renderCRM(){
   }
 }
 
+function genCrmQueueSelected(){
+  ensureCrmDefaults();
+  const filtro = (state.crm?.filtro || "ALL");
+  const base = buildCrmRows();
+
+  let rows = base;
+
+  switch(filtro){
+    case "OK":
+      rows = base.filter(r=>r.situacaoKey === "OK");
+      break;
+
+    case "ATT":
+    case "WARN":
+      rows = base.filter(r=>r.situacaoKey === "ATT");
+      break;
+
+    case "R1":
+      rows = base.filter(r=>r.situacaoKey === "R1");
+      break;
+
+    case "R2":
+      rows = base.filter(r=>r.situacaoKey === "R2");
+      break;
+
+    // legado: "REMARKETING" (46–90) = R1 + R2
+    case "REM":
+    case "REMARKETING":
+      rows = base.filter(r=>r.situacaoKey === "R1" || r.situacaoKey === "R2");
+      break;
+
+    case "OLD":
+    case "WINBACK":
+      rows = base.filter(r=>r.situacaoKey === "OLD");
+      break;
+
+    case "NONE":
+    case "NOHIST":
+      rows = base.filter(r=>r.situacaoKey === "NONE");
+      break;
+
+    case "ALL":
+    default:
+      // por padrão, não enfileira "Sem histórico"
+      rows = base.filter(r=>r.situacaoKey !== "NONE");
+      break;
+  }
+
+  state.crmQueue = rows.map(r=>({
+    id: uid(),
+    cliente: r.cliente,
+    phone: r.phone,
+    ultima: r.ultima,
+    dias: r.dias,
+    situacaoKey: r.situacaoKey,
+    situacaoLabel: r.situacaoLabel
+  }));
+
+  saveSoft();
+  renderCRM();
+}
+
+// ✅ legado (mantém compatibilidade se ainda existir botão 45+/90+)
 function genCrmQueue(minDias){
   ensureCrmDefaults();
   const rows = buildCrmRows()
-    .filter(r=>r.dias !== null && r.dias >= minDias)
-    .filter(r=>!!normalizePhoneBR(r.phone));
+    .filter(r=>r.dias !== null && r.dias >= minDias);
 
   state.crmQueue = rows.map(r=>({
     id: uid(),
@@ -2297,8 +2374,13 @@ function bindCRMUI(){
     alert("Template salvo ✅");
   });
 
+  // ✅ gera fila conforme o filtro selecionado
+  el.btnGenSelected?.addEventListener("click", genCrmQueueSelected);
+
+  // legado (se existir no HTML antigo)
   el.btnGen45?.addEventListener("click", ()=> genCrmQueue(45));
   el.btnGen90?.addEventListener("click", ()=> genCrmQueue(90));
+
   el.btnClear?.addEventListener("click", clearCrmQueue);
 }
 
