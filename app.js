@@ -83,7 +83,7 @@ const ROUTES = [
   { id:"calendario", label:"Calendário" },
   { id:"agenda", label:"Agenda" },
   { id:"whatsapp", label:"WhatsApp" },
-  { id:"crm", label:"CRM" },
+  { id:"crm", label:"Crm" },
   { id:"procedimentos", label:"Procedimentos" },
   { id:"clientes", label:"Clientes" },
   { id:"materiais", label:"Materiais" },
@@ -524,9 +524,10 @@ applyTheme();
   });
 
   function setRoute(route){
-    $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab===route));
-    $$(".panel").forEach(p => p.classList.toggle("active", p.dataset.route===route));
-    history.replaceState({}, "", `#${route}`);
+    const r = String(route||"").toLowerCase();
+    $$(".tab").forEach(t => t.classList.toggle("active", String(t.dataset.tab||"").toLowerCase()===r));
+    $$(".panel").forEach(p => p.classList.toggle("active", String(p.dataset.route||"").toLowerCase()===r));
+    history.replaceState({}, "", `#${r}`);
   }
 
   window.__SJM_SET_ROUTE = setRoute;
@@ -2042,23 +2043,32 @@ function fillCrmTpl(tpl, item){
 
 function getCrmElements(){
   return {
+    // KPIs (suporta IDs antigos e novos do seu index.html)
     kpiTotal: byId("crmKpiTotal") || byId("crmTotal") || byId("kpiCrmTotal"),
     kpiOk:    byId("crmKpiOk")    || byId("crmOk"),
-    kpiAtt:   byId("crmKpiAtt")   || byId("crmAtt"),
+    // "Atenção" pode estar como crmKpiAtt OU crmKpiWarn
+    kpiAtt:   byId("crmKpiAtt")   || byId("crmKpiWarn") || byId("crmAtt"),
+    // Alguns layouts juntam REM+OLD em um KPI só (crmKpiRisk)
     kpiRem:   byId("crmKpiRem")   || byId("crmRem"),
     kpiOld:   byId("crmKpiOld")   || byId("crmOld"),
+    kpiRisk:  byId("crmKpiRisk")  || byId("crmRisk"),
 
     selFiltro: byId("crmFiltro") || byId("crmFilter"),
     inpBusca:  byId("crmBusca")  || byId("crmSearch"),
     txtTpl:    byId("crmTpl")    || byId("crmTemplate") || byId("crmMensagem"),
 
     btnSaveTpl: byId("btnCrmSaveTpl") || byId("btnSaveCrmTpl") || byId("btnSaveCrmTemplate"),
-    btnGen45:   byId("btnCrmGen45")   || byId("btnCrm45"),
-    btnGen90:   byId("btnCrmGen90")   || byId("btnCrm90"),
-    btnClear:   byId("btnCrmClear")   || byId("btnCrmClearQueue"),
+    // botões do seu HTML: btnCrmQueue45 / btnCrmQueue90
+    btnGen45:   byId("btnCrmGen45")   || byId("btnCrmQueue45") || byId("btnCrm45"),
+    btnGen90:   byId("btnCrmGen90")   || byId("btnCrmQueue90") || byId("btnCrm90"),
+    btnClear:   byId("btnCrmClear")   || byId("btnCrmClearQueue") || byId("btnCrmClearQueue"),
 
-    tbl: $("#tblCrmQueue tbody") || $("#tblCRMQueue tbody") || $("#tblCrm tbody"),
+    // tabela do seu HTML é #tblCRM
+    tbl: $("#tblCRM tbody") || $("#tblCrmQueue tbody") || $("#tblCRMQueue tbody") || $("#tblCrm tbody"),
     chart: byId("crmChart") || byId("chartCRM") || byId("crmBars"),
+
+    // opcional: se você usar um container em div em vez de tabela
+    listBox: byId("crmQueue"),
   };
 }
 
@@ -2130,10 +2140,11 @@ function applyCrmFilter(rows){
     if(busca && !normName(r.cliente).includes(busca)) return false;
     if(filtro === "ALL") return true;
     if(filtro === "OK") return r.situacaoKey === "OK";
-    if(filtro === "ATT") return r.situacaoKey === "ATT";
-    if(filtro === "REM") return r.situacaoKey === "REM";
-    if(filtro === "OLD") return r.situacaoKey === "OLD";
-    if(filtro === "NONE") return r.situacaoKey === "NONE";
+    // aceita valores antigos e novos do <select> do HTML
+    if(filtro === "ATT" || filtro === "WARN") return r.situacaoKey === "ATT";
+    if(filtro === "REM" || filtro === "REMARKETING") return r.situacaoKey === "REM";
+    if(filtro === "OLD" || filtro === "WINBACK") return r.situacaoKey === "OLD";
+    if(filtro === "NONE" || filtro === "NOHIST") return r.situacaoKey === "NONE";
     return true;
   });
 }
@@ -2153,6 +2164,14 @@ function renderCRM(){
   if(el.kpiTotal) el.kpiTotal.textContent = String(withHist.length);
   if(el.kpiOk)    el.kpiOk.textContent    = String(cOk);
   if(el.kpiAtt)   el.kpiAtt.textContent   = String(cAtt);
+
+  // se existir KPI "risk" no HTML, ele mostra REM + OLD juntos
+  if(el.kpiRisk){
+    el.kpiRisk.textContent = String(cRem + cOld);
+  }else{
+    if(el.kpiRem) el.kpiRem.textContent = String(cRem);
+    if(el.kpiOld) el.kpiOld.textContent = String(cOld);
+  }
   if(el.kpiRem)   el.kpiRem.textContent   = String(cRem);
   if(el.kpiOld)   el.kpiOld.textContent   = String(cOld);
 
