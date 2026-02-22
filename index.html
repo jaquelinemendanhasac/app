@@ -250,23 +250,23 @@
             <label class="field">
               <span>Filtro</span>
               <select id="crmFiltro">
-                <option value="ALL">Todos</option>
-                <option value="OK">Em dia (≤30)</option>
-                <option value="WARN">Atenção (31–45)</option>
-                <option value="REMARKETING">Remarketing (46–90)</option>
-                <option value="WINBACK">Antigos (90+)</option>
-                <option value="NOHIST">Sem histórico</option>
-              </select>
+  <option value="ALL">Todos</option>
+  <option value="OK">Em dia (≤30)</option>
+  <option value="WARN">Atenção (31–45)</option>
+  <option value="R1">Remarketing (46–70)</option>
+  <option value="R2">Remarketing (71–90)</option>
+  <option value="WINBACK">Antigos (90+)</option>
+  <option value="NOHIST">Sem histórico</option>
+</select>
             </label>
             <label class="field">
               <span>Busca (nome)</span>
               <input id="crmBusca" placeholder="Digite para filtrar..." />
             </label>
             <div class="actions" style="margin:0;">
-              <button class="btn btn--ghost" id="btnCrmQueue45">Gerar fila (45+)</button>
-              <button class="btn btn--ghost" id="btnCrmQueue90">Gerar fila (90+)</button>
-              <button class="btn btn--ghost" id="btnCrmClearQueue">Limpar fila</button>
-            </div>
+  <button class="btn btn--ghost" id="btnCrmQueueSelected">Gerar fila (selecionado)</button>
+  <button class="btn btn--ghost" id="btnCrmClearQueue">Limpar fila</button>
+</div>
           </div>
 
           <label class="field" style="margin-top:10px;">
