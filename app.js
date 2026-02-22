@@ -83,7 +83,7 @@ const ROUTES = [
   { id:"calendario", label:"Calendário" },
   { id:"agenda", label:"Agenda" },
   { id:"whatsapp", label:"WhatsApp" },
-  { id:"CRM", label:"CRM" },
+  { id:"crm", label:"CRM" },
   { id:"procedimentos", label:"Procedimentos" },
   { id:"clientes", label:"Clientes" },
   { id:"materiais", label:"Materiais" },
@@ -228,7 +228,17 @@ Total recebido: {total}`
     materiais: [],
     atendimentos: [],
     despesas: [],
-    wppQueue: []
+    wppQueue: [],
+
+    // ✅ CRM / Remarketing
+    crm: {
+      tplRemarketing:
+`Oi {cliente}! 💜 Faz {dias} dias desde seu último atendimento no {studio}.
+Que tal agendarmos sua manutenção? 😊`,
+      filtro: "ALL",
+      busca: ""
+    },
+    crmQueue: []
   };
 }
 
@@ -244,6 +254,7 @@ function sanitizeState(parsed){
 
   s.settings = { ...base.settings, ...(s.settings && typeof s.settings==="object" ? s.settings : {}) };
   s.wpp = { ...base.wpp, ...(s.wpp && typeof s.wpp==="object" ? s.wpp : {}) };
+  s.crm = { ...base.crm, ...(s.crm && typeof s.crm==="object" ? s.crm : {}) };
 
   const arr = (v)=> Array.isArray(v) ? v : [];
   s.procedimentos = arr(s.procedimentos);
@@ -253,6 +264,7 @@ function sanitizeState(parsed){
   s.atendimentos = arr(s.atendimentos);
   s.despesas = arr(s.despesas);
   s.wppQueue = arr(s.wppQueue);
+  s.crmQueue = arr(s.crmQueue);
 
   // migração: agenda
   s.agenda.forEach(a=>{
@@ -703,7 +715,7 @@ function custoMateriaisPorCliente(){
   }, 0);
 }
 
-/* =================== ATENDIMENTOS (DERIVED) =================== */
+/* =================== CRM (Atendimentos) — DERIVED =================== */
 function calcularAtendimento(a){
   a.valor = procPrice(a.procedimento);
   a.custoMaterial = custoMateriaisPorCliente();
@@ -711,7 +723,7 @@ function calcularAtendimento(a){
   a.lucro = num(a.recebido) - num(a.custoTotal);
 }
 
-/* =================== AGENDA -> ATENDIMENTOS =================== */
+/* =================== AGENDA -> CRM (Atendimentos) =================== */
 function getAtendimentoByAgendaId(agendaId){
   return state.atendimentos.find(x => x.fromAgendaId === agendaId) || null;
 }
@@ -1161,6 +1173,7 @@ function syncDerivedAndUI(){
     updateDashboardKPIs();
 
     updateCalendarAuto();
+    if(typeof renderCRM === "function") renderCRM();
 
     saveSoft();
   } finally {
@@ -1182,6 +1195,8 @@ function renderAllHard(){
     bindConfigUI();
     renderDashboard();
     renderWppQueue();
+    bindCRMUI();
+    renderCRM();
 
     bindCalendarUI();
     renderCalendar();
@@ -1649,8 +1664,8 @@ onClick('btnAddMat', ()=>{
   scheduleSync();
 });
 
-/* =================== ATENDIMENTOS =================== */
-function getAtendTbody(){ return document.querySelector('#tblAtend tbody'); }
+/* =================== CRM (Atendimentos) =================== */
+function getAtendTbody(){ return document.querySelector('#tblCRM tbody') || document.querySelector('#tblAtend tbody'); }
 
 function renderAtendimentosHard(){
   const body = getAtendTbody();
@@ -1658,13 +1673,9 @@ function renderAtendimentosHard(){
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
 
-  // ✅ CRM agora mostra SOMENTE realizados
-  const atendimentosRealizados = state.atendimentos
-    .filter(a => num(a.recebido) > 0);
+  state.atendimentos.forEach(calcularAtendimento);
 
-  atendimentosRealizados.forEach(calcularAtendimento);
-
-  body.innerHTML = atendimentosRealizados.map((a)=>{
+  body.innerHTML = state.atendimentos.map((a)=>{
     const wpp = clientWpp(a.cliente);
     const valor = procPrice(a.procedimento);
     return `
@@ -1814,6 +1825,19 @@ onClick('btnAddAtendimento', ()=>{
     recebido: 0, maoObra: 0, custoMaterial: 0, custoTotal: 0, lucro: 0,
     foto:'', fromAgendaId:'', auto:false
   });
+
+// ✅ Compat: botão novo "CRM" (se existir no HTML) usa a mesma ação do antigo "Atendimento"
+onClick('btnAddCRM', ()=>{
+  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || 'Alongamento';
+  state.atendimentos.unshift({
+    id: uid(), data: todayISO(), cliente:'', procedimento:firstProc,
+    recebido: 0, maoObra: 0, custoMaterial: 0, custoTotal: 0, lucro: 0,
+    foto:'', fromAgendaId:'', auto:false
+  });
+  saveSoft();
+  renderAtendimentosHard();
+  scheduleSync();
+});
   saveSoft();
   renderAtendimentosHard();
   scheduleSync();
@@ -1959,6 +1983,304 @@ function renderWppQueue(){
       renderWppQueue();
     });
   });
+}
+
+
+/* =================== CRM / REMARKETING =================== */
+function normName(s){ return String(s||"").trim().toLowerCase(); }
+
+function daysBetweenISO(aISO, bISO){
+  if(!aISO || !bISO) return null;
+  const a = new Date(aISO+"T00:00:00");
+  const b = new Date(bISO+"T00:00:00");
+  const ms = b.getTime() - a.getTime();
+  return Math.floor(ms / 86400000);
+}
+
+function getLastAtendimentoISOByClientName(nome){
+  const n = normName(nome);
+  if(!n) return "";
+
+  let best = "";
+
+  // 1) atende (CRM) explícito
+  for(const a of (state.atendimentos||[])){
+    if(!a) continue;
+    if(normName(a.cliente) !== n) continue;
+    const d = String(a.data||"");
+    if(d && (!best || d > best)) best = d;
+  }
+
+  // 2) fallback: agenda realizado (caso não tenha atendimento derivado por algum motivo)
+  for(const ag of (state.agenda||[])){
+    if(!ag) continue;
+    if((ag.status||"Agendado") !== "Realizado") continue;
+    if(normName(ag.cliente) !== n) continue;
+    const d = String(ag.data||"");
+    if(d && (!best || d > best)) best = d;
+  }
+
+  return best;
+}
+
+function classifyCRM(days){
+  if(days === null) return { key:"NONE", label:"Sem histórico" };
+  if(days <= 30)   return { key:"OK",   label:"Em dia (≤30)" };
+  if(days <= 45)   return { key:"ATT",  label:"Atenção (31–45)" };
+  if(days <= 90)   return { key:"REM",  label:"Remarketing (46–90)" };
+  return            { key:"OLD",  label:"Antigos (90+)" };
+}
+
+function fillCrmTpl(tpl, item){
+  const studio = state.settings.studioNome || "Studio";
+  return String(tpl||"")
+    .replaceAll("{cliente}", item.cliente || "")
+    .replaceAll("{dias}", String(item.dias ?? ""))
+    .replaceAll("{ultima}", item.ultima ? fmtBRDate(item.ultima) : "")
+    .replaceAll("{studio}", studio);
+}
+
+function getCrmElements(){
+  return {
+    kpiTotal: byId("crmKpiTotal") || byId("crmTotal") || byId("kpiCrmTotal"),
+    kpiOk:    byId("crmKpiOk")    || byId("crmOk"),
+    kpiAtt:   byId("crmKpiAtt")   || byId("crmAtt"),
+    kpiRem:   byId("crmKpiRem")   || byId("crmRem"),
+    kpiOld:   byId("crmKpiOld")   || byId("crmOld"),
+
+    selFiltro: byId("crmFiltro") || byId("crmFilter"),
+    inpBusca:  byId("crmBusca")  || byId("crmSearch"),
+    txtTpl:    byId("crmTpl")    || byId("crmTemplate") || byId("crmMensagem"),
+
+    btnSaveTpl: byId("btnCrmSaveTpl") || byId("btnSaveCrmTpl") || byId("btnSaveCrmTemplate"),
+    btnGen45:   byId("btnCrmGen45")   || byId("btnCrm45"),
+    btnGen90:   byId("btnCrmGen90")   || byId("btnCrm90"),
+    btnClear:   byId("btnCrmClear")   || byId("btnCrmClearQueue"),
+
+    tbl: $("#tblCrmQueue tbody") || $("#tblCRMQueue tbody") || $("#tblCrm tbody"),
+    chart: byId("crmChart") || byId("chartCRM") || byId("crmBars"),
+  };
+}
+
+function ensureCrmDefaults(){
+  state.crm = state.crm && typeof state.crm==="object" ? state.crm : {};
+  if(!state.crm.tplRemarketing){
+    state.crm.tplRemarketing =
+`Oi {cliente}! 💜 Faz {dias} dias desde seu último atendimento no {studio}.
+Que tal agendarmos sua manutenção? 😊`;
+  }
+  if(!state.crm.filtro) state.crm.filtro = "ALL";
+  if(state.crm.busca === undefined) state.crm.busca = "";
+  state.crmQueue = Array.isArray(state.crmQueue) ? state.crmQueue : [];
+}
+
+function buildCrmRows(){
+  const today = todayISO();
+
+  // base de clientes: usa state.clientes, mas também inclui quem aparece em atendimentos/agenda
+  const names = new Map();
+
+  (state.clientes||[]).forEach(c=>{
+    const nm = String(c?.nome||"").trim();
+    if(nm) names.set(normName(nm), nm);
+  });
+  (state.atendimentos||[]).forEach(a=>{
+    const nm = String(a?.cliente||"").trim();
+    if(nm) names.set(normName(nm), nm);
+  });
+  (state.agenda||[]).forEach(a=>{
+    const nm = String(a?.cliente||"").trim();
+    if(nm) names.set(normName(nm), nm);
+  });
+
+  const rows = [];
+  for(const [nk, displayName] of names.entries()){
+    const ultima = getLastAtendimentoISOByClientName(displayName);
+    const dias = ultima ? daysBetweenISO(ultima, today) : null;
+    const cls = classifyCRM(dias);
+
+    const wpp = clientWpp(displayName);
+
+    rows.push({
+      id: uid(),
+      cliente: displayName,
+      phone: wpp,
+      ultima: ultima || "",
+      dias: dias,
+      situacaoKey: cls.key,
+      situacaoLabel: cls.label
+    });
+  }
+
+  // ordena: mais dias primeiro, sem histórico por último
+  rows.sort((a,b)=>{
+    const da = (a.dias===null) ? -1 : a.dias;
+    const db = (b.dias===null) ? -1 : b.dias;
+    return db - da;
+  });
+
+  return rows;
+}
+
+function applyCrmFilter(rows){
+  const filtro = (state.crm?.filtro || "ALL");
+  const busca = normName(state.crm?.busca || "");
+
+  return rows.filter(r=>{
+    if(busca && !normName(r.cliente).includes(busca)) return false;
+    if(filtro === "ALL") return true;
+    if(filtro === "OK") return r.situacaoKey === "OK";
+    if(filtro === "ATT") return r.situacaoKey === "ATT";
+    if(filtro === "REM") return r.situacaoKey === "REM";
+    if(filtro === "OLD") return r.situacaoKey === "OLD";
+    if(filtro === "NONE") return r.situacaoKey === "NONE";
+    return true;
+  });
+}
+
+function renderCRM(){
+  ensureCrmDefaults();
+
+  const el = getCrmElements();
+  const allRows = buildCrmRows();
+
+  const withHist = allRows.filter(r=>r.situacaoKey !== "NONE");
+  const cOk  = allRows.filter(r=>r.situacaoKey==="OK").length;
+  const cAtt = allRows.filter(r=>r.situacaoKey==="ATT").length;
+  const cRem = allRows.filter(r=>r.situacaoKey==="REM").length;
+  const cOld = allRows.filter(r=>r.situacaoKey==="OLD").length;
+
+  if(el.kpiTotal) el.kpiTotal.textContent = String(withHist.length);
+  if(el.kpiOk)    el.kpiOk.textContent    = String(cOk);
+  if(el.kpiAtt)   el.kpiAtt.textContent   = String(cAtt);
+  if(el.kpiRem)   el.kpiRem.textContent   = String(cRem);
+  if(el.kpiOld)   el.kpiOld.textContent   = String(cOld);
+
+  if(el.txtTpl && document.activeElement !== el.txtTpl){
+    el.txtTpl.value = state.crm.tplRemarketing || "";
+  }
+  if(el.selFiltro && document.activeElement !== el.selFiltro){
+    el.selFiltro.value = state.crm.filtro || "ALL";
+  }
+  if(el.inpBusca && document.activeElement !== el.inpBusca){
+    el.inpBusca.value = state.crm.busca || "";
+  }
+
+  // gráfico simples (barras por bucket)
+  if(el.chart){
+    drawBars(el.chart, ["Em dia","Atenção","Remarketing","Antigos"], [cOk,cAtt,cRem,cOld]);
+  }
+
+  // tabela da fila
+  if(el.tbl){
+    if(!state.crmQueue.length){
+      el.tbl.innerHTML = `<tr><td colspan="6"><div class="hint">Fila vazia.</div></td></tr>`;
+      return;
+    }
+
+    el.tbl.innerHTML = state.crmQueue.map((q)=>`
+      <tr data-id="${q.id}">
+        <td>${q.cliente||""}</td>
+        <td>${q.phone||""}</td>
+        <td>${q.ultima?fmtBRDate(q.ultima):""}</td>
+        <td>${q.dias ?? ""}</td>
+        <td>${q.situacaoLabel||""}</td>
+        <td>
+          <div class="iconRow">
+            <button class="iconBtn" data-wa title="WhatsApp">📲</button>
+            <button class="iconBtn" data-copy title="Copiar">📋</button>
+            <button class="iconBtn" data-del title="Remover">✕</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+
+    el.tbl.querySelectorAll("tr").forEach((tr)=>{
+      const id = tr.dataset.id;
+      const q = state.crmQueue.find(x=>x.id===id);
+      if(!q) return;
+
+      tr.querySelector("[data-wa]")?.addEventListener("click", ()=>{
+        if(!q.phone){ alert("Cliente sem WhatsApp."); return; }
+        const msg = fillCrmTpl(state.crm.tplRemarketing, q);
+        window.open(waLink(q.phone, msg), "_blank");
+      });
+
+      tr.querySelector("[data-copy]")?.addEventListener("click", async ()=>{
+        const msg = fillCrmTpl(state.crm.tplRemarketing, q);
+        const ok = await copyToClipboardSafe(msg);
+        alert(ok ? "Mensagem copiada ✅" : "Não foi possível copiar.");
+      });
+
+      tr.querySelector("[data-del]")?.addEventListener("click", ()=>{
+        state.crmQueue = state.crmQueue.filter(x=>x.id!==id);
+        saveSoft();
+        renderCRM();
+      });
+    });
+  }
+}
+
+function genCrmQueue(minDias){
+  ensureCrmDefaults();
+  const rows = buildCrmRows()
+    .filter(r=>r.dias !== null && r.dias >= minDias)
+    .filter(r=>!!normalizePhoneBR(r.phone));
+
+  state.crmQueue = rows.map(r=>({
+    id: uid(),
+    cliente: r.cliente,
+    phone: r.phone,
+    ultima: r.ultima,
+    dias: r.dias,
+    situacaoKey: r.situacaoKey,
+    situacaoLabel: r.situacaoLabel
+  }));
+
+  saveSoft();
+  renderCRM();
+}
+
+function clearCrmQueue(){
+  state.crmQueue = [];
+  saveSoft();
+  renderCRM();
+}
+
+function bindCRMUI(){
+  ensureCrmDefaults();
+  const el = getCrmElements();
+
+  // evita bind duplicado
+  if(bindCRMUI.__bound) return;
+  bindCRMUI.__bound = true;
+
+  el.selFiltro?.addEventListener("change", ()=>{
+    state.crm.filtro = el.selFiltro.value || "ALL";
+    saveSoft();
+    renderCRM();
+  });
+
+  el.inpBusca?.addEventListener("input", ()=>{
+    state.crm.busca = el.inpBusca.value || "";
+    saveSoft();
+    renderCRM();
+  });
+
+  el.txtTpl?.addEventListener("input", ()=>{
+    state.crm.tplRemarketing = el.txtTpl.value || "";
+    saveSoft();
+  });
+
+  el.btnSaveTpl?.addEventListener("click", ()=>{
+    state.crm.tplRemarketing = el.txtTpl?.value || state.crm.tplRemarketing;
+    saveSoft();
+    alert("Template salvo ✅");
+  });
+
+  el.btnGen45?.addEventListener("click", ()=> genCrmQueue(45));
+  el.btnGen90?.addEventListener("click", ()=> genCrmQueue(90));
+  el.btnClear?.addEventListener("click", clearCrmQueue);
 }
 
 function sendReportToday(){
