@@ -1658,9 +1658,13 @@ function renderAtendimentosHard(){
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
 
-  state.atendimentos.forEach(calcularAtendimento);
+  // ✅ CRM agora mostra SOMENTE realizados
+  const atendimentosRealizados = state.atendimentos
+    .filter(a => num(a.recebido) > 0);
 
-  body.innerHTML = state.atendimentos.map((a)=>{
+  atendimentosRealizados.forEach(calcularAtendimento);
+
+  body.innerHTML = atendimentosRealizados.map((a)=>{
     const wpp = clientWpp(a.cliente);
     const valor = procPrice(a.procedimento);
     return `
