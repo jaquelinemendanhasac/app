@@ -71,6 +71,9 @@ function debounce(fn, ms=250){
   };
 }
 
+const saveSoftDebounced = debounce(()=> saveSoft(), 250);
+const scheduleSyncDebounced = debounce(()=> scheduleSync(), 350);
+
 // =======================================================
 // ✅ MODO DIGITANDO (evita sync mexer no input ativo)
 // =======================================================
@@ -228,6 +231,7 @@ Total recebido: {total}`
     materiais: [],
     atendimentos: [],
     despesas: [],
+    receitasExtras: [],
     wppQueue: [],
 
     // ✅ CRM / Remarketing
@@ -258,11 +262,35 @@ function sanitizeState(parsed){
 
   const arr = (v)=> Array.isArray(v) ? v : [];
   s.procedimentos = arr(s.procedimentos);
+  s.procedimentos.forEach(p=>{
+    if(p && typeof p==="object"){
+      if(p.id === undefined) p.id = uid();
+      if(p.nome === undefined) p.nome = "";
+      if(p.preco === undefined) p.preco = 0;
+      if(p.reajuste === undefined) p.reajuste = "";
+      if(p.duracaoMin === undefined) p.duracaoMin = 60;
+      if(!Array.isArray(p.historico)) p.historico = [];
+      if(p.precoBase === undefined) p.precoBase = num(p.preco);
+      p.historico = p.historico
+        .filter(h => h && typeof h === "object")
+        .map(h => ({
+          dataInicio: String(h.dataInicio || "").slice(0,10),
+          valor: num(h.valor)
+        }))
+        .filter(h => h.dataInicio);
+      p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
+      if(p.historico.length){
+        p.preco = num(p.historico[p.historico.length-1].valor);
+        p.reajuste = p.historico[p.historico.length-1].dataInicio;
+      }
+    }
+  });
   s.clientes = arr(s.clientes);
   s.agenda = arr(s.agenda);
   s.materiais = arr(s.materiais);
   s.atendimentos = arr(s.atendimentos);
   s.despesas = arr(s.despesas);
+  s.receitasExtras = arr(s.receitasExtras);
   s.wppQueue = arr(s.wppQueue);
   s.crmQueue = arr(s.crmQueue);
 
@@ -344,6 +372,16 @@ function sanitizeState(parsed){
       if(d.tipo === undefined) d.tipo = "Fixa";
       if(d.valor === undefined) d.valor = 0;
       if(d.desc === undefined) d.desc = "";
+    }
+  });
+
+  // migração: receitas extras
+  s.receitasExtras.forEach(r=>{
+    if(r && typeof r==="object"){
+      if(r.id === undefined) r.id = uid();
+      if(r.data === undefined) r.data = todayISO();
+      if(r.descricao === undefined) r.descricao = "";
+      if(r.valor === undefined) r.valor = 0;
     }
   });
 
@@ -605,9 +643,25 @@ function scheduleSync(){
 }
 
 /* =================== CORE LOOKUPS =================== */
-function procPrice(nome){
+function procPrice(nome, data=null){
   const p = state.procedimentos.find(x => x.nome === nome);
-  return p ? num(p.preco) : 0;
+  if(!p) return 0;
+
+  const historico = Array.isArray(p.historico) ? [...p.historico] : [];
+  historico.sort((a,b)=> String(a.dataInicio||"").localeCompare(String(b.dataInicio||"")));
+
+  if(!data){
+    if(historico.length) return num(historico[historico.length-1].valor);
+    return num(p.preco);
+  }
+
+  let valor = (p.precoBase !== undefined) ? num(p.precoBase) : num(p.preco);
+  for(const h of historico){
+    if(String(h.dataInicio||"") && h.dataInicio <= data){
+      valor = num(h.valor);
+    }
+  }
+  return num(valor);
 }
 function findClientByName(name){
   const n = (name||"").trim().toLowerCase();
@@ -662,7 +716,7 @@ function enforceAgendaRecebidoRules(){
     }
 
     if(status === "Realizado"){
-      ag.recebido = procPrice(ag.procedimento);
+      ag.recebido = procPrice(ag.procedimento, ag.data);
     }else if(status === "Cancelado" || status === "Remarcado"){
       ag.recebido = 0;
     }else{
@@ -685,7 +739,7 @@ function waLink(phoneDigits, text){
 }
 function fillTpl(tpl, a){
   const studio = state.settings.studioNome || "Studio";
-  const valor = money(procPrice(a.procedimento));
+  const valor = money(procPrice(a.procedimento, a.data));
   return String(tpl||"")
     .replaceAll("{cliente}", a.cliente || "")
     .replaceAll("{data}", fmtBRDate(a.data))
@@ -718,7 +772,7 @@ function custoMateriaisPorCliente(){
 
 /* =================== CRM (Atendimentos) — DERIVED =================== */
 function calcularAtendimento(a){
-  a.valor = procPrice(a.procedimento);
+  a.valor = procPrice(a.procedimento, a.data);
   a.custoMaterial = custoMateriaisPorCliente();
   a.custoTotal = num(a.custoMaterial) + num(a.maoObra);
   a.lucro = num(a.recebido) - num(a.custoTotal);
@@ -738,7 +792,7 @@ function ensureAtendimentoFromAgenda(ag){
       data: ag.data || todayISO(),
       cliente: ag.cliente || "",
       procedimento: ag.procedimento || "",
-      valor: procPrice(ag.procedimento),
+      valor: procPrice(ag.procedimento, ag.data),
       recebido: 0,
       custoMaterial: custoMateriaisPorCliente(),
       maoObra: 0,
@@ -767,13 +821,13 @@ function syncAgendaToAtendimentos(){
     }
 
     if(status === "Realizado"){
-      ag.recebido = procPrice(ag.procedimento);
+      ag.recebido = procPrice(ag.procedimento, ag.data);
 
       const at = ensureAtendimentoFromAgenda(ag);
       at.data = ag.data || at.data;
       at.cliente = ag.cliente || at.cliente;
       at.procedimento = ag.procedimento || at.procedimento;
-      at.valor = procPrice(at.procedimento);
+      at.valor = procPrice(at.procedimento, at.data);
       at.recebido = num(ag.recebido);
     }else{
       removeAtendimentoFromAgenda(ag.id);
@@ -794,15 +848,21 @@ function currentMonthKey(){
 // ✅ Resumo com opção de filtrar por mês e escolher escopo de despesas
 function calcResumo(opts = {}){
   const {
-    onlyMonthKey = null,          // ex: "2026-02" para filtrar atendimentos do mês
-    despesasScope = "ALL"         // "ALL" ou "MONTH"
+    onlyMonthKey = null,
+    despesasScope = "ALL"
   } = opts;
 
   const atend = onlyMonthKey
     ? state.atendimentos.filter(a => monthKey(a.data) === onlyMonthKey)
     : state.atendimentos;
 
-  const receita = atend.reduce((s,a)=> s + num(a.recebido), 0);
+  const receitaAtend = atend.reduce((s,a)=> s + num(a.recebido), 0);
+
+  const receitaExtras = (state.receitasExtras || [])
+    .filter(r => !onlyMonthKey || monthKey(r.data) === onlyMonthKey)
+    .reduce((s,r)=> s + num(r.valor), 0);
+
+  const receita = receitaAtend + receitaExtras;
   const custos  = atend.reduce((s,a)=> s + (num(a.custoMaterial)+num(a.maoObra)), 0);
 
   const despesasFonte = (despesasScope === "MONTH" && onlyMonthKey)
@@ -810,7 +870,6 @@ function calcResumo(opts = {}){
     : state.despesas;
 
   const despesas = despesasFonte.reduce((s,d)=> s + num(d.valor), 0);
-
   const lucro = receita - custos - despesas;
 
   return { receita, custos, despesas, lucro };
@@ -822,6 +881,11 @@ function calcMonthlyRevenue(){
     const k = monthKey(a.data);
     if(!k) continue;
     map.set(k, (map.get(k)||0) + num(a.recebido));
+  }
+  for(const r of (state.receitasExtras || [])){
+    const k = monthKey(r.data);
+    if(!k) continue;
+    map.set(k, (map.get(k)||0) + num(r.valor));
   }
   const keys = Array.from(map.keys()).sort();
   return keys.map(k => ({ k, v: map.get(k) }));
@@ -1067,7 +1131,7 @@ function renderCalendarDay(){
   box.innerHTML = itens.map((a)=>{
     const st = (a.status||"Agendado");
     const rec = num(a.recebido);
-    const val = (st==="Bloqueio") ? 0 : procPrice(a.procedimento);
+    const val = (st==="Bloqueio") ? 0 : procPrice(a.procedimento, a.data);
 
     const idx = state.agenda.findIndex(x=>x && x.id===a.id);
     const conflita = (idx >= 0) ? isConflictByDuration(idx) : false;
@@ -1112,7 +1176,7 @@ function renderCalendarDay(){
 
       if(act === 'done'){
         ag.status = "Realizado";
-        ag.recebido = procPrice(ag.procedimento);
+        ag.recebido = procPrice(ag.procedimento, ag.data);
         saveSoft();
         renderAgendaHard();
         renderCalendar();
@@ -1132,7 +1196,7 @@ function renderCalendarDay(){
       }
 
       if(act === 'edit'){
-        setRoute("agenda");
+        openAgendaEditorById(ag.id);
         return;
       }
     });
@@ -1246,7 +1310,65 @@ function isConflict(i){
   return state.agenda.some((x,idx)=> idx!==i && active(x) && active(a) && `${x.data}|${x.hora}` === key);
 }
 
+
+function escAttr(v){
+  return String(v ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+function ensureAgendaClientesDatalist(){
+  let dl = byId("agendaClientesDatalist");
+  if(!dl){
+    dl = document.createElement("datalist");
+    dl.id = "agendaClientesDatalist";
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = state.clientes
+    .map(c => (c?.nome||"").trim())
+    .filter(Boolean)
+    .sort((a,b)=> a.localeCompare(b, "pt-BR"))
+    .map(nome => `<option value="${escAttr(nome)}"></option>`)
+    .join("");
+  return dl;
+}
+
+function agendaClienteInputHTML(valor=""){
+  return `<input class="mini" type="text" list="agendaClientesDatalist" value="${escAttr(valor)}" />`;
+}
+
+function openAgendaEditorById(agendaId){
+  setRoute("agenda");
+
+  const doOpen = ()=>{
+    const row = document.querySelector(`#tblAgenda tbody tr[data-id="${agendaId}"]`);
+    if(!row){
+      renderAgendaHard();
+    }
+    const row2 = document.querySelector(`#tblAgenda tbody tr[data-id="${agendaId}"]`);
+    if(!row2) return;
+
+    document.querySelectorAll('#tblAgenda tbody tr.ok').forEach(el=> el.classList.remove('ok'));
+    row2.scrollIntoView({ behavior: "smooth", block: "center" });
+    row2.classList.add("ok");
+
+    const inputNome = row2.querySelectorAll("td")[2]?.querySelector("input");
+    if(inputNome){
+      inputNome.focus({ preventScroll:true });
+      inputNome.select();
+    }
+
+    setTimeout(()=> row2.classList.remove("ok"), 1800);
+  };
+
+  requestAnimationFrame(()=> setTimeout(doOpen, 80));
+}
+
 function renderAgendaHard(){
+  ensureAgendaClientesDatalist();
+
   const tblAgendaBody = getAgendaTbody();
   const agendaNotice = getAgendaNotice();
   if(!tblAgendaBody) return;
@@ -1263,7 +1385,7 @@ function renderAgendaHard(){
 
   tblAgendaBody.innerHTML = state.agenda.map((a,i)=>{
     const isBlock = (a.status==="Bloqueio");
-    const val = isBlock ? 0 : procPrice(a.procedimento);
+    const val = isBlock ? 0 : procPrice(a.procedimento, a.data);
     const conflict = isBlock ? false : isConflict(i);
     const conflictDur = isBlock ? false : isConflictByDuration(i);
 
@@ -1275,7 +1397,7 @@ function renderAgendaHard(){
       <tr data-id="${a.id}" class="${(conflict || conflictDur) ? "danger" : ""}">
         <td>${inputHTML({value:a.data, type:"date"})}</td>
         <td>${inputHTML({value:a.hora, type:"time", step:"60"})}</td>
-        <td>${inputHTML({value:a.cliente})}</td>
+        <td>${agendaClienteInputHTML(a.cliente)}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
         <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:["Alongamento"]), readonly:isBlock})}</td>
         <td>${inputHTML({value:val.toFixed(2), type:"text", cls:"money", readonly:true})}</td>
@@ -1323,13 +1445,14 @@ function renderAgendaHard(){
     getInp(tdCli)?.addEventListener("input", ()=>{
       a.cliente = getInp(tdCli).value;
       if(inpWpp) inpWpp.value = clientWpp(a.cliente);
-      saveSoft(); scheduleSync();
+      saveSoftDebounced();
+      scheduleSyncDebounced();
     });
 
     getInp(tdProc)?.addEventListener("change", ()=>{
       if(isBlock) return;
       a.procedimento = getInp(tdProc).value;
-      const preco = procPrice(a.procedimento);
+      const preco = procPrice(a.procedimento, a.data);
       if(inpVal) inpVal.value = preco.toFixed(2);
 
       if((a.status||"Agendado") === "Realizado"){
@@ -1348,7 +1471,7 @@ function renderAgendaHard(){
         if(inpRec) inpRec.value = "0.00";
         if(inpVal) inpVal.value = "0.00";
       } else if(a.status === "Realizado"){
-        a.recebido = procPrice(a.procedimento);
+        a.recebido = procPrice(a.procedimento, a.data);
         if(inpRec) inpRec.value = num(a.recebido).toFixed(2);
       } else if(a.status === "Cancelado" || a.status === "Remarcado"){
         a.recebido = 0;
@@ -1369,7 +1492,7 @@ function renderAgendaHard(){
       a.recebido = num(inpRec.value);
 
       if((a.status||"Agendado") === "Realizado"){
-        a.recebido = procPrice(a.procedimento);
+        a.recebido = procPrice(a.procedimento, a.data);
         inpRec.value = num(a.recebido).toFixed(2);
       }
 
@@ -1378,7 +1501,8 @@ function renderAgendaHard(){
 
     getInp(tdObs)?.addEventListener("input", ()=>{
       a.obs = getInp(tdObs).value;
-      saveSoft();
+      saveSoftDebounced();
+      scheduleSyncDebounced();
     });
 
     tr.querySelector("[data-conf]")?.addEventListener("click", ()=>{
@@ -1431,7 +1555,7 @@ function updateAgendaAutoCells(){
       a.procedimento = "—";
       a.recebido = 0;
     } else if((a.status||"Agendado") === "Realizado"){
-      a.recebido = procPrice(a.procedimento);
+      a.recebido = procPrice(a.procedimento, a.data);
     } else if(a.status === "Cancelado" || a.status === "Remarcado"){
       a.recebido = 0;
     }
@@ -1443,7 +1567,7 @@ function updateAgendaAutoCells(){
     const active = document.activeElement;
 
     if(inpWpp && active !== inpWpp) inpWpp.value = clientWpp(a.cliente);
-    if(inpVal && active !== inpVal) inpVal.value = ((a.status==="Bloqueio")?0:procPrice(a.procedimento)).toFixed(2);
+    if(inpVal && active !== inpVal) inpVal.value = ((a.status==="Bloqueio")?0:procPrice(a.procedimento, a.data)).toFixed(2);
     if(inpRec && active !== inpRec) inpRec.value = num(a.recebido).toFixed(2);
   });
 }
@@ -1481,8 +1605,36 @@ function renderProcedimentos(){
     const inpDur  = getInp(getCell(tr,3));
 
     inpNome?.addEventListener('input', ()=>{ p.nome = inpNome.value; saveSoft(); scheduleSync(); });
-    inpPreco?.addEventListener('input', ()=>{ p.preco = num(inpPreco.value); saveSoft(); scheduleSync(); });
-    inpReaj?.addEventListener('change',()=>{ p.reajuste = inpReaj.value; saveSoft(); });
+
+    inpPreco?.addEventListener('input', ()=>{
+      const novoPreco = num(inpPreco.value);
+      const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
+      p.preco = novoPreco;
+      if(!tinhaHistorico && !p.reajuste){
+        p.precoBase = novoPreco;
+      }
+      saveSoft();
+      scheduleSync();
+    });
+
+    inpReaj?.addEventListener('change',()=>{
+      p.reajuste = inpReaj.value || "";
+      if(!Array.isArray(p.historico)) p.historico = [];
+      if(p.reajuste){
+        const idxHist = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+        const entry = { dataInicio: p.reajuste, valor: num(p.preco) };
+        if(idxHist >= 0) p.historico[idxHist] = entry;
+        else p.historico.push(entry);
+        p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
+      }
+      saveSoft();
+      scheduleSync();
+      renderAgendaHard();
+      renderAtendimentosHard();
+      renderCalendar();
+      renderDashboard();
+    });
+
     inpDur?.addEventListener('input', ()=>{ p.duracaoMin = Math.max(1, Math.round(num(inpDur.value)||60)); saveSoft(); scheduleSync(); });
 
     tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
@@ -2399,7 +2551,7 @@ function sendReportToday(){
     .sort((x,y)=>(x.hora||'').localeCompare(y.hora||''));
 
   const lista = itens.length
-    ? itens.map(a=>`• ${a.hora||''} — ${a.cliente||''} (${a.procedimento||''}) — ${money(procPrice(a.procedimento))}`).join('\n')
+    ? itens.map(a=>`• ${a.hora||''} — ${a.cliente||''} (${a.procedimento||''}) — ${money(procPrice(a.procedimento, a.data))}`).join('\n')
     : 'Sem atendimentos realizados.';
 
   const total = itens.reduce((s,a)=> s + num(a.recebido), 0);
@@ -2496,6 +2648,145 @@ function updateRevenueComparisons(){
   hintYoY.textContent = `Mês atual vs ano anterior: ${money(cur)} vs ${money(yoy)} (${fmtPct(yoyPct)})`;
 }
 
+
+function ensureReceitasExtrasUI(){
+  const panel = document.querySelector('.panel[data-route="dashboard"]');
+  if(!panel) return;
+
+  let host = byId('boxReceitasExtras');
+  if(!host){
+    host = document.createElement('div');
+    host.className = 'box';
+    host.id = 'boxReceitasExtras';
+    host.innerHTML = `
+      <h3>Receitas extras</h3>
+      <div class="row">
+        <label class="field">
+          <span>Data</span>
+          <input id="rxData" type="date" />
+        </label>
+        <label class="field" style="flex:1;">
+          <span>Descrição</span>
+          <input id="rxDescricao" type="text" placeholder="Ex.: Joias vendidas" />
+        </label>
+        <label class="field">
+          <span>Valor</span>
+          <input id="rxValor" type="number" step="0.01" inputmode="decimal" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn" id="btnAddReceitaExtra">+ Adicionar receita extra</button>
+      </div>
+      <div class="tableWrap">
+        <table class="table" id="tblReceitasExtras">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Descrição</th>
+              <th>Valor</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
+    panel.appendChild(host);
+
+    const btn = byId('btnAddReceitaExtra');
+    btn?.addEventListener('click', ()=>{
+      const data = byId('rxData')?.value || todayISO();
+      const descricao = (byId('rxDescricao')?.value || '').trim();
+      const valor = num(byId('rxValor')?.value);
+      if(!descricao){
+        alert('Digite a descrição da receita extra.');
+        byId('rxDescricao')?.focus();
+        return;
+      }
+      if(valor <= 0){
+        alert('Digite um valor válido.');
+        byId('rxValor')?.focus();
+        return;
+      }
+
+      state.receitasExtras.unshift({
+        id: uid(),
+        data,
+        descricao,
+        valor
+      });
+
+      if(byId('rxDescricao')) byId('rxDescricao').value = '';
+      if(byId('rxValor')) byId('rxValor').value = '';
+      if(byId('rxData')) byId('rxData').value = todayISO();
+
+      saveSoft();
+      renderReceitasExtrasUI();
+      renderDashboard();
+    });
+  }
+
+  const dataInp = byId('rxData');
+  if(dataInp && !dataInp.value) dataInp.value = todayISO();
+}
+
+function renderReceitasExtrasUI(){
+  ensureReceitasExtrasUI();
+
+  const body = document.querySelector('#tblReceitasExtras tbody');
+  if(!body) return;
+
+  body.innerHTML = (state.receitasExtras || []).map((r)=>`
+    <tr data-id="${r.id}">
+      <td>${inputHTML({value:r.data || todayISO(), type:'date'})}</td>
+      <td>${inputHTML({value:r.descricao || ''})}</td>
+      <td>${inputHTML({value:num(r.valor).toFixed(2), type:'number', cls:'money', step:'0.01', inputmode:'decimal'})}</td>
+      <td><button class="iconBtn" data-del>✕</button></td>
+    </tr>
+  `).join('');
+
+  body.querySelectorAll('tr').forEach((tr)=>{
+    const id = tr.dataset.id;
+    const r = (state.receitasExtras || []).find(x=>x.id===id);
+    if(!r) return;
+
+    const inpData = getInp(getCell(tr,0));
+    const inpDesc = getInp(getCell(tr,1));
+    const inpVal  = getInp(getCell(tr,2));
+
+    inpData?.addEventListener('change', ()=>{
+      r.data = inpData.value || todayISO();
+      saveSoftDebounced();
+      scheduleSyncDebounced();
+      updateDashboardKPIs();
+    });
+
+    inpDesc?.addEventListener('input', ()=>{
+      r.descricao = inpDesc.value;
+      saveSoftDebounced();
+      scheduleSyncDebounced();
+    });
+
+    inpVal?.addEventListener('input', ()=>{
+      r.valor = num(inpVal.value);
+      updateDashboardKPIs();
+      saveSoftDebounced();
+      scheduleSyncDebounced();
+    });
+
+    inpVal?.addEventListener('blur', ()=> renderDashboard());
+    inpData?.addEventListener('blur', ()=> renderDashboard());
+
+    tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
+      if(!confirmDel('esta receita extra')) return;
+      state.receitasExtras = state.receitasExtras.filter(x=>x.id!==id);
+      saveSoft();
+      renderReceitasExtrasUI();
+      renderDashboard();
+    });
+  });
+}
+
 /* =================== DASHBOARD =================== */
 function updateDashboardKPIs(){
   const k1 = byId("kpiReceita");
@@ -2525,6 +2816,7 @@ function updateDashboardKPIs(){
 
 function renderDashboard(){
   updateDashboardKPIs();
+  renderReceitasExtrasUI();
 
   const bars = byId("chartBars");
   const line = byId("chartLine");
