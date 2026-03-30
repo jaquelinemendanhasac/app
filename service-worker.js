@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "sjm-gestao";
-const CACHE_VERSION = "v19"; // ✅ SUBIU pra forçar atualizar
+const CACHE_VERSION = "v21"; // ✅ SUBIU pra forçar atualizar
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 
 const ASSETS = [
