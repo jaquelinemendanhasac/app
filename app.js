@@ -9710,6 +9710,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       </div>
       <div class="clienteFichaActions">
         <button type="button" class="btn btn--ghost" data-open-fotos-v52>Ver galeria da cliente</button>
+        <button type="button" class="btn" data-confirm-cliente-v52>Confirmar cadastro</button>
         <button type="button" class="iconBtn danger" data-del-cliente-v52>Excluir cliente</button>
       </div>`;
   }
@@ -9747,6 +9748,11 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       });
       box.querySelectorAll('[data-open-fotos-v52]').forEach(btn=>{
         btn.addEventListener('click',()=>{ try{ renderClientPhotoPanel(); }catch{}; document.getElementById('clientPhotoPanel')?.scrollIntoView({behavior:'smooth', block:'start'}); });
+      });
+      box.querySelector('[data-confirm-cliente-v52]')?.addEventListener('click',()=>{
+        saveClientV52();
+        alert('Cadastro confirmado e salvo ✅');
+        window.renderClientes();
       });
       box.querySelector('[data-del-cliente-v52]')?.addEventListener('click',()=>{
         if(typeof confirmDel==='function' ? !confirmDel('esta cliente') : !confirm('Excluir esta cliente?')) return;
@@ -9832,4 +9838,73 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.addEventListener('load', hideDevClientPatch);
   setTimeout(hideDevClientPatch, 100);
   setTimeout(hideDevClientPatch, 800);
+})();
+
+
+/* PATCH MOBILE — RGB por controle deslizante em Configurações */
+(function(){
+  function $id(id){ return document.getElementById(id); }
+  function hexToRgb(hex){
+    let h = String(hex || '').replace('#','').trim();
+    if(h.length === 3) h = h.split('').map(x=>x+x).join('');
+    const n = parseInt(h || '000000', 16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+  }
+  function rgbToHex(r,g,b){
+    const to = v => Math.max(0, Math.min(255, parseInt(v || 0, 10))).toString(16).padStart(2,'0').toUpperCase();
+    return '#'+to(r)+to(g)+to(b);
+  }
+  function setRgb(prefix, hex){
+    const rgb = hexToRgb(hex);
+    const r=$id(prefix+'R'), g=$id(prefix+'G'), b=$id(prefix+'B'), color=$id(prefix), prev=$id(prefix+'Preview'), label=$id(prefix+'Hex');
+    if(r) r.value = rgb.r; if(g) g.value = rgb.g; if(b) b.value = rgb.b;
+    const fixed = rgbToHex(rgb.r,rgb.g,rgb.b);
+    if(color) color.value = fixed;
+    if(prev) prev.style.background = fixed;
+    if(label) label.textContent = fixed;
+  }
+  function readRgb(prefix){
+    const hex = rgbToHex($id(prefix+'R')?.value, $id(prefix+'G')?.value, $id(prefix+'B')?.value);
+    const color=$id(prefix), prev=$id(prefix+'Preview'), label=$id(prefix+'Hex');
+    if(color) color.value = hex;
+    if(prev) prev.style.background = hex;
+    if(label) label.textContent = hex;
+    return hex;
+  }
+  function bindOne(prefix, settingKey){
+    ['R','G','B'].forEach(ch=>{
+      const el=$id(prefix+ch);
+      if(!el || el.__rgbMobileBound) return;
+      el.__rgbMobileBound = true;
+      el.addEventListener('input', ()=>{
+        const hex = readRgb(prefix);
+        try{ state.settings[settingKey] = hex; applyTheme(); }catch(e){}
+      });
+      el.addEventListener('change', ()=>{
+        const hex = readRgb(prefix);
+        try{ state.settings[settingKey] = hex; saveSoft(); scheduleSync(); applyTheme(); }catch(e){}
+      });
+    });
+  }
+  function initRgbMobile(){
+    if(!$id('cfgCorPrimariaR')) return;
+    try{
+      setRgb('cfgCorPrimaria', state?.settings?.corPrimaria || $id('cfgCorPrimaria')?.value || '#7B2CBF');
+      setRgb('cfgCorAcento', state?.settings?.corAcento || $id('cfgCorAcento')?.value || '#F72585');
+      bindOne('cfgCorPrimaria', 'corPrimaria');
+      bindOne('cfgCorAcento', 'corAcento');
+    }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded', ()=>{
+    setTimeout(initRgbMobile, 200);
+    setTimeout(initRgbMobile, 1000);
+  });
+  const oldBind = window.bindConfigUI;
+  if(typeof oldBind === 'function'){
+    window.bindConfigUI = function(){
+      const r = oldBind.apply(this, arguments);
+      setTimeout(initRgbMobile, 50);
+      return r;
+    };
+  }
 })();
