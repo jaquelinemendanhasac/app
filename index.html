@@ -2,9 +2,12 @@
 <!doctype html>
 <html lang="pt-br">
 <head>
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Studio Jaqueline Mendanha — Gestão</title>
+  <title>Studio Sync Pro — Limpa Estável 1.0</title>
 
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#7B2CBF">
@@ -14,18 +17,54 @@
 
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body class="auth-locked">
   <header class="topbar">
     <div class="brand">
       <div class="brandRow">
         <img id="logoImg" class="logo isHidden" alt="Logo do Studio" />
         <div>
-          <div class="brand__title" id="studioTitle">Studio Jaqueline Mendanha</div>
-          <div class="brand__subtitle">Agenda • WhatsApp • Materiais</div>
+          <div class="brand__title" id="studioTitle">Studio Sync Pro</div>
+          <div class="brand__subtitle">Gestão para profissionais da beleza</div>
+          <div class="planBadge" id="currentPlanBadge" role="button" tabindex="0">Plano Premium</div>
         </div>
       </div>
     </div>
+    <div class="topbar__right"><button class="btn btn--ghost supportTopBtn" id="btnSupport" type="button">Suporte</button><button class="btn btn--ghost userTopBtn" id="btnUserArea" type="button">Usuário</button></div>
   </header>
+
+  <div class="authGate">🔒 Faça login para acessar o Studio Sync Pro.</div>
+
+  <section class="authBox" id="authBox" aria-label="Acesso ao sistema">
+    <div class="authCard">
+      <h2>Studio Sync Pro</h2>
+      <p class="hint">Entre na sua conta para acessar agenda, clientes e financeiro.</p>
+
+      <div class="authTabs">
+        <button type="button" class="authTab active" id="authTabLogin">Entrar</button>
+        <button type="button" class="authTab" id="authTabRegister">Criar conta</button>
+      </div>
+
+      <form id="loginForm" class="authForm">
+        <label class="field"><span>Email</span><input id="loginEmail" type="email" autocomplete="email" required></label>
+        <label class="field"><span>Senha</span><input id="loginPass" type="password" autocomplete="current-password" required></label>
+        <button class="btn" type="submit">Entrar</button>
+        <button class="linkBtn" type="button" id="btnForgotPass">Esqueci minha senha</button>
+      </form>
+
+      <form id="registerForm" class="authForm isHidden">
+        <label class="field"><span>Nome do Studio</span><input id="regStudio" autocomplete="organization" required></label>
+        <label class="field"><span>Nome da profissional</span><input id="regName" autocomplete="name" required></label>
+        <label class="field"><span>WhatsApp</span><input id="regWpp" inputmode="tel" placeholder="5517999999999"></label>
+        <label class="field"><span>Email</span><input id="regEmail" type="email" autocomplete="email" required></label>
+        <label class="field"><span>Senha</span><input id="regPass" type="password" autocomplete="new-password" minlength="6" required></label>
+        <label class="field"><span>Confirmar senha</span><input id="regPass2" type="password" autocomplete="new-password" minlength="6" required></label>
+        <button class="btn" type="submit">Criar conta</button>
+        <small class="hint">Conta criada no plano Básico. Você pode mudar para Pro ou Premium depois sem perder dados.</small>
+      </form>
+
+      <div class="authMsg" id="authMsg" role="status"></div>
+    </div>
+  </section>
 
   <nav class="tabs" id="tabs"></nav>
 
@@ -40,6 +79,11 @@
           </div>
           <img id="dashLogo" class="dashLogo isHidden" alt="Logo do Studio" />
         </div>
+      </div>
+
+      <div class="actions dashExportActions">
+        <button class="btn" id="btnExportPDF" type="button" >📄 Exportar PDF</button>
+        <button class="btn btn--ghost" id="btnExportExcel" type="button" >📊 Exportar Excel</button>
       </div>
 
       <div class="cards">
@@ -59,6 +103,22 @@
           <div class="card__label">Lucro Líquido</div>
           <div class="card__value" id="kpiLucro">R$ 0,00</div>
         </div>
+        <div class="card">
+          <div class="card__label">Clientes atendidas no mês</div>
+          <div class="card__value" id="kpiClientesMes">0</div>
+        </div>
+        <div class="card">
+          <div class="card__label">Ticket médio</div>
+          <div class="card__value" id="kpiTicketMedio">R$ 0,00</div>
+        </div>
+        <div class="card">
+          <div class="card__label">Procedimento mais vendido</div>
+          <div class="card__value smallValue" id="kpiTopProcedimento">—</div>
+        </div>
+        <div class="card">
+          <div class="card__label">Próximo horário</div>
+          <div class="card__value smallValue" id="kpiProximoHorario">—</div>
+        </div>
       </div>
 
       <div class="grid2">
@@ -73,6 +133,45 @@
           <small class="hint" id="hintMoM">Mês atual vs mês anterior: —</small>
           <small class="hint" id="hintYoY">Mês atual vs ano anterior: —</small>
         </div>
+      </div>
+
+
+      <div class="dashboardQuick grid2">
+        <div class="box box--today">
+          <h3>Hoje</h3>
+          <div class="quickStats">
+            <div><b id="dashHojeAtend">0</b><span>atendimentos</span></div>
+            <div><b id="dashHojeReceita">R$ 0,00</b><span>receita prevista</span></div>
+            <div><b id="dashHojeRecebido">R$ 0,00</b><span>recebido</span></div>
+          </div>
+        </div>
+        <div class="box box--goal">
+          <h3>Meta mensal</h3>
+          <div class="goalLine"><span id="dashMetaTexto">R$ 0,00 / R$ 0,00</span><b id="dashMetaPct">0%</b></div>
+          <div class="goalBar"><i id="dashMetaBar"></i></div>
+          <small class="hint">Defina a meta na configuração de caixa abaixo.</small>
+        </div>
+      </div>
+
+      <div class="grid2 dashboardLists">
+        <div class="box">
+          <h3>Próximos horários</h3>
+          <div id="dashNextList" class="simpleList"></div>
+        </div>
+        <div class="box">
+          <h3>Alertas rápidos</h3>
+          <div id="dashAlertList" class="simpleList"></div>
+        </div>
+      </div>
+
+      <div class="box dashboardFinanceBox dashboardCashConfig">
+        <h3>Configuração de caixa</h3>
+        <p class="hint">Defina a meta mensal e o dia de fechamento do caixa.</p>
+        <div class="row">
+          <label class="field"><span>Meta mensal</span><input id="finMetaInput" type="number" step="0.01" inputmode="decimal"></label>
+          <label class="field"><span>Dia do fechamento</span><input id="finDiaFechamento" type="number" min="1" max="31"></label>
+        </div>
+        <div class="actions"><button class="btn" id="btnSalvarFinanceiroConfig" type="button">Salvar configuração de caixa</button></div>
       </div>
     </section>
 
@@ -101,7 +200,6 @@
             <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
           </div>
           <div class="calGrid" id="calGrid"></div>
-          <small class="hint">Badges: total do dia / valor recebido (Realizado). Conflitos ficam destacados.</small>
         </div>
 
         <div class="calSide">
@@ -123,13 +221,33 @@
 
       <div class="actions">
         <button class="btn" id="btnAddAgenda">+ Novo agendamento</button>
-        <button class="btn btn--ghost" id="btnClearAgenda">Limpar agenda (somente agenda)</button>
         <button class="btn btn--ghost" id="btnReportToday">Relatório de hoje (WhatsApp)</button>
       </div>
 
       <div class="notice" id="agendaNotice" hidden></div>
 
-      <div class="tableWrap">
+      <div class="agendaCompact">
+        <div class="agendaCompact__left">
+          <div class="agendaCompact__filters">
+            <input id="agendaFiltroBusca" type="search" placeholder="Pesquisar cliente, procedimento ou observação..." />
+            <div class="agendaCompact__filterRow">
+              <input id="agendaFiltroData" type="date" />
+              <select id="agendaFiltroStatus">
+                <option value="">Todos</option>
+                <option value="Agendado">Agendado</option>
+                <option value="Realizado">Realizado</option>
+                <option value="Cancelado">Cancelado</option>
+                <option value="Remarcado">Remarcado</option>
+                <option value="Bloqueio">Bloqueio</option>
+              </select>
+            </div>
+          </div>
+          <div id="agendaCompactList" class="agendaCompact__list"></div>
+        </div>
+        <div class="agendaCompact__right" id="agendaCompactDetail"></div>
+      </div>
+
+      <div class="tableWrap agendaTableLegacy">
         <table class="table" id="tblAgenda">
           <thead>
             <tr>
@@ -195,6 +313,22 @@
             <textarea id="tplAgradecimento" rows="3"></textarea>
           </label>
           <label class="field">
+            <span>Envio das fotos do procedimento</span>
+            <textarea id="tplFotoProcedimento" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Cartão fidelidade</span>
+            <textarea id="tplFidelidade" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Aniversário da cliente</span>
+            <textarea id="tplAniversario" rows="3"></textarea>
+          </label>
+          <label class="field">
+            <span>Reativação / cliente sumida</span>
+            <textarea id="tplReativacao" rows="3"></textarea>
+          </label>
+          <label class="field">
             <span>Relatório diário (para você)</span>
             <textarea id="tplRelatorio" rows="3"></textarea>
           </label>
@@ -212,12 +346,11 @@
     </section>
 
     <!-- ✅ CRM (ROTA CORRIGIDA PARA "CRM") -->
-    <section class="panel" data-route="CRM">
+    <section class="panel" data-route="crm">
       <div class="panel__head">
         <h2>Clientes (CRM / Remarketing)</h2>
         <p>Controle de manutenção, clientes em dia, e remarketing (45+ dias sem voltar).</p>
       </div>
-
       <div class="cards">
         <div class="card card--accent">
           <div class="card__label">Clientes com atendimento</div>
@@ -277,6 +410,17 @@
             <button class="btn" id="btnCrmSaveTpl">Salvar template</button>
           </div>
           <small class="hint">Variáveis: {cliente}, {dias}, {ultima}, {studio}</small>
+        </div>
+      </div>
+
+      <div class="box" id="crmReportsBox" style="margin-top:12px;">
+        <h3>Resumo comercial</h3>
+        <p class="hint">Top clientes, serviços mais vendidos e taxa de faltas/cancelamentos em um só lugar.</p>
+        <div class="grid2">
+          <div class="simpleList"><b>Top clientes</b><div id="crmTopClientes">—</div></div>
+          <div class="simpleList"><b>Top serviços</b><div id="crmTopServicos">—</div></div>
+          <div class="simpleList"><b>Taxa de faltas/cancelamentos</b><div id="crmTaxaFaltas">—</div></div>
+          <div class="simpleList"><b>Lucro por serviço</b><div id="crmLucroServico">—</div></div>
         </div>
       </div>
 
@@ -348,11 +492,17 @@
           <thead>
             <tr>
               <th>Cliente</th><th>WhatsApp</th><th>Telefone</th><th>Nasc.</th><th>Alergia</th><th>Quais</th>
-              <th>Gestante</th><th>N° do molde</th><th>Obs.</th><th></th>
+              <th>Gestante</th><th>N° do molde</th><th>Obs.</th><th>Fotos</th><th></th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
+      </div>
+
+      <div class="box" style="margin-top:12px;" data-feature="fotos">
+        <h3>📁 Pastas de fotos das clientes</h3>
+        <p class="hint">Recurso Premium: as fotos tiradas nos procedimentos ficam salvas por cliente.</p>
+        <div id="clientPhotoPanel"></div>
       </div>
     </section>
 
@@ -367,18 +517,21 @@
         <button class="btn" id="btnAddMat">+ Novo material</button>
       </div>
 
+      <div class="box" id="materialAlerts" style="margin-top:12px;"></div>
+
       <div class="tableWrap">
         <table class="table" id="tblMat">
           <thead>
             <tr>
               <th>Material</th>
-              <th>Qtd total</th>
+              <th>Qtd por unidade</th>
               <th>Unidade</th>
-              <th>Valor compra</th>
-              <th>Custo unitário</th>
-              <th>Qtd por cliente</th>
-              <th>Rendimento (clientes)</th>
+              <th>Valor da unidade</th>
+              <th>Unidades compradas</th>
+              <th>Total comprado</th>
+              <th>Uso por cliente</th>
               <th>Custo por cliente</th>
+              <th>Rendimento</th>
               <th></th>
             </tr>
           </thead>
@@ -387,7 +540,7 @@
       </div>
 
       <small class="hint">
-        Ex.: 120 ml por R$ 18,00 → custo unitário = 18/120 = 0,15 por ml.
+        Ex.: pote com 15 ml por R$ 70,00 e comprou 2 unidades → total 30 ml. Se usa 2 ml por cliente, custo por cliente = R$ 9,33.
       </small>
     </section>
 
@@ -414,11 +567,57 @@
       </div>
     </section>
 
-    <!-- CONFIG -->
+
+    <!-- AUTOAGENDAMENTO 2.0 -->
+    <section class="panel" data-route="autoagendamento">
+      <div class="panel__head"><h2>Autoagendamento</h2><p>Link público, regras de disponibilidade e sinal via Pix.</p></div>
+      <div class="grid2">
+        <div class="box"><h3>Link personalizado</h3>
+          <label class="field"><span>Status da autoagenda</span><select id="agAtivo"><option value="true">Ativada</option><option value="false">Desativada</option></select></label>
+          <label class="field"><span>Slug do studio</span><input id="agSlug" placeholder="studio-jaqueline"></label>
+          <label class="field"><span>Link gerado</span><input id="agLink" readonly></label>
+          <div class="actions"><button class="btn" id="btnSalvarAutoAg" type="button">Salvar autoagendamento</button><button class="btn btn--ghost" id="btnCopiarLinkAg" type="button">Copiar link</button></div>
+        </div>
+        <div class="box"><h3>Regras e Pix sinal</h3>
+          <div class="row">
+            <label class="field"><span>Horário inicial</span><input id="agHoraIni" type="time"></label>
+            <label class="field"><span>Horário final</span><input id="agHoraFim" type="time"></label>
+            <label class="field"><span>Intervalo entre horários (min)</span><input id="agIntervalo" type="number" min="0"></label>
+            <label class="field"><span>Sinal Pix (%)</span><input id="agPixPct" type="number" min="0" max="100"></label>
+            <label class="field"><span>Chave Pix</span><input id="agPixChave"></label>
+          </div>
+        </div>
+      </div>
+      <div class="box" style="margin-top:12px"><h3>Prévia do link público</h3><div id="agPreview" class="simpleList"></div></div>
+    </section>
+
+    <!-- EQUIPE removida temporariamente conforme pedido do cliente. -->
+
+    <!-- FIDELIDADE 2.0/2.5 -->
+    <section class="panel" data-route="fidelidade">
+      <div class="panel__head"><h2>Fidelidade e Indicações</h2><p>Cartão de selos, recompensa, WhatsApp e programa de indicação.</p></div>
+      <div class="grid2">
+        <div class="box"><h3>Configuração do cartão</h3><div class="row">
+          <label class="field"><span>Selos necessários</span><input id="fidSelos" type="number" min="1"></label>
+          <label class="field"><span>Selos iniciais</span><input id="fidIniciais" type="number" min="0"></label>
+          <label class="field"><span>Reiniciar após dias sem atendimento</span><input id="fidResetDias" type="number" min="0"></label>
+          <label class="field"><span>Recompensa</span><input id="fidRecompensa"></label>
+        </div><div class="actions"><button class="btn" id="btnSalvarFidelidade" type="button">Salvar fidelidade</button></div></div>
+        <div class="box"><h3>Clientes próximas da recompensa</h3><div id="fidResumo" class="simpleList"></div></div>
+      </div>
+      <div class="grid2" style="margin-top:12px">
+        <div class="box"><h3>Programa de indicação</h3><p class="muted">Registre quem indicou uma nova cliente. Fica salvo junto da fidelidade.</p><div class="row"><input id="indCliente" placeholder="Cliente que indicou"><input id="indAmiga" placeholder="Cliente indicada"></div><div class="actions"><button class="btn" id="btnAddIndicacao" type="button">Registrar indicação</button></div><div id="indList" class="simpleList"></div></div>
+        <div class="box"><h3>Como usar</h3><div class="simpleList"><div class="simpleItem">Use indicações para premiar clientes que trazem novas clientes.</div><div class="simpleItem">Exemplo: indicou 3 clientes = ganha desconto, brinde ou selo extra.</div></div></div>
+      </div>
+      <div class="tableWrap" style="margin-top:12px"><table class="table" id="tblFidelidade"><thead><tr><th>Cliente</th><th>Selos</th><th>Faltam</th><th>Último atendimento</th><th>Ação</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- PROMOÇÕES -->
+<!-- CONFIG -->
     <section class="panel" data-route="config">
       <div class="panel__head">
         <h2>Configurações</h2>
-        <p>Logo, cores e WhatsApp do estúdio.</p>
+        <p>Logo, WhatsApp, plano e backup do estúdio.</p>
       </div>
 
       <div class="grid2">
@@ -432,22 +631,25 @@
             <label class="field">
               <span>Logo (URL da imagem)</span>
               <input id="cfgLogoUrl" placeholder="https://..." />
+              <div class="actions" style="margin-top:8px;">
+                <label class="btn btn--ghost fileBtn" for="cfgLogoFile">Carregar logo</label>
+                <input type="file" id="cfgLogoFile" accept="image/*" hidden />
+                <button class="btn btn--ghost" id="btnClearLogo" type="button">Remover logo</button>
+              </div>
+              <small class="hint">Pode colar uma URL ou carregar uma imagem do computador.</small>
             </label>
           </div>
         </div>
+      </div>
 
-        <div class="box">
-          <h3>Cores</h3>
-          <div class="row">
-            <label class="field">
-              <span>Cor Primária</span>
-              <input id="cfgCorPrimaria" type="color" />
-            </label>
-            <label class="field">
-              <span>Cor Acento</span>
-              <input id="cfgCorAcento" type="color" />
-            </label>
-          </div>
+
+
+      <div class="box" style="margin-top:12px;">
+        <h3>Cores do aplicativo</h3>
+        <p class="hint">A profissional pode alterar as cores principais do app.</p>
+        <div class="row">
+          <label class="field"><span>Cor primária</span><input id="cfgCorPrimaria" type="color" value="#7B2CBF" /></label>
+          <label class="field"><span>Cor acento</span><input id="cfgCorAcento" type="color" value="#F72585" /></label>
         </div>
       </div>
 
@@ -459,27 +661,133 @@
         </label>
       </div>
 
+      <div class="box" style="margin-top:12px;">
+        <h3>Plano de acesso</h3>
+        <label class="field">
+          <span>Tipo de plano do profissional</span>
+          <select id="cfgPlano">
+            <option value="basic">Básico</option>
+            <option value="pro">Pro</option>
+            <option value="premium">Premium</option>
+          </select>
+        </label>
+        <small class="hint">Clique em “Ver planos” para comparar valores, recursos e mudar de plano sem perder dados.</small>
+        <div class="actions" style="margin-top:10px;"><button class="btn btn--ghost" id="btnOpenPlans" type="button">Ver planos e mudar plano</button></div>
+      </div>
+
+      <div class="box" style="margin-top:12px;">
+        <h3>Backup</h3>
+        <div class="actions">
+          <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
+          <button class="btn btn--ghost" id="btnImportBackupFinal" type="button">Importar backup</button>
+          <input type="file" id="fileImport" accept="application/json" hidden />
+        </div>
+      </div>
+
       <div class="actions">
         <button class="btn" id="btnSaveConfig">Salvar Config</button>
       </div>
     </section>
+
+
+    <!-- DESENVOLVEDOR PROFISSIONAL -->
+    <section class="panel" data-route="desenvolvedor">
+      <div id="devProRoot" class="devProRoot">
+        <div class="panel__head">
+          <h2>Central do Desenvolvedor</h2>
+          <p>Carregando ferramentas profissionais de controle do app...</p>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <footer class="footer">
-    <small id="buildInfo">v18 • Dados salvos no seu aparelho (localStorage).</small>
-    <small id="syncInfo" style="display:block;margin-top:6px;">Sync: aguardando…</small>
+    <small id="buildInfo"></small>
+    <small id="syncInfo" style="display:none;margin-top:6px;">Sistema pronto</small>
   </footer>
 
-  <div class="backupDock">
-    <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
-    <label class="btn btn--ghost fileBtn">
-      Importar backup
-      <input type="file" id="fileImport" accept="application/json" hidden />
-    </label>
+
+
+
+
+  <div class="supportModal" id="supportModal" hidden>
+    <div class="supportModal__card">
+      <div class="supportModal__head">
+        <div>
+          <h2>Suporte Studio Sync Pro</h2>
+          <p>Precisa de ajuda, encontrou erro ou quer solicitar melhoria?</p>
+        </div>
+        <button class="iconBtn" id="btnCloseSupport" type="button">✕</button>
+      </div>
+      <div class="supportGrid">
+        <a class="btn" id="btnSupportWpp" href="https://wa.me/5517999999999?text=Olá! Preciso de suporte no Studio Sync Pro." target="_blank" rel="noopener">WhatsApp do suporte</a>
+        <a class="btn btn--ghost" href="mailto:suporte@jaquelinemendanha.com?subject=Suporte Studio Sync Pro">Enviar e-mail</a>
+        <button class="btn btn--ghost" type="button" id="btnReportProblem">Reportar problema</button>
+      </div>
+      <small class="hint">O suporte não altera nem apaga seus dados. Seus clientes, agenda e financeiro continuam preservados.</small>
+    </div>
+  </div>
+
+  <div class="planModal" id="planModal" hidden>
+    <div class="planModal__card">
+      <div class="planModal__head">
+        <div>
+          <h2>Planos Studio Sync Pro</h2>
+          <p>Compare os planos e mude sem perder clientes, agenda, fotos ou financeiro.</p>
+        </div>
+        <button class="iconBtn" id="btnClosePlanModal" type="button">✕</button>
+      </div>
+      <div class="planWarn">Trocar de plano nunca apaga dados. Recursos bloqueados ficam apenas ocultos até o plano ser reativado.</div>
+      <div class="planCards" id="planCards"></div>
+    </div>
   </div>
 
   <!-- firebase antes do app -->
-  <script type="module" src="./firebase.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./firebase.js?v=62-clean"></script>
+  <script src="./app.js?v=62-clean"></script>
+
+<script>
+(function(){
+  window.STUDIO_SYNC_BUILD = "v58-banco-unico-persistencia";
+  try {
+    localStorage.setItem("studio_sync_build", window.STUDIO_SYNC_BUILD);
+  } catch(e) {}
+
+  async function limparCacheAntigo(){
+    try {
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter(k => !String(k).includes("v58-banco-unico-persistencia")).map(k => caches.delete(k)));
+      }
+    } catch(e) {}
+  }
+
+  async function atualizarServiceWorker(){
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.update().catch(()=>{})));
+      }
+    } catch(e) {}
+  }
+
+  window.addEventListener("load", function(){
+    limparCacheAntigo().then(atualizarServiceWorker);
+  });
+
+  // Garante que ao entrar como desenvolvedor a tela já abra com a versão nova.
+  window.studioSyncRefreshDev = function(){
+    limparCacheAntigo().then(function(){
+      const url = new URL(location.href);
+      url.searchParams.set("build", window.STUDIO_SYNC_BUILD);
+      if(!location.href.includes("build=" + window.STUDIO_SYNC_BUILD)){
+        location.replace(url.toString());
+      }
+    });
+  };
+})();
+</script>
+
 </body>
 </html>
