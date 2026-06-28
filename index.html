@@ -219,16 +219,21 @@
         <p>Status “Realizado” cria/atualiza Atendimentos automaticamente. Status “Bloqueio” é folga/compromisso.</p>
       </div>
 
-      <div class="actions">
+      <div class="actions agendaTopActions">
         <button class="btn" id="btnAddAgenda">+ Novo agendamento</button>
-        <button class="btn btn--ghost" id="btnReportToday">Relatório de hoje (WhatsApp)</button>
+        <button class="btn btn--ghost" id="btnAgendaTodos" type="button">Todos os atendimentos</button>
       </div>
 
       <div class="notice" id="agendaNotice" hidden></div>
 
-      <div class="agendaCompact">
+      <div class="agendaCompact agendaCompact--form" id="agendaFormPanel">
+        <div class="agendaCompact__right" id="agendaCompactDetail"></div>
+      </div>
+
+      <div class="agendaCompact agendaCompact--list" id="agendaListPanel" hidden>
         <div class="agendaCompact__left">
           <div class="agendaCompact__filters">
+            <h3>Todos os atendimentos</h3>
             <input id="agendaFiltroBusca" type="search" placeholder="Pesquisar cliente, procedimento ou observação..." />
             <div class="agendaCompact__filterRow">
               <input id="agendaFiltroData" type="date" />
@@ -241,10 +246,10 @@
                 <option value="Bloqueio">Bloqueio</option>
               </select>
             </div>
+            <button class="btn btn--ghost" id="btnReportToday" type="button">Relatório de hoje (WhatsApp)</button>
           </div>
           <div id="agendaCompactList" class="agendaCompact__list"></div>
         </div>
-        <div class="agendaCompact__right" id="agendaCompactDetail"></div>
       </div>
 
       <div class="tableWrap agendaTableLegacy">
@@ -298,11 +303,8 @@
           <small class="hint">Variáveis: {cliente}, {data}, {hora}, {procedimento}, {valor}, {studio}</small>
         </div>
 
-        <details class="box boxToggle" id="wppTemplatesToggle">
-          <summary class="boxToggle__summary">
-            <span>Templates editáveis</span>
-            <small>Toque para abrir/fechar</small>
-          </summary>
+        <div class="box">
+          <h3>Templates editáveis</h3>
           <label class="field">
             <span>Confirmação (ao agendar)</span>
             <textarea id="tplConfirmacao" rows="3"></textarea>
@@ -339,7 +341,7 @@
           <div class="actions">
             <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
           </div>
-        </details>
+        </div>
       </div>
 
       <div class="box" style="margin-top:12px;">
@@ -650,31 +652,9 @@
       <div class="box" style="margin-top:12px;">
         <h3>Cores do aplicativo</h3>
         <p class="hint">A profissional pode alterar as cores principais do app.</p>
-        <div class="colorPickerGrid">
-          <div class="colorPickerCard" data-color-card="cfgCorPrimaria">
-            <div class="colorPickerCard__top">
-              <span>Cor primária</span>
-              <label class="colorPreview" for="cfgCorPrimaria" id="cfgCorPrimariaPreview" title="Toque para escolher a cor"></label>
-            </div>
-            <input id="cfgCorPrimaria" class="nativeColor" type="color" value="#7B2CBF" />
-            <div class="rgbRow">
-              <label>R <input id="cfgCorPrimariaR" type="number" min="0" max="255" inputmode="numeric"></label>
-              <label>G <input id="cfgCorPrimariaG" type="number" min="0" max="255" inputmode="numeric"></label>
-              <label>B <input id="cfgCorPrimariaB" type="number" min="0" max="255" inputmode="numeric"></label>
-            </div>
-          </div>
-          <div class="colorPickerCard" data-color-card="cfgCorAcento">
-            <div class="colorPickerCard__top">
-              <span>Cor acento</span>
-              <label class="colorPreview" for="cfgCorAcento" id="cfgCorAcentoPreview" title="Toque para escolher a cor"></label>
-            </div>
-            <input id="cfgCorAcento" class="nativeColor" type="color" value="#F72585" />
-            <div class="rgbRow">
-              <label>R <input id="cfgCorAcentoR" type="number" min="0" max="255" inputmode="numeric"></label>
-              <label>G <input id="cfgCorAcentoG" type="number" min="0" max="255" inputmode="numeric"></label>
-              <label>B <input id="cfgCorAcentoB" type="number" min="0" max="255" inputmode="numeric"></label>
-            </div>
-          </div>
+        <div class="colorCompactRow">
+          <label class="colorCompactField"><span>Cor primária</span><input id="cfgCorPrimaria" type="color" value="#7B2CBF" /></label>
+          <label class="colorCompactField"><span>Cor acento</span><input id="cfgCorAcento" type="color" value="#F72585" /></label>
         </div>
       </div>
 
