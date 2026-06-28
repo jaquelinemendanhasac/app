@@ -5257,6 +5257,15 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       const text = encodeURIComponent("Olá! Quero reportar um problema no Studio Sync Pro.\n\nErro encontrado:");
       window.open(`https://wa.me/5517999999999?text=${text}`, "_blank", "noopener");
     };
+    const printBtn = byId("btnSupportPrint");
+    if(printBtn) printBtn.onclick = ()=>{
+      const text = encodeURIComponent("Olá! Preciso de suporte no Studio Sync Pro. Vou enviar um print da tela agora.");
+      window.open(`https://wa.me/5517999999999?text=${text}`, "_blank", "noopener");
+    };
+    const faqBtn = byId("btnSupportFaq");
+    if(faqBtn) faqBtn.onclick = ()=>{
+      alert("Manual rápido:\n\n1. Agenda: crie e acompanhe horários.\n2. Clientes: cadastre e consulte histórico.\n3. WhatsApp: use confirmação, lembrete e agradecimento.\n4. CRM: veja clientes para manutenção e remarketing.\n5. Configurações: altere logo, cores, plano e backup.");
+    };
   }
 
   document.addEventListener("DOMContentLoaded", ()=>{ cleanFooter(); bindSupport(); });
@@ -7014,7 +7023,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
           <div class="userBox">
             <h3>Conta e segurança</h3>
             <p><b>Tipo de acesso:</b> ${dev ? "Desenvolvedor" : "Profissional"}</p>
-            <p><b>Build:</b> ${BUILD_V54}</p>
+            ${dev ? `<p><b>Build:</b> ${BUILD_V54}</p>` : ``}
             <div class="userActions">
               <button class="btn btn--ghost" type="button" id="btnBackupUser54">Exportar backup</button>
               <button class="btn btn--ghost" type="button" id="btnImportUser54">Importar backup</button>
