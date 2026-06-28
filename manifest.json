@@ -1,12 +1,12 @@
 {
-  "name": "Studio SJM",
-  "short_name": "Studio SJM",
-  "id": "studio-sjm",
+  "name": "Studio Sync Pro — Limpa Estável 1.0",
+  "short_name": "Studio Sync Pro",
+  "id": "studio-sync-pro-limpa-estavel-1",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#7B2CBF",
+  "theme_color": "#2E5E78",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -31,5 +31,4 @@
       "purpose": "any maskable"
     }
   ]
-  
 }
