@@ -1232,3 +1232,40 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .rgbColorBox label{display:grid;grid-template-columns:22px 1fr;align-items:center;gap:8px;font-weight:900;color:var(--text,#111827);}
 .rgbColorBox input[type="range"]{width:100%;accent-color:var(--primary,#7B2CBF);}
 @media(max-width:768px){.rgbColorPanel{grid-template-columns:1fr}.rgbColorBox{padding:14px}.rgbColorBox input[type="range"]{height:32px}}
+
+/* Configurações: seletor de cor nativo, igual ao cursor do navegador/celular */
+.nativeColorPanel{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.nativeColorBox{border:1px solid var(--line,#e5e7eb);border-radius:18px;padding:16px;background:#fff;display:grid;gap:14px;}
+.nativeColorHead{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.nativeColorInput{width:88px;height:52px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:#fff;padding:6px;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.08);}
+.nativeColorInput::-webkit-color-swatch-wrapper{padding:0;border-radius:8px;}
+.nativeColorInput::-webkit-color-swatch{border:none;border-radius:8px;}
+.nativeColorInput::-moz-color-swatch{border:none;border-radius:8px;}
+.nativeColorFields{display:grid;grid-template-columns:repeat(3,72px);gap:10px;align-items:center;}
+.nativeColorFields label{display:grid;gap:6px;text-align:center;font-weight:800;color:var(--text,#111827);}
+.nativeColorFields input{width:100%;height:42px;border:1px solid var(--line,#e5e7eb);border-radius:8px;text-align:center;font-weight:800;background:#f9fafb;}
+@media(max-width:768px){
+  .nativeColorPanel{grid-template-columns:1fr;}
+  .nativeColorBox{padding:14px;}
+  .nativeColorInput{width:110px;height:58px;}
+  .nativeColorFields{grid-template-columns:repeat(3,minmax(64px,1fr));}
+}
+
+/* v70 — Clientes organizado em botões internos para celular */
+.clientFolderActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 14px;}
+.clientFolderBtn{border:1px solid var(--line,#e5e7eb);background:#fff;border-radius:999px;padding:13px 10px;font-weight:900;color:var(--text,#111827);box-shadow:0 1px 4px rgba(15,23,42,.04);cursor:pointer;}
+.clientFolderBtn.active{border-color:transparent;background:linear-gradient(135deg,var(--accent,#d765d7),var(--primary,#871844));color:#fff;}
+.clientesCompactPanel{margin-top:0;}
+.clienteFichaBox.is-new{border-color:rgba(215,101,215,.45);box-shadow:0 10px 28px rgba(135,24,68,.08);}
+.clienteModeTitle{margin:0 0 8px;font-size:1.05rem;font-weight:900;}
+.clienteModeHint{margin:0 0 12px;color:var(--muted,#6b7280);}
+@media(max-width:760px){
+  .clientFolderActions{grid-template-columns:1fr;gap:8px;}
+  .clientFolderBtn{width:100%;font-size:1rem;padding:14px 12px;}
+  [data-route="clientes"] .panel__head{margin-bottom:8px;}
+  [data-route="clientes"] .clientesCompactTop{margin-bottom:8px;}
+  [data-route="clientes"] .clientesCompactLayout{gap:10px;}
+  [data-route="clientes"] .clienteFichaBox{order:1;}
+  [data-route="clientes"] .clientesCompactSide{order:2;}
+  [data-route="clientes"] #clientesGaleriaBox{margin-top:0!important;}
+}
