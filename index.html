@@ -488,11 +488,27 @@
         <p>Campos essenciais.</p>
       </div>
 
-      <div class="actions">
+      <div class="actions agendaTopActions clienteTopActions">
         <button class="btn" id="btnAddCliente">+ Nova cliente</button>
+        <button class="btn btn--ghost" id="btnClientesTodos" type="button">Clientes cadastradas</button>
       </div>
 
-      <div class="tableWrap">
+      <div class="clienteCompact clienteCompact--form" id="clienteFormPanel">
+        <div class="clienteCompact__right" id="clienteCompactDetail"></div>
+      </div>
+
+      <div class="clienteCompact clienteCompact--list" id="clienteListPanel" hidden>
+        <div class="clienteCompact__left">
+          <div class="clienteCompact__filters">
+            <h3>Clientes cadastradas</h3>
+            <p class="hint"><span id="clienteQtdResumo">0</span> cliente(s). Pesquise e toque para editar.</p>
+            <input id="clienteFiltroBusca" type="search" placeholder="Pesquisar cliente..." />
+          </div>
+          <div id="clienteCompactList" class="clienteCompact__list"></div>
+        </div>
+      </div>
+
+      <div class="tableWrap clienteTableLegacy" hidden>
         <table class="table" id="tblCli">
           <thead>
             <tr>
@@ -504,7 +520,7 @@
         </table>
       </div>
 
-      <div class="box" style="margin-top:12px;" data-feature="fotos">
+      <div class="box clienteFotosBox" style="margin-top:12px;" data-feature="fotos">
         <h3>📁 Pastas de fotos das clientes</h3>
         <p class="hint">Recurso Premium: as fotos tiradas nos procedimentos ficam salvas por cliente.</p>
         <div id="clientPhotoPanel"></div>
@@ -652,10 +668,17 @@
       <div class="box" style="margin-top:12px;">
         <h3>Cores do aplicativo</h3>
         <p class="hint">A profissional pode alterar as cores principais do app.</p>
-        <div class="colorCompactRow">
-          <label class="colorCompactField"><span>Cor primária</span><input id="cfgCorPrimaria" type="color" value="#7B2CBF" /></label>
-          <label class="colorCompactField"><span>Cor acento</span><input id="cfgCorAcento" type="color" value="#F72585" /></label>
+        <div class="colorCompactRow colorEasyRow">
+          <label class="colorEasyField">
+            <span>Cor primária</span>
+            <div class="colorEasyControl"><input id="cfgCorPrimaria" type="color" value="#7B2CBF" /><input id="cfgCorPrimariaHex" type="text" value="#7B2CBF" maxlength="7" /></div>
+          </label>
+          <label class="colorEasyField">
+            <span>Cor acento</span>
+            <div class="colorEasyControl"><input id="cfgCorAcento" type="color" value="#F72585" /><input id="cfgCorAcentoHex" type="text" value="#F72585" maxlength="7" /></div>
+          </label>
         </div>
+        <button class="btn btn--ghost" id="btnApplyColors" type="button" style="margin-top:10px;width:100%;">Aplicar cores</button>
       </div>
 
       <div class="box" style="margin-top:12px;">
