@@ -920,6 +920,10 @@ applyTheme();
     }
     $$(".tab").forEach(t => t.classList.toggle("active", String(t.dataset.tab||"").toLowerCase()===r));
     $$(".panel").forEach(p => p.classList.toggle("active", String(p.dataset.route||"").toLowerCase()===r));
+    if(r === "agenda" && typeof openAgendaNewDraft === "function"){
+      openAgendaNewDraft(true);
+      if(typeof renderAgendaHard === "function") setTimeout(()=>renderAgendaHard(), 0);
+    }
     history.replaceState({}, "", `#${r}`);
     applyPlanUI();
   }
@@ -1708,7 +1712,17 @@ function setAgendaViewMode(mode){
   if(list) list.hidden = window.__agendaViewMode !== "list";
 }
 
-onClick("btnAddAgenda", ()=>{
+function isAgendaDraftBlank(a){
+  if(!a) return false;
+  const st = String(a.status || "Agendado");
+  return st === "Agendado"
+    && !String(a.cliente || "").trim()
+    && !String(a.obs || "").trim()
+    && num(a.recebido) === 0
+    && !String(a.atendId || "").trim();
+}
+
+function createAgendaDraft(){
   const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
   const novo = {
     id:uid(),
@@ -1723,6 +1737,28 @@ onClick("btnAddAgenda", ()=>{
   };
   state.agenda.unshift(novo);
   window.__agendaSelectedId = novo.id;
+  return novo;
+}
+
+function openAgendaNewDraft(saveNow=false){
+  const selected = state.agenda.find(a => a.id === window.__agendaSelectedId);
+  if(!isAgendaDraftBlank(selected)){
+    const topBlank = state.agenda.find(isAgendaDraftBlank);
+    if(topBlank){
+      window.__agendaSelectedId = topBlank.id;
+      const i = state.agenda.findIndex(a => a.id === topBlank.id);
+      if(i > 0){ state.agenda.splice(i,1); state.agenda.unshift(topBlank); }
+    }else{
+      createAgendaDraft();
+      saveNow = true;
+    }
+  }
+  setAgendaViewMode("form");
+  if(saveNow){ saveSoft(); scheduleSync(); }
+}
+
+onClick("btnAddAgenda", ()=>{
+  createAgendaDraft();
   setAgendaViewMode("form");
   saveSoft();
   renderAgendaHard();
@@ -1963,7 +1999,7 @@ function renderAgendaCompact(){
 }
 
 function renderAgendaHard(){
-  if(!window.__agendaViewMode) setAgendaViewMode("form");
+  if(!window.__agendaViewMode) openAgendaNewDraft(false);
   ensureAgendaClientesDatalist();
 
   const tblAgendaBody = getAgendaTbody();
