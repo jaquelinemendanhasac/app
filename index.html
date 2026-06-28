@@ -26,7 +26,7 @@
           <div class="brand__title" id="studioTitle">Studio Sync Pro</div>
           <div class="brand__subtitle">Gestão para profissionais da beleza</div>
           <div class="planBadge" id="currentPlanBadge" role="button" tabindex="0">Plano Premium</div>
-        </div></details>
+        </div>
       </div>
     </div>
     <div class="topbar__right"><button class="btn btn--ghost supportTopBtn" id="btnSupport" type="button">Suporte</button><button class="btn btn--ghost userTopBtn" id="btnUserArea" type="button">Usuário</button></div>
@@ -298,8 +298,11 @@
           <small class="hint">Variáveis: {cliente}, {data}, {hora}, {procedimento}, {valor}, {studio}</small>
         </div>
 
-        <details class="box wppTemplatesBox"><summary><strong>Templates editáveis</strong></summary>
-<div style="margin-top:12px;">
+        <details class="box boxToggle" id="wppTemplatesToggle">
+          <summary class="boxToggle__summary">
+            <span>Templates editáveis</span>
+            <small>Toque para abrir/fechar</small>
+          </summary>
           <label class="field">
             <span>Confirmação (ao agendar)</span>
             <textarea id="tplConfirmacao" rows="3"></textarea>
@@ -336,7 +339,7 @@
           <div class="actions">
             <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
           </div>
-        </div>
+        </details>
       </div>
 
       <div class="box" style="margin-top:12px;">
@@ -424,12 +427,12 @@
         </div>
       </div>
 
-      <div class="box crmRemarketingBox" style="margin-top:12px;">
+      <div class="box" style="margin-top:12px;">
         <h3>Fila de remarketing (1 clique)</h3>
         <div id="crmQueue"></div>
       </div>
 
-      <div class="tableWrap crmRemarketingTableWrap" style="margin-top:12px;">
+      <div class="tableWrap" style="margin-top:12px;">
         <table class="table" id="tblCRM">
           <thead>
             <tr>
@@ -483,10 +486,8 @@
         <p>Campos essenciais.</p>
       </div>
 
-      <div class="clientFolderActions" id="clientFolderActions">
-        <button class="clientFolderBtn active" type="button" data-client-mode="novo">+ Novo cliente</button>
-        <button class="clientFolderBtn" type="button" data-client-mode="cadastrados">Clientes cadastrados</button>
-        <button class="clientFolderBtn" type="button" data-client-mode="galeria">Galeria de fotos</button>
+      <div class="actions">
+        <button class="btn" id="btnAddCliente">+ Nova cliente</button>
       </div>
 
       <div class="tableWrap">
@@ -501,7 +502,7 @@
         </table>
       </div>
 
-      <div class="box" id="clientesGaleriaBox" style="margin-top:12px; display:none;" data-feature="fotos">
+      <div class="box" style="margin-top:12px;" data-feature="fotos">
         <h3>📁 Pastas de fotos das clientes</h3>
         <p class="hint">Recurso Premium: as fotos tiradas nos procedimentos ficam salvas por cliente.</p>
         <div id="clientPhotoPanel"></div>
@@ -633,7 +634,7 @@
             <label class="field">
               <span>Logo (URL da imagem)</span>
               <input id="cfgLogoUrl" placeholder="https://..." />
-              <div class="actions" style="margin-top:8px;">
+              <div class="logoActions" style="margin-top:8px;">
                 <label class="btn btn--ghost fileBtn" for="cfgLogoFile">Carregar logo</label>
                 <input type="file" id="cfgLogoFile" accept="image/*" hidden />
                 <button class="btn btn--ghost" id="btnClearLogo" type="button">Remover logo</button>
@@ -649,30 +650,30 @@
       <div class="box" style="margin-top:12px;">
         <h3>Cores do aplicativo</h3>
         <p class="hint">A profissional pode alterar as cores principais do app.</p>
-        <div class="nativeColorPanel">
-          <div class="nativeColorBox" data-color-box="primary">
-            <div class="nativeColorHead">
-              <b>Cor primária</b>
-              <input id="cfgCorPrimaria" class="nativeColorInput" type="color" value="#7B2CBF" aria-label="Escolher cor primária" />
+        <div class="colorPickerGrid">
+          <div class="colorPickerCard" data-color-card="cfgCorPrimaria">
+            <div class="colorPickerCard__top">
+              <span>Cor primária</span>
+              <label class="colorPreview" for="cfgCorPrimaria" id="cfgCorPrimariaPreview" title="Toque para escolher a cor"></label>
             </div>
-            <div class="nativeColorFields">
-              <label><input id="cfgCorPrimariaR" type="number" min="0" max="255" value="123"><span>R</span></label>
-              <label><input id="cfgCorPrimariaG" type="number" min="0" max="255" value="44"><span>G</span></label>
-              <label><input id="cfgCorPrimariaB" type="number" min="0" max="255" value="191"><span>B</span></label>
+            <input id="cfgCorPrimaria" class="nativeColor" type="color" value="#7B2CBF" />
+            <div class="rgbRow">
+              <label>R <input id="cfgCorPrimariaR" type="number" min="0" max="255" inputmode="numeric"></label>
+              <label>G <input id="cfgCorPrimariaG" type="number" min="0" max="255" inputmode="numeric"></label>
+              <label>B <input id="cfgCorPrimariaB" type="number" min="0" max="255" inputmode="numeric"></label>
             </div>
-            <small id="cfgCorPrimariaHex" class="hint">#7B2CBF</small>
           </div>
-          <div class="nativeColorBox" data-color-box="accent">
-            <div class="nativeColorHead">
-              <b>Cor acento</b>
-              <input id="cfgCorAcento" class="nativeColorInput" type="color" value="#F72585" aria-label="Escolher cor acento" />
+          <div class="colorPickerCard" data-color-card="cfgCorAcento">
+            <div class="colorPickerCard__top">
+              <span>Cor acento</span>
+              <label class="colorPreview" for="cfgCorAcento" id="cfgCorAcentoPreview" title="Toque para escolher a cor"></label>
             </div>
-            <div class="nativeColorFields">
-              <label><input id="cfgCorAcentoR" type="number" min="0" max="255" value="247"><span>R</span></label>
-              <label><input id="cfgCorAcentoG" type="number" min="0" max="255" value="37"><span>G</span></label>
-              <label><input id="cfgCorAcentoB" type="number" min="0" max="255" value="133"><span>B</span></label>
+            <input id="cfgCorAcento" class="nativeColor" type="color" value="#F72585" />
+            <div class="rgbRow">
+              <label>R <input id="cfgCorAcentoR" type="number" min="0" max="255" inputmode="numeric"></label>
+              <label>G <input id="cfgCorAcentoG" type="number" min="0" max="255" inputmode="numeric"></label>
+              <label>B <input id="cfgCorAcentoB" type="number" min="0" max="255" inputmode="numeric"></label>
             </div>
-            <small id="cfgCorAcentoHex" class="hint">#F72585</small>
           </div>
         </div>
       </div>
