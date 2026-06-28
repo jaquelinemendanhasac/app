@@ -1700,9 +1700,17 @@ function renderAllHard(){
 function getAgendaTbody(){ return $("#tblAgenda tbody"); }
 function getAgendaNotice(){ return byId("agendaNotice"); }
 
+function setAgendaViewMode(mode){
+  window.__agendaViewMode = mode === "list" ? "list" : "form";
+  const form = byId("agendaFormPanel");
+  const list = byId("agendaListPanel");
+  if(form) form.hidden = window.__agendaViewMode !== "form";
+  if(list) list.hidden = window.__agendaViewMode !== "list";
+}
+
 onClick("btnAddAgenda", ()=>{
   const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
-  state.agenda.unshift({
+  const novo = {
     id:uid(),
     data: todayISO(),
     hora: "08:00",
@@ -1712,10 +1720,18 @@ onClick("btnAddAgenda", ()=>{
     recebido: 0,
     obs:"",
     atendId:""
-  });
+  };
+  state.agenda.unshift(novo);
+  window.__agendaSelectedId = novo.id;
+  setAgendaViewMode("form");
   saveSoft();
   renderAgendaHard();
   scheduleSync();
+});
+
+onClick("btnAgendaTodos", ()=>{
+  setAgendaViewMode("list");
+  renderAgendaCompact();
 });
 
 onClick("btnClearAgenda", ()=>{
@@ -1883,6 +1899,7 @@ function renderAgendaCompact(){
   list.querySelectorAll('[data-agenda-id]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       window.__agendaSelectedId = btn.dataset.agendaId || '';
+      setAgendaViewMode("form");
       renderAgendaCompact();
     });
   });
@@ -1946,6 +1963,7 @@ function renderAgendaCompact(){
 }
 
 function renderAgendaHard(){
+  if(!window.__agendaViewMode) setAgendaViewMode("form");
   ensureAgendaClientesDatalist();
 
   const tblAgendaBody = getAgendaTbody();
@@ -9832,141 +9850,4 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.addEventListener('load', hideDevClientPatch);
   setTimeout(hideDevClientPatch, 100);
   setTimeout(hideDevClientPatch, 800);
-})();
-
-/* ===== Ajustes finais Allan: mobile agenda, WhatsApp foto e seletor de cores ===== */
-(function(){
-  function $(id){ return document.getElementById(id); }
-  function safeHex(v){
-    v = String(v || '').trim();
-    if(/^#[0-9a-fA-F]{6}$/.test(v)) return v.toUpperCase();
-    return '#000000';
-  }
-  function hexToRgb(hex){
-    hex = safeHex(hex).slice(1);
-    return {
-      r: parseInt(hex.slice(0,2),16),
-      g: parseInt(hex.slice(2,4),16),
-      b: parseInt(hex.slice(4,6),16)
-    };
-  }
-  function rgbToHex(r,g,b){
-    const clamp = n => Math.max(0, Math.min(255, parseInt(n || 0,10) || 0));
-    return '#' + [clamp(r),clamp(g),clamp(b)].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
-  }
-  function refreshOneColor(baseId, saveNow){
-    const color = $(baseId); if(!color) return;
-    color.value = safeHex(color.value);
-    const rgb = hexToRgb(color.value);
-    const r=$(baseId+'R'), g=$(baseId+'G'), b=$(baseId+'B'), p=$(baseId+'Preview');
-    if(r) r.value = rgb.r;
-    if(g) g.value = rgb.g;
-    if(b) b.value = rgb.b;
-    if(p) p.style.background = color.value;
-    try{
-      if(baseId === 'cfgCorPrimaria') state.settings.corPrimaria = color.value;
-      if(baseId === 'cfgCorAcento') state.settings.corAcento = color.value;
-      applyTheme();
-      if(saveNow){ saveSoft(); scheduleSync(); }
-    }catch(e){}
-  }
-  function bindColor(baseId){
-    const color=$(baseId); if(!color || color.__allanColorBound) return;
-    color.__allanColorBound = true;
-    const preview=$(baseId+'Preview');
-    if(preview) preview.style.background = color.value;
-    color.addEventListener('input', ()=>refreshOneColor(baseId, false));
-    color.addEventListener('change', ()=>refreshOneColor(baseId, true));
-    ['R','G','B'].forEach(suf=>{
-      const el=$(baseId+suf); if(!el) return;
-      el.addEventListener('input', ()=>{
-        const r=$(baseId+'R')?.value, g=$(baseId+'G')?.value, b=$(baseId+'B')?.value;
-        color.value = rgbToHex(r,g,b);
-        refreshOneColor(baseId, false);
-      });
-      el.addEventListener('change', ()=>refreshOneColor(baseId, true));
-    });
-    refreshOneColor(baseId, false);
-  }
-  function initColors(){ bindColor('cfgCorPrimaria'); bindColor('cfgCorAcento'); }
-
-  function scrollAgendaDetail(){
-    setTimeout(()=>{
-      const detail = $('agendaCompactDetail') || document.querySelector('.agendaCompact__right');
-      if(detail){
-        try{ detail.scrollIntoView({behavior:'smooth', block:'start'}); }catch{ detail.scrollIntoView(); }
-        try{ detail.focus({preventScroll:true}); }catch{}
-      }
-    }, 80);
-  }
-  function createNewAgendaAt(dateISO){
-    const firstProc = (state.procedimentos || []).find(p=>p.nome)?.nome || 'Alongamento';
-    const ag = { id:uid(), data:dateISO || todayISO(), hora:'08:00', cliente:'', procedimento:firstProc, status:'Agendado', recebido:0, obs:'', atendId:'' };
-    state.agenda.unshift(ag);
-    window.__agendaSelectedId = ag.id;
-    try{ saveSoft(); renderAgendaHard(); renderCalendar(); scheduleSync(); }catch(e){ console.warn(e); }
-    try{ setRoute('agenda'); }catch{}
-    scrollAgendaDetail();
-  }
-
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest ? e.target.closest('#btnAddAgenda,#calNew') : null;
-    if(!btn) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const iso = btn.id === 'calNew' ? (window.__CAL_SELECTED_ISO || todayISO()) : todayISO();
-    createNewAgendaAt(iso);
-  }, true);
-
-  function overridePhotoWhatsapp(){
-    if(window.__allanPhotoPatchDone) return;
-    window.__allanPhotoPatchDone = true;
-    window.__SJM_PICK_GALLERY_FOR_AGENDA = function(ag){
-      return new Promise((resolve)=>{
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.style.position = 'fixed';
-        input.style.left = '-9999px';
-        input.style.top = '-9999px';
-        document.body.appendChild(input);
-        input.onchange = async ()=>{
-          const phoneBefore = clientWpp(ag?.cliente || '');
-          let waWin = null;
-          if(phoneBefore){ try{ waWin = window.open('', '_blank'); }catch{} }
-          try{
-            const file = input.files && input.files[0];
-            if(!file){ if(waWin) waWin.close(); resolve(false); return; }
-            if(file.size > 3_500_000){ alert('Foto muito pesada. Escolha uma imagem menor, até aproximadamente 3,5 MB.'); if(waWin) waWin.close(); resolve(false); return; }
-            const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=rej; r.readAsDataURL(file); });
-            saveAgendaProcedurePhoto(ag,b64); saveSoft();
-            try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderClientes(); renderClientPhotoPanel(); renderAtendimentosHard(); renderDashboard(); scheduleSync(); }catch{}
-            const at = getAtendimentoByAgendaId(ag.id) || ag;
-            const txt = gratitudeMsgForAtendimento(at);
-            const phone = clientWpp(ag.cliente);
-            if(phone){
-              await copyToClipboardSafe(txt);
-              const link = waLink(phone, txt);
-              if(waWin){ waWin.location.href = link; } else { window.open(link, '_blank', 'noopener,noreferrer'); }
-              alert('Foto salva na pasta da cliente ✅\nMensagem copiada e WhatsApp aberto. No WhatsApp, anexe a foto salva para enviar.');
-            }else{
-              if(waWin) waWin.close();
-              alert('Foto salva na pasta da cliente ✅\nCliente sem WhatsApp cadastrado.');
-            }
-            resolve(true);
-          }catch(err){
-            console.error(err);
-            if(waWin) try{ waWin.close(); }catch{}
-            alert('Erro ao salvar foto: ' + (err?.message || err));
-            resolve(false);
-          }finally{ try{ input.remove(); }catch{} }
-        };
-        input.click();
-      });
-    };
-  }
-
-  document.addEventListener('DOMContentLoaded', ()=>{ initColors(); overridePhotoWhatsapp(); setTimeout(initColors,400); setTimeout(overridePhotoWhatsapp,400); });
-  setTimeout(()=>{ initColors(); overridePhotoWhatsapp(); }, 900);
-  setTimeout(()=>{ initColors(); overridePhotoWhatsapp(); }, 1800);
 })();
