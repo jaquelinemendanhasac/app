@@ -1161,33 +1161,13 @@ function removeAtendimentoFromAgenda(agendaId){
   state.atendimentos = state.atendimentos.filter(x => x.fromAgendaId !== agendaId);
   return state.atendimentos.length !== before;
 }
-
-// Tipos que ocupam a agenda/calendário, mas NÃO entram como cliente, CRM ou financeiro.
-function agendaIsCompromisso(ag){
-  const st = String(ag?.status || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const proc = String(ag?.procedimento || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const obs = String(ag?.obs || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const txt = `${st} ${proc} ${obs}`;
-  return st === 'bloqueio' || st === 'folga' ||
-    /\b(medico|medica|reuniao|compromisso|folga|bloqueio|pessoal)\b/.test(txt);
-}
-function agendaTipoVisual(ag){
-  if(!ag) return 'atendimento';
-  const st = String(ag.status||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  const txt = `${st} ${String(ag.procedimento||'')} ${String(ag.obs||'')}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  if(/folga/.test(txt)) return 'folga';
-  if(/bloqueio/.test(txt)) return 'bloqueio';
-  if(/medico|medica/.test(txt)) return 'medico';
-  if(/reuniao/.test(txt)) return 'reuniao';
-  if(/compromisso|pessoal/.test(txt)) return 'compromisso';
-  return 'atendimento';
-}
 function syncAgendaToAtendimentos(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
 
-    if(agendaIsCompromisso(ag)){
-      if(status === "Bloqueio" || status === "Folga") ag.recebido = 0;
+    if(status === "Bloqueio"){
+      ag.procedimento = "—";
+      ag.recebido = 0;
       removeAtendimentoFromAgenda(ag.id);
       return;
     }
@@ -1433,31 +1413,26 @@ function renderCalendar(){
     const isToday = sameISO(iso, today);
     const isSel = sameISO(iso, __CAL_SELECTED_ISO);
 
-    const itens = agendaOfDay(iso);
-    const totalAg = itens.length;
+    const { totalAg, totalRec } = dayBadges(iso);
     const hasConflict = conflictsInDay(iso);
 
-    // Calendário limpo: só horários e bolinhas. Nomes ficam na lista do dia.
-    const visible = itens.slice(0,3);
-    const mini = visible.map(a=>{
-      const tipo = agendaTipoVisual(a);
-      return `<div class="calSlot calSlot--${tipo}" title="${escapeHTML((a.cliente||a.procedimento||'Agendamento'))}">
-        <span class="calDot"></span><span>${escapeHTML(a.hora || '')}</span>
-      </div>`;
-    }).join('');
-    const more = itens.length > visible.length ? `<div class="calMore">+${itens.length-visible.length} mais</div>` : '';
+    const mini = agendaOfDay(iso).slice(0,2).map(a=>{
+      const label = (a.status==="Bloqueio") ? "BLOQUEIO" : ((a.cliente||"").trim() || "Sem nome");
+      return `<div class="calMiniItem">${a.hora || ""} — ${label}</div>`;
+    }).join("");
 
-    const badgeAg = totalAg ? `<span class="calCount">${totalAg}x</span>` : "";
-    const badgeConf = hasConflict ? `<span class="calWarn">!</span>` : "";
+    const badgeAg = totalAg ? `<span class="calBadge">${totalAg}x</span>` : "";
+    const badgeRec = totalRec ? `<span class="calBadge ok">${money(totalRec)}</span>` : "";
+    const badgeConf = hasConflict ? `<span class="calBadge danger">Conflito</span>` : "";
 
     cells.push(`
-      <button type="button" class="calDay ${isOther?"isOther":""} ${isToday?"isToday":""} ${isSel?"isSelected":""}" data-iso="${iso}" aria-label="Dia ${fmtBRDate(iso)}">
+      <div class="calDay ${isOther?"isOther":""} ${isToday?"isToday":""} ${isSel?"isSelected":""}" data-iso="${iso}">
         <div class="calDayTop">
           <div class="calNum">${d.getDate()}</div>
-          <div class="calBadges">${badgeConf}${badgeAg}</div>
+          <div class="calBadges">${badgeAg}${badgeRec}${badgeConf}</div>
         </div>
-        <div class="calMiniList">${mini}${more}</div>
-      </button>
+        <div class="calMiniList">${mini}</div>
+      </div>
     `);
   }
 
@@ -1468,7 +1443,6 @@ function renderCalendar(){
       __CAL_SELECTED_ISO = el.dataset.iso;
       renderCalendar();
       renderCalendarDay();
-      setTimeout(()=> byId('calDayTitle')?.scrollIntoView({behavior:'smooth', block:'start'}), 60);
     });
   });
 
@@ -1486,15 +1460,11 @@ function renderCalendarDay(){
 
   const itens = agendaOfDay(iso);
   const totalAg = itens.length;
-  const totalAtend = itens.filter(a => !agendaIsCompromisso(a)).length;
-  const totalComp = itens.filter(a => agendaIsCompromisso(a)).length;
-  const totalRec = itens.filter(a => !agendaIsCompromisso(a) && (a.status||"Agendado")==="Realizado").reduce((s,a)=> s + num(a.recebido), 0);
+  const totalRec = itens.filter(a => (a.status||"Agendado")==="Realizado").reduce((s,a)=> s + num(a.recebido), 0);
   const hasConflict = conflictsInDay(iso);
 
   resumo.innerHTML = `
-    <div class="calChip">Total: ${totalAg}</div>
-    <div class="calChip">Atendimentos: ${totalAtend}</div>
-    <div class="calChip">Compromissos/Folgas: ${totalComp}</div>
+    <div class="calChip">Agendamentos: ${totalAg}</div>
     <div class="calChip">Recebido: ${money(totalRec)}</div>
     <div class="calChip ${hasConflict ? "danger": ""}">${hasConflict ? "⚠️ Conflito de horário" : "Sem conflito"}</div>
   `;
@@ -1512,19 +1482,17 @@ function renderCalendarDay(){
 
   box.innerHTML = itens.map((a)=>{
     const st = (a.status||"Agendado");
-    const isComp = agendaIsCompromisso(a);
-    const rec = isComp ? 0 : num(a.recebido);
-    const val = isComp ? 0 : procPrice(a.procedimento, a.data);
+    const rec = num(a.recebido);
+    const val = (st==="Bloqueio") ? 0 : procPrice(a.procedimento, a.data);
 
     const idx = state.agenda.findIndex(x=>x && x.id===a.id);
     const conflita = (idx >= 0) ? isConflictByDuration(idx) : false;
 
-    const tipoLabel = agendaTipoVisual(a);
-    const titulo = isBlock
-      ? `${a.hora || ""} — ${(a.procedimento||tipoLabel||"Compromisso").toUpperCase()}`
+    const titulo = (st==="Bloqueio")
+      ? `${a.hora || ""} — BLOQUEIO`
       : `${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}`;
 
-    const isBlock = agendaIsCompromisso(a);
+    const isBlock = (st==="Bloqueio");
 
     // ✅ botões: Realizado / Cancelado / Editar (Agenda)
     const buttons = isBlock ? `` : `
@@ -1939,9 +1907,9 @@ function renderAgendaCompact(){
   const ag = state.agenda.find(x=>x.id===window.__agendaSelectedId) || items[0];
   if(!ag) return;
   const idx = state.agenda.findIndex(x=>x.id===ag.id);
-  const isBlock = agendaIsCompromisso(ag);
+  const isBlock = (ag.status === 'Bloqueio');
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
-  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio","Folga"];
+  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
   const wpp = clientWpp(ag.cliente);
   const val = isBlock ? 0 : procPrice(ag.procedimento, ag.data);
   const rec = num(ag.recebido);
@@ -1981,7 +1949,7 @@ function renderAgendaCompact(){
   byId('agDetProc')?.addEventListener('change', e=>{ if(isBlock) return; ag.procedimento=e.target.value; const preco=procPrice(ag.procedimento, ag.data); if((ag.status||'Agendado')==='Realizado') ag.recebido=preco; refresh(); });
   byId('agDetStatus')?.addEventListener('change', e=>{
     ag.status=e.target.value;
-    if(agendaIsCompromisso(ag)){ ag.recebido=0; }
+    if(ag.status==='Bloqueio'){ ag.procedimento='—'; ag.recebido=0; }
     else if(ag.status==='Realizado'){ ag.recebido=procPrice(ag.procedimento, ag.data); }
     else if(ag.status==='Cancelado' || ag.status==='Remarcado'){ ag.recebido=0; }
     refresh();
@@ -2008,12 +1976,12 @@ function renderAgendaHard(){
   }
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
-  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio","Folga"];
+  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
 
   enforceAgendaRecebidoRules();
 
   tblAgendaBody.innerHTML = state.agenda.map((a,i)=>{
-    const isBlock = agendaIsCompromisso(a);
+    const isBlock = (a.status==="Bloqueio");
     const val = isBlock ? 0 : procPrice(a.procedimento, a.data);
     const conflict = isBlock ? false : isConflict(i);
     const conflictDur = isBlock ? false : isConflictByDuration(i);
@@ -2095,7 +2063,8 @@ function renderAgendaHard(){
     getInp(tdSta)?.addEventListener("change", ()=>{
       a.status = getInp(tdSta).value;
 
-      if(agendaIsCompromisso(a)){
+      if(a.status === "Bloqueio"){
+        a.procedimento = "—";
         a.recebido = 0;
         if(inpRec) inpRec.value = "0.00";
         if(inpVal) inpVal.value = "0.00";
@@ -2111,7 +2080,7 @@ function renderAgendaHard(){
     });
 
     inpRec?.addEventListener("input", ()=>{
-      if(agendaIsCompromisso(a)){
+      if((a.status||"Agendado")==="Bloqueio"){
         a.recebido = 0;
         inpRec.value = "0.00";
         saveSoft(); scheduleSync();
@@ -2163,7 +2132,7 @@ function renderAgendaHard(){
     });
 
     tr.querySelector("[data-conf]")?.addEventListener("click", ()=>{
-      if(agendaIsCompromisso(a)) return;
+      if((a.status||"Agendado")==="Bloqueio") return;
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplConfirmacao, a);
@@ -2171,7 +2140,7 @@ function renderAgendaHard(){
     });
 
     tr.querySelector("[data-lem]")?.addEventListener("click", ()=>{
-      if(agendaIsCompromisso(a)) return;
+      if((a.status||"Agendado")==="Bloqueio") return;
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const txt = fillTpl(state.wpp.tplLembrete, a);
@@ -2179,7 +2148,7 @@ function renderAgendaHard(){
     });
 
     tr.querySelector("[data-agr]")?.addEventListener("click", async ()=>{
-      if(agendaIsCompromisso(a)) return;
+      if((a.status||"Agendado")==="Bloqueio") return;
       const phone = clientWpp(a.cliente);
       if(!phone){ alert("Cliente sem WhatsApp. Preencha em Clientes."); setRoute("clientes"); return; }
       const at = getAtendimentoByAgendaId(a.id) || { ...a, id:a.id };
