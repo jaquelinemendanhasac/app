@@ -10123,3 +10123,175 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
   document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ try{ window.renderClientes(); }catch{} },180));
 })();
+
+/* PATCH FINAL — agenda, WhatsApp foto, configuração logo e seletor de cor customizado */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  function clamp(v,min,max){ v=Number(v); return Math.max(min, Math.min(max, isNaN(v)?min:v)); }
+  function hexToRgbLocal(hex){
+    let h=String(hex||'').replace('#','').trim();
+    if(h.length===3) h=h.split('').map(x=>x+x).join('');
+    const n=parseInt(h||'000000',16);
+    return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
+  }
+  function rgbToHexLocal(r,g,b){
+    const to=v=>clamp(parseInt(v||0,10),0,255).toString(16).padStart(2,'0').toUpperCase();
+    return '#'+to(r)+to(g)+to(b);
+  }
+  function rgbToHsv(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+    let h=0, s=max===0?0:d/max, v=max;
+    if(d!==0){
+      if(max===r) h=((g-b)/d)%6;
+      else if(max===g) h=(b-r)/d+2;
+      else h=(r-g)/d+4;
+      h*=60; if(h<0) h+=360;
+    }
+    return {h,s,v};
+  }
+  function hsvToRgb(h,s,v){
+    h=((Number(h)||0)%360+360)%360; s=clamp(s,0,1); v=clamp(v,0,1);
+    const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
+    let r=0,g=0,b=0;
+    if(h<60){r=c;g=x;} else if(h<120){r=x;g=c;} else if(h<180){g=c;b=x;} else if(h<240){g=x;b=c;} else if(h<300){r=x;b=c;} else {r=c;b=x;}
+    return {r:Math.round((r+m)*255),g:Math.round((g+m)*255),b:Math.round((b+m)*255)};
+  }
+  function openWhatsAppSamePage(phone,msg){
+    const link=(typeof waLink==='function') ? waLink(phone,msg) : ('https://wa.me/'+String(phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent(msg||''));
+    try{ window.location.href = link; }
+    catch(e){ try{ window.open(link,'_self'); }catch(_){} }
+  }
+  function patchLogoButtons(){
+    const clear=$('btnClearLogo');
+    const load=document.querySelector('label[for="cfgLogoFile"]');
+    if(clear && load && load.parentElement){
+      load.parentElement.classList.add('logoActionsFix');
+      if(clear.previousElementSibling !== load && clear.parentElement === load.parentElement){
+        load.parentElement.appendChild(clear);
+      }
+    }
+  }
+  function buildColorPicker(prefix, settingKey, fallback){
+    const input=$(prefix); if(!input) return;
+    const box=input.closest('.nativeColorBox'); if(!box || box.__sjmCustomPicker) return;
+    box.__sjmCustomPicker=true;
+    const start=(state&&state.settings&&state.settings[settingKey]) || input.value || fallback;
+    const rgb=hexToRgbLocal(start); let hsv=rgbToHsv(rgb.r,rgb.g,rgb.b);
+    const picker=document.createElement('div');
+    picker.className='sjmColorPicker';
+    picker.innerHTML=`
+      <div class="sjmColorPicker__top"><div class="sjmColorPicker__title">${prefix==='cfgCorPrimaria'?'Cor primária':'Cor acento'}</div><div class="sjmColorPicker__swatch"></div></div>
+      <div class="sjmColorPicker__area"><span class="sjmColorPicker__cursor"></span></div>
+      <input class="sjmColorPicker__hue" type="range" min="0" max="360" value="${Math.round(hsv.h)}" aria-label="Matiz">
+      <div class="sjmColorPicker__rgb">
+        <label><input data-rgb="r" type="number" min="0" max="255"><span>R</span></label>
+        <label><input data-rgb="g" type="number" min="0" max="255"><span>G</span></label>
+        <label><input data-rgb="b" type="number" min="0" max="255"><span>B</span></label>
+      </div>
+      <small class="sjmColorPicker__hex"></small>`;
+    const oldHead=box.querySelector('.nativeColorHead');
+    if(oldHead) oldHead.style.display='none';
+    const oldFields=box.querySelector('.nativeColorFields');
+    if(oldFields) oldFields.style.display='none';
+    box.appendChild(picker);
+    const sw=picker.querySelector('.sjmColorPicker__swatch');
+    const area=picker.querySelector('.sjmColorPicker__area');
+    const cursor=picker.querySelector('.sjmColorPicker__cursor');
+    const hue=picker.querySelector('.sjmColorPicker__hue');
+    const hexEl=picker.querySelector('.sjmColorPicker__hex');
+    const rIn=picker.querySelector('[data-rgb="r"]'), gIn=picker.querySelector('[data-rgb="g"]'), bIn=picker.querySelector('[data-rgb="b"]');
+    function commit(hex, save){
+      input.value=hex;
+      if($(prefix+'R')) $(prefix+'R').value=hexToRgbLocal(hex).r;
+      if($(prefix+'G')) $(prefix+'G').value=hexToRgbLocal(hex).g;
+      if($(prefix+'B')) $(prefix+'B').value=hexToRgbLocal(hex).b;
+      if($(prefix+'Hex')) $(prefix+'Hex').textContent=hex;
+      try{ state.settings[settingKey]=hex; applyTheme(); if(save){ saveSoft(); scheduleSync(); } }catch(e){}
+    }
+    function render(save){
+      const base=hsvToRgb(hsv.h,1,1);
+      area.style.setProperty('--pickerHue', rgbToHexLocal(base.r,base.g,base.b));
+      const out=hsvToRgb(hsv.h,hsv.s,hsv.v);
+      const hex=rgbToHexLocal(out.r,out.g,out.b);
+      sw.style.background=hex; hexEl.textContent=hex;
+      rIn.value=out.r; gIn.value=out.g; bIn.value=out.b;
+      cursor.style.left=(hsv.s*100)+'%'; cursor.style.top=((1-hsv.v)*100)+'%';
+      hue.value=Math.round(hsv.h);
+      commit(hex, save);
+    }
+    function setFromPoint(clientX, clientY, save){
+      const rect=area.getBoundingClientRect();
+      hsv.s=clamp((clientX-rect.left)/rect.width,0,1);
+      hsv.v=1-clamp((clientY-rect.top)/rect.height,0,1);
+      render(save);
+    }
+    let dragging=false;
+    area.addEventListener('pointerdown',e=>{ dragging=true; area.setPointerCapture?.(e.pointerId); setFromPoint(e.clientX,e.clientY,false); e.preventDefault(); });
+    area.addEventListener('pointermove',e=>{ if(dragging) setFromPoint(e.clientX,e.clientY,false); });
+    area.addEventListener('pointerup',e=>{ if(dragging){ dragging=false; setFromPoint(e.clientX,e.clientY,true); } });
+    hue.addEventListener('input',()=>{ hsv.h=Number(hue.value)||0; render(false); });
+    hue.addEventListener('change',()=>render(true));
+    [rIn,gIn,bIn].forEach(el=>{
+      el.addEventListener('input',()=>{ const rr=clamp(rIn.value,0,255), gg=clamp(gIn.value,0,255), bb=clamp(bIn.value,0,255); hsv=rgbToHsv(rr,gg,bb); render(false); });
+      el.addEventListener('change',()=>render(true));
+    });
+    render(false);
+  }
+  function patchConfig(){
+    patchLogoButtons();
+    buildColorPicker('cfgCorPrimaria','corPrimaria','#7B2CBF');
+    buildColorPicker('cfgCorAcento','corAcento','#F72585');
+  }
+  function createAgendaDraft(){
+    const firstProc = state.procedimentos.find(p=>p.nome)?.nome || 'Alongamento';
+    const ag={id:uid(),data:todayISO(),hora:'08:00',cliente:'',procedimento:firstProc,status:'Agendado',recebido:0,obs:'',atendId:''};
+    state.agenda.unshift(ag);
+    window.__agendaSelectedId=ag.id;
+    saveSoft();
+    try{ renderAgendaHard(); scheduleSync(); }catch(e){}
+    setTimeout(()=>{ const d=$('agendaCompactDetail') || document.querySelector('.agendaCompact__right'); d?.scrollIntoView({behavior:'smooth',block:'start'}); },80);
+  }
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest && e.target.closest('#btnAddAgenda');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+    createAgendaDraft();
+  },true);
+  window.handleCalendarRealizadoComFoto=function(ag){
+    if(!ag) return;
+    ag.status='Realizado'; ag.recebido=procPrice(ag.procedimento, ag.data); saveSoft();
+    try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderDashboard(); scheduleSync(); }catch(e){}
+    if(!canUseFeature || !canUseFeature('fotos')){ alert('Atendimento marcado como realizado ✅'); return; }
+    const ask=confirm('Atendimento marcado como realizado ✅\n\nDeseja tirar ou carregar uma foto do procedimento agora?');
+    if(!ask) return;
+    const input=document.createElement('input'); input.type='file'; input.accept='image/*'; input.style.position='fixed'; input.style.left='-9999px'; document.body.appendChild(input);
+    input.onchange=async()=>{
+      try{
+        const file=input.files&&input.files[0]; if(!file) return;
+        if(file.size>3_500_000){ alert('Foto muito pesada. Escolha uma foto menor, até aproximadamente 3,5 MB.'); return; }
+        const b64=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=rej; r.readAsDataURL(file); });
+        saveAgendaProcedurePhoto(ag,b64); saveSoft();
+        try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderClientes(); renderClientPhotoPanel(); renderAtendimentosHard(); renderDashboard(); scheduleSync(); }catch(e){}
+        const at=getAtendimentoByAgendaId(ag.id)||ag;
+        const txt=gratitudeMsgForAtendimento(at);
+        const phone=clientWpp(ag.cliente);
+        if(phone){
+          await copyToClipboardSafe(txt);
+          alert('Foto salva na pasta da cliente ✅\n\nA mensagem foi copiada. Toque em OK para abrir o WhatsApp.');
+          openWhatsAppSamePage(phone, txt);
+        }else{
+          alert('Foto salva na pasta da cliente ✅\n\nCliente sem WhatsApp cadastrado. Preencha o WhatsApp na aba Clientes para enviar.');
+        }
+      }catch(err){ console.error(err); alert('Não consegui salvar a foto. Tente novamente.'); }
+      finally{ try{ input.remove(); }catch(e){} }
+    };
+    input.click();
+  };
+  document.addEventListener('DOMContentLoaded',()=>{ setTimeout(patchConfig,150); setTimeout(patchConfig,800); });
+  const oldBind=window.bindConfigUI;
+  if(typeof oldBind==='function'){
+    window.bindConfigUI=function(){ const r=oldBind.apply(this,arguments); setTimeout(patchConfig,50); return r; };
+  }
+  document.addEventListener('click',e=>{ if(e.target.closest('[data-route="config"], [data-tab="config"], a[href$="#config"]')) setTimeout(patchConfig,200); },true);
+})();
