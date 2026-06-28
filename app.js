@@ -9710,7 +9710,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       </div>
       <div class="clienteFichaActions">
         <button type="button" class="btn btn--ghost" data-open-fotos-v52>Ver galeria da cliente</button>
-        <button type="button" class="btn" data-confirm-cliente-v52>Confirmar cadastro</button>
         <button type="button" class="iconBtn danger" data-del-cliente-v52>Excluir cliente</button>
       </div>`;
   }
@@ -9748,11 +9747,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       });
       box.querySelectorAll('[data-open-fotos-v52]').forEach(btn=>{
         btn.addEventListener('click',()=>{ try{ renderClientPhotoPanel(); }catch{}; document.getElementById('clientPhotoPanel')?.scrollIntoView({behavior:'smooth', block:'start'}); });
-      });
-      box.querySelector('[data-confirm-cliente-v52]')?.addEventListener('click',()=>{
-        saveClientV52();
-        alert('Cadastro confirmado e salvo ✅');
-        window.renderClientes();
       });
       box.querySelector('[data-del-cliente-v52]')?.addEventListener('click',()=>{
         if(typeof confirmDel==='function' ? !confirmDel('esta cliente') : !confirm('Excluir esta cliente?')) return;
@@ -9840,458 +9834,139 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(hideDevClientPatch, 800);
 })();
 
-
-/* PATCH MOBILE — RGB por controle deslizante em Configurações */
-(function(){
-  function $id(id){ return document.getElementById(id); }
-  function hexToRgb(hex){
-    let h = String(hex || '').replace('#','').trim();
-    if(h.length === 3) h = h.split('').map(x=>x+x).join('');
-    const n = parseInt(h || '000000', 16);
-    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
-  }
-  function rgbToHex(r,g,b){
-    const to = v => Math.max(0, Math.min(255, parseInt(v || 0, 10))).toString(16).padStart(2,'0').toUpperCase();
-    return '#'+to(r)+to(g)+to(b);
-  }
-  function setRgb(prefix, hex){
-    const rgb = hexToRgb(hex);
-    const r=$id(prefix+'R'), g=$id(prefix+'G'), b=$id(prefix+'B'), color=$id(prefix), prev=$id(prefix+'Preview'), label=$id(prefix+'Hex');
-    if(r) r.value = rgb.r; if(g) g.value = rgb.g; if(b) b.value = rgb.b;
-    const fixed = rgbToHex(rgb.r,rgb.g,rgb.b);
-    if(color) color.value = fixed;
-    if(prev) prev.style.background = fixed;
-    if(label) label.textContent = fixed;
-  }
-  function readRgb(prefix){
-    const hex = rgbToHex($id(prefix+'R')?.value, $id(prefix+'G')?.value, $id(prefix+'B')?.value);
-    const color=$id(prefix), prev=$id(prefix+'Preview'), label=$id(prefix+'Hex');
-    if(color) color.value = hex;
-    if(prev) prev.style.background = hex;
-    if(label) label.textContent = hex;
-    return hex;
-  }
-  function bindOne(prefix, settingKey){
-    ['R','G','B'].forEach(ch=>{
-      const el=$id(prefix+ch);
-      if(!el || el.__rgbMobileBound) return;
-      el.__rgbMobileBound = true;
-      el.addEventListener('input', ()=>{
-        const hex = readRgb(prefix);
-        try{ state.settings[settingKey] = hex; applyTheme(); }catch(e){}
-      });
-      el.addEventListener('change', ()=>{
-        const hex = readRgb(prefix);
-        try{ state.settings[settingKey] = hex; saveSoft(); scheduleSync(); applyTheme(); }catch(e){}
-      });
-    });
-  }
-  function initRgbMobile(){
-    if(!$id('cfgCorPrimariaR')) return;
-    try{
-      setRgb('cfgCorPrimaria', state?.settings?.corPrimaria || $id('cfgCorPrimaria')?.value || '#7B2CBF');
-      setRgb('cfgCorAcento', state?.settings?.corAcento || $id('cfgCorAcento')?.value || '#F72585');
-      bindOne('cfgCorPrimaria', 'corPrimaria');
-      bindOne('cfgCorAcento', 'corAcento');
-    }catch(e){}
-  }
-  document.addEventListener('DOMContentLoaded', ()=>{
-    setTimeout(initRgbMobile, 200);
-    setTimeout(initRgbMobile, 1000);
-  });
-  const oldBind = window.bindConfigUI;
-  if(typeof oldBind === 'function'){
-    window.bindConfigUI = function(){
-      const r = oldBind.apply(this, arguments);
-      setTimeout(initRgbMobile, 50);
-      return r;
-    };
-  }
-})();
-
-/* PATCH CONFIGURAÇÕES — seletor de cor nativo com cursor + RGB */
-(function(){
-  function $id(id){ return document.getElementById(id); }
-  function hexToRgb(hex){
-    let h = String(hex || '').replace('#','').trim();
-    if(h.length === 3) h = h.split('').map(x=>x+x).join('');
-    const n = parseInt(h || '000000', 16);
-    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
-  }
-  function rgbToHex(r,g,b){
-    const to = v => Math.max(0, Math.min(255, parseInt(v || 0, 10))).toString(16).padStart(2,'0').toUpperCase();
-    return '#'+to(r)+to(g)+to(b);
-  }
-  function setNumbers(prefix, hex){
-    const rgb = hexToRgb(hex);
-    if($id(prefix+'R')) $id(prefix+'R').value = rgb.r;
-    if($id(prefix+'G')) $id(prefix+'G').value = rgb.g;
-    if($id(prefix+'B')) $id(prefix+'B').value = rgb.b;
-    if($id(prefix+'Hex')) $id(prefix+'Hex').textContent = rgbToHex(rgb.r,rgb.g,rgb.b);
-  }
-  function apply(prefix, settingKey, hex, shouldSave){
-    hex = String(hex || '#000000').toUpperCase();
-    const color = $id(prefix);
-    if(color && color.value.toUpperCase() !== hex) color.value = hex;
-    setNumbers(prefix, hex);
-    try{
-      state.settings[settingKey] = hex;
-      applyTheme();
-      if(shouldSave){ saveSoft(); scheduleSync(); }
-    }catch(e){}
-  }
-  function bindPicker(prefix, settingKey, fallback){
-    const color = $id(prefix);
-    if(!color || color.__nativeColorBound) return;
-    color.__nativeColorBound = true;
-    apply(prefix, settingKey, (state?.settings?.[settingKey] || color.value || fallback), false);
-    color.addEventListener('input', function(){ apply(prefix, settingKey, color.value, false); }, true);
-    color.addEventListener('change', function(){ apply(prefix, settingKey, color.value, true); }, true);
-    ['R','G','B'].forEach(ch=>{
-      const n = $id(prefix+ch);
-      if(!n || n.__nativeRgbBound) return;
-      n.__nativeRgbBound = true;
-      n.addEventListener('input', function(){
-        const hex = rgbToHex($id(prefix+'R')?.value, $id(prefix+'G')?.value, $id(prefix+'B')?.value);
-        apply(prefix, settingKey, hex, false);
-      }, true);
-      n.addEventListener('change', function(){
-        const hex = rgbToHex($id(prefix+'R')?.value, $id(prefix+'G')?.value, $id(prefix+'B')?.value);
-        apply(prefix, settingKey, hex, true);
-      }, true);
-    });
-  }
-  function initNativeColorPickers(){
-    bindPicker('cfgCorPrimaria', 'corPrimaria', '#7B2CBF');
-    bindPicker('cfgCorAcento', 'corAcento', '#F72585');
-  }
-  document.addEventListener('DOMContentLoaded', function(){
-    setTimeout(initNativeColorPickers, 200);
-    setTimeout(initNativeColorPickers, 1000);
-  });
-  window.addEventListener('load', function(){ setTimeout(initNativeColorPickers, 300); });
-})();
-
-/* =========================================================
-   v70 — Clientes por botões internos: Novo / Cadastrados / Galeria
-   - Deixa a aba Clientes mais limpa no celular.
-   - Novo cliente mostra somente o cadastro.
-   - Clientes cadastrados mostra lista + ficha.
-   - Galeria mostra somente a galeria de fotos.
-   ========================================================= */
-(function(){
-  const esc = (v)=>String(v ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
-  const attr = (v)=>esc(v).replace(/`/g,'&#96;');
-  const uidLocal = ()=> (typeof uid==='function' ? uid() : ('cli_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)));
-  const saveAll = ()=>{
-    try{ saveSoft(); }catch{}
-    try{ updateAgendaAutoCells(); }catch{}
-    try{ updateAtendimentosAutoCells(); }catch{}
-    try{ scheduleSync(); }catch{}
-  };
-  function clientes(){
-    if(!window.state) return [];
-    state.clientes = Array.isArray(state.clientes) ? state.clientes : [];
-    state.clientes.forEach(c=>{ if(!Array.isArray(c.fotos)) c.fotos=[]; });
-    return state.clientes;
-  }
-  function fotoCount(c){
-    const nome=String(c?.nome||'').trim().toLowerCase();
-    const fotosCliente=Array.isArray(c?.fotos)?c.fotos.length:0;
-    const fotosAt=(Array.isArray(state?.atendimentos)?state.atendimentos:[]).filter(a=>String(a?.cliente||'').trim().toLowerCase()===nome && a?.foto).length;
-    return fotosCliente+fotosAt;
-  }
-  function ensurePanel(){
-    const tbl=document.getElementById('tblCli');
-    const wrap=tbl?.closest('.tableWrap');
-    if(wrap) wrap.style.display='none';
-    let box=document.getElementById('clientesCompactPanel');
-    if(!box){
-      box=document.createElement('div');
-      box.id='clientesCompactPanel';
-      box.className='clientesCompactPanel box';
-      if(wrap && wrap.parentNode) wrap.parentNode.insertBefore(box, wrap);
-      else document.querySelector('[data-route="clientes"]')?.appendChild(box);
-    }
-    return box;
-  }
-  function setMode(mode){
-    window.__SJM_CLIENTE_MODE_V70 = mode || 'novo';
-    document.querySelectorAll('[data-client-mode]').forEach(b=>b.classList.toggle('active', b.getAttribute('data-client-mode')===window.__SJM_CLIENTE_MODE_V70));
-  }
-  function getMode(){ return window.__SJM_CLIENTE_MODE_V70 || 'novo'; }
-  function newDraft(){
-    if(!window.__SJM_CLIENTE_DRAFT_V70){
-      window.__SJM_CLIENTE_DRAFT_V70={ id: uidLocal(), nome:'', wpp:'', tel:'', nasc:'', alergia:'N', quais:'', gestante:'N', molde:'', obs:'', fotos:[] };
-    }
-    return window.__SJM_CLIENTE_DRAFT_V70;
-  }
-  function formHTML(c, isDraft){
-    return `<section class="clienteFichaBox ${isDraft?'is-new':''}">
-      <div class="clienteFichaHead">
-        <div><h3>${isDraft?'Novo cliente':esc(c.nome||'Cliente sem nome')}</h3><p>${isDraft?'Preencha os dados e confirme o cadastro.':esc(c.wpp||c.tel||'Sem telefone cadastrado')}</p></div>
-        ${isDraft?'':`<button type="button" class="iconBtn" data-open-fotos-v70>📷 Fotos: ${fotoCount(c)}</button>`}
-      </div>
-      <div class="clienteFichaGrid">
-        <label>Cliente<input data-field-v70="nome" value="${attr(c.nome||'')}" placeholder="Nome completo"></label>
-        <label>WhatsApp<input data-field-v70="wpp" value="${attr(c.wpp||'')}" placeholder="Ex: +55 17 99999-9999"></label>
-        <label>Telefone<input data-field-v70="tel" value="${attr(c.tel||'')}" placeholder="Ex: +55 17 99999-9999"></label>
-        <label>Nascimento<input data-field-v70="nasc" type="date" value="${attr(c.nasc||'')}"></label>
-        <label>Alergia<select data-field-v70="alergia"><option value="N" ${(c.alergia||'N')==='N'?'selected':''}>N</option><option value="S" ${(c.alergia||'N')==='S'?'selected':''}>S</option></select></label>
-        <label>Quais alergias<input data-field-v70="quais" value="${attr(c.quais||'')}" placeholder="Descreva as alergias"></label>
-        <label>Gestante<select data-field-v70="gestante"><option value="N" ${(c.gestante||'N')==='N'?'selected':''}>N</option><option value="S" ${(c.gestante||'N')==='S'?'selected':''}>S</option></select></label>
-        <label>N° do molde<input data-field-v70="molde" value="${attr(c.molde||'')}"></label>
-        <label class="clienteFichaFull">Observações<input data-field-v70="obs" value="${attr(c.obs||'')}"></label>
-      </div>
-      <div class="clienteFichaActions">
-        ${isDraft?'<button type="button" class="btn" data-confirm-new-v70>Confirmar cadastro</button><button type="button" class="btn btn--ghost" data-clear-new-v70>Limpar</button>':'<button type="button" class="btn" data-confirm-edit-v70>Confirmar cadastro</button><button type="button" class="btn btn--ghost" data-open-fotos-v70>Ver galeria da cliente</button><button type="button" class="iconBtn danger" data-del-cliente-v70>Excluir cliente</button>'}
-      </div>
-    </section>`;
-  }
-  function listHTML(){
-    const filtro=window.__SJM_CLIENTE_BUSCA_V70||'';
-    const f=filtro.trim().toLowerCase();
-    const arr=clientes().filter(c=>!f || [c.nome,c.wpp,c.tel,c.molde,c.obs].join(' ').toLowerCase().includes(f));
-    const selected=clientes().find(c=>c.id===window.__SJM_CLIENTE_SEL_V70) || arr[0] || null;
-    if(selected) window.__SJM_CLIENTE_SEL_V70=selected.id;
-    return `<div class="clientesCompactTop"><div><h3>Clientes cadastradas</h3><p class="hint">${clientes().length} cliente(s). Pesquise, selecione e edite sem poluir a tela.</p></div></div>
-    <div class="clientesCompactLayout">
-      <aside class="clientesCompactSide">
-        <input id="clientesCompactBuscaV70" placeholder="Pesquisar cliente..." value="${attr(filtro)}">
-        <div class="clientesCompactList">${arr.length?arr.map(c=>`<button type="button" class="clienteListItem ${selected&&selected.id===c.id?'active':''}" data-select-cliente-v70="${attr(c.id)}"><span><b>${esc(c.nome||'Cliente sem nome')}</b><small>${esc(c.wpp||c.tel||'Sem telefone')}</small></span><em>${fotoCount(c)} foto(s)</em></button>`).join(''):'<div class="hint compactEmpty">Nenhuma cliente encontrada.</div>'}</div>
-      </aside>
-      ${selected?formHTML(selected,false):'<section class="clienteFichaBox"><div class="clienteFichaEmpty"><b>Nenhuma cliente cadastrada</b><span>Use o botão Novo cliente para começar.</span></div></section>'}
-    </div>`;
-  }
-  function bindForm(box, c, isDraft){
-    box.querySelectorAll('[data-field-v70]').forEach(el=>{
-      const field=el.getAttribute('data-field-v70');
-      const evt=(el.tagName==='SELECT'||el.type==='date')?'change':'input';
-      el.addEventListener(evt,()=>{ c[field]=el.value; if(!isDraft) saveAll(); });
-    });
-    box.querySelector('[data-confirm-new-v70]')?.addEventListener('click',()=>{
-      if(!String(c.nome||'').trim() && !String(c.wpp||c.tel||'').trim()){
-        alert('Preencha pelo menos o nome ou telefone da cliente.'); return;
-      }
-      state.clientes.unshift({...c, id: uidLocal(), fotos:[]});
-      window.__SJM_CLIENTE_DRAFT_V70=null;
-      window.__SJM_CLIENTE_SEL_V70=state.clientes[0].id;
-      setMode('cadastrados'); saveAll(); window.renderClientes();
-      alert('Cliente cadastrada ✅');
-    });
-    box.querySelector('[data-clear-new-v70]')?.addEventListener('click',()=>{ window.__SJM_CLIENTE_DRAFT_V70=null; window.renderClientes(); });
-    box.querySelector('[data-confirm-edit-v70]')?.addEventListener('click',()=>{ saveAll(); alert('Cadastro confirmado e salvo ✅'); window.renderClientes(); });
-    box.querySelector('[data-del-cliente-v70]')?.addEventListener('click',()=>{
-      if(typeof confirmDel==='function' ? !confirmDel('esta cliente') : !confirm('Excluir esta cliente?')) return;
-      state.clientes=clientes().filter(x=>x.id!==c.id);
-      window.__SJM_CLIENTE_SEL_V70=state.clientes[0]?.id || '';
-      saveAll(); window.renderClientes();
-    });
-    box.querySelectorAll('[data-open-fotos-v70]').forEach(btn=>btn.addEventListener('click',()=>{
-      window.__SJM_SELECTED_PHOTO_CLIENT=c.id; setMode('galeria'); window.renderClientes();
-    }));
-  }
-  window.renderClientes=function(){
-    const box=ensurePanel(); if(!box) return;
-    const galBox=document.getElementById('clientesGaleriaBox');
-    setMode(getMode());
-    if(galBox) galBox.style.display='none';
-    const mode=getMode();
-    if(mode==='novo'){
-      const c=newDraft();
-      box.innerHTML=`<h3 class="clienteModeTitle">+ Novo cliente</h3><p class="clienteModeHint">Cadastre primeiro a cliente. Depois use Clientes cadastrados ou Galeria de fotos.</p>${formHTML(c,true)}`;
-      bindForm(box,c,true); return;
-    }
-    if(mode==='galeria'){
-      box.innerHTML=`<h3 class="clienteModeTitle">📷 Galeria de fotos dos clientes</h3><p class="clienteModeHint">Pesquise uma cliente e veja as fotos salvas por atendimento.</p>`;
-      if(galBox){ galBox.style.display='block'; box.appendChild(galBox); }
-      try{ renderClientPhotoPanel(); }catch{}
-      return;
-    }
-    box.innerHTML=listHTML();
-    const busca=document.getElementById('clientesCompactBuscaV70');
-    busca?.addEventListener('input',()=>{ window.__SJM_CLIENTE_BUSCA_V70=busca.value; window.renderClientes(); });
-    box.querySelectorAll('[data-select-cliente-v70]').forEach(btn=>btn.addEventListener('click',()=>{ window.__SJM_CLIENTE_SEL_V70=btn.getAttribute('data-select-cliente-v70'); window.renderClientes(); }));
-    const selected=clientes().find(c=>c.id===window.__SJM_CLIENTE_SEL_V70);
-    if(selected) bindForm(box, selected, false);
-  };
-  document.addEventListener('click', (ev)=>{
-    const btn=ev.target.closest('[data-client-mode]');
-    if(!btn) return;
-    setMode(btn.getAttribute('data-client-mode'));
-    window.renderClientes();
-  });
-  document.addEventListener('DOMContentLoaded',()=>setTimeout(()=>{ try{ window.renderClientes(); }catch{} },180));
-})();
-
-/* PATCH FINAL — agenda, WhatsApp foto, configuração logo e seletor de cor customizado */
+/* ===== Ajustes finais Allan: mobile agenda, WhatsApp foto e seletor de cores ===== */
 (function(){
   function $(id){ return document.getElementById(id); }
-  function clamp(v,min,max){ v=Number(v); return Math.max(min, Math.min(max, isNaN(v)?min:v)); }
-  function hexToRgbLocal(hex){
-    let h=String(hex||'').replace('#','').trim();
-    if(h.length===3) h=h.split('').map(x=>x+x).join('');
-    const n=parseInt(h||'000000',16);
-    return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
+  function safeHex(v){
+    v = String(v || '').trim();
+    if(/^#[0-9a-fA-F]{6}$/.test(v)) return v.toUpperCase();
+    return '#000000';
   }
-  function rgbToHexLocal(r,g,b){
-    const to=v=>clamp(parseInt(v||0,10),0,255).toString(16).padStart(2,'0').toUpperCase();
-    return '#'+to(r)+to(g)+to(b);
-  }
-  function rgbToHsv(r,g,b){
-    r/=255; g/=255; b/=255;
-    const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
-    let h=0, s=max===0?0:d/max, v=max;
-    if(d!==0){
-      if(max===r) h=((g-b)/d)%6;
-      else if(max===g) h=(b-r)/d+2;
-      else h=(r-g)/d+4;
-      h*=60; if(h<0) h+=360;
-    }
-    return {h,s,v};
-  }
-  function hsvToRgb(h,s,v){
-    h=((Number(h)||0)%360+360)%360; s=clamp(s,0,1); v=clamp(v,0,1);
-    const c=v*s, x=c*(1-Math.abs((h/60)%2-1)), m=v-c;
-    let r=0,g=0,b=0;
-    if(h<60){r=c;g=x;} else if(h<120){r=x;g=c;} else if(h<180){g=c;b=x;} else if(h<240){g=x;b=c;} else if(h<300){r=x;b=c;} else {r=c;b=x;}
-    return {r:Math.round((r+m)*255),g:Math.round((g+m)*255),b:Math.round((b+m)*255)};
-  }
-  function openWhatsAppSamePage(phone,msg){
-    const link=(typeof waLink==='function') ? waLink(phone,msg) : ('https://wa.me/'+String(phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent(msg||''));
-    try{ window.location.href = link; }
-    catch(e){ try{ window.open(link,'_self'); }catch(_){} }
-  }
-  function patchLogoButtons(){
-    const clear=$('btnClearLogo');
-    const load=document.querySelector('label[for="cfgLogoFile"]');
-    if(clear && load && load.parentElement){
-      load.parentElement.classList.add('logoActionsFix');
-      if(clear.previousElementSibling !== load && clear.parentElement === load.parentElement){
-        load.parentElement.appendChild(clear);
-      }
-    }
-  }
-  function buildColorPicker(prefix, settingKey, fallback){
-    const input=$(prefix); if(!input) return;
-    const box=input.closest('.nativeColorBox'); if(!box || box.__sjmCustomPicker) return;
-    box.__sjmCustomPicker=true;
-    const start=(state&&state.settings&&state.settings[settingKey]) || input.value || fallback;
-    const rgb=hexToRgbLocal(start); let hsv=rgbToHsv(rgb.r,rgb.g,rgb.b);
-    const picker=document.createElement('div');
-    picker.className='sjmColorPicker';
-    picker.innerHTML=`
-      <div class="sjmColorPicker__top"><div class="sjmColorPicker__title">${prefix==='cfgCorPrimaria'?'Cor primária':'Cor acento'}</div><div class="sjmColorPicker__swatch"></div></div>
-      <div class="sjmColorPicker__area"><span class="sjmColorPicker__cursor"></span></div>
-      <input class="sjmColorPicker__hue" type="range" min="0" max="360" value="${Math.round(hsv.h)}" aria-label="Matiz">
-      <div class="sjmColorPicker__rgb">
-        <label><input data-rgb="r" type="number" min="0" max="255"><span>R</span></label>
-        <label><input data-rgb="g" type="number" min="0" max="255"><span>G</span></label>
-        <label><input data-rgb="b" type="number" min="0" max="255"><span>B</span></label>
-      </div>
-      <small class="sjmColorPicker__hex"></small>`;
-    const oldHead=box.querySelector('.nativeColorHead');
-    if(oldHead) oldHead.style.display='none';
-    const oldFields=box.querySelector('.nativeColorFields');
-    if(oldFields) oldFields.style.display='none';
-    box.appendChild(picker);
-    const sw=picker.querySelector('.sjmColorPicker__swatch');
-    const area=picker.querySelector('.sjmColorPicker__area');
-    const cursor=picker.querySelector('.sjmColorPicker__cursor');
-    const hue=picker.querySelector('.sjmColorPicker__hue');
-    const hexEl=picker.querySelector('.sjmColorPicker__hex');
-    const rIn=picker.querySelector('[data-rgb="r"]'), gIn=picker.querySelector('[data-rgb="g"]'), bIn=picker.querySelector('[data-rgb="b"]');
-    function commit(hex, save){
-      input.value=hex;
-      if($(prefix+'R')) $(prefix+'R').value=hexToRgbLocal(hex).r;
-      if($(prefix+'G')) $(prefix+'G').value=hexToRgbLocal(hex).g;
-      if($(prefix+'B')) $(prefix+'B').value=hexToRgbLocal(hex).b;
-      if($(prefix+'Hex')) $(prefix+'Hex').textContent=hex;
-      try{ state.settings[settingKey]=hex; applyTheme(); if(save){ saveSoft(); scheduleSync(); } }catch(e){}
-    }
-    function render(save){
-      const base=hsvToRgb(hsv.h,1,1);
-      area.style.setProperty('--pickerHue', rgbToHexLocal(base.r,base.g,base.b));
-      const out=hsvToRgb(hsv.h,hsv.s,hsv.v);
-      const hex=rgbToHexLocal(out.r,out.g,out.b);
-      sw.style.background=hex; hexEl.textContent=hex;
-      rIn.value=out.r; gIn.value=out.g; bIn.value=out.b;
-      cursor.style.left=(hsv.s*100)+'%'; cursor.style.top=((1-hsv.v)*100)+'%';
-      hue.value=Math.round(hsv.h);
-      commit(hex, save);
-    }
-    function setFromPoint(clientX, clientY, save){
-      const rect=area.getBoundingClientRect();
-      hsv.s=clamp((clientX-rect.left)/rect.width,0,1);
-      hsv.v=1-clamp((clientY-rect.top)/rect.height,0,1);
-      render(save);
-    }
-    let dragging=false;
-    area.addEventListener('pointerdown',e=>{ dragging=true; area.setPointerCapture?.(e.pointerId); setFromPoint(e.clientX,e.clientY,false); e.preventDefault(); });
-    area.addEventListener('pointermove',e=>{ if(dragging) setFromPoint(e.clientX,e.clientY,false); });
-    area.addEventListener('pointerup',e=>{ if(dragging){ dragging=false; setFromPoint(e.clientX,e.clientY,true); } });
-    hue.addEventListener('input',()=>{ hsv.h=Number(hue.value)||0; render(false); });
-    hue.addEventListener('change',()=>render(true));
-    [rIn,gIn,bIn].forEach(el=>{
-      el.addEventListener('input',()=>{ const rr=clamp(rIn.value,0,255), gg=clamp(gIn.value,0,255), bb=clamp(bIn.value,0,255); hsv=rgbToHsv(rr,gg,bb); render(false); });
-      el.addEventListener('change',()=>render(true));
-    });
-    render(false);
-  }
-  function patchConfig(){
-    patchLogoButtons();
-    buildColorPicker('cfgCorPrimaria','corPrimaria','#7B2CBF');
-    buildColorPicker('cfgCorAcento','corAcento','#F72585');
-  }
-  function createAgendaDraft(){
-    const firstProc = state.procedimentos.find(p=>p.nome)?.nome || 'Alongamento';
-    const ag={id:uid(),data:todayISO(),hora:'08:00',cliente:'',procedimento:firstProc,status:'Agendado',recebido:0,obs:'',atendId:''};
-    state.agenda.unshift(ag);
-    window.__agendaSelectedId=ag.id;
-    saveSoft();
-    try{ renderAgendaHard(); scheduleSync(); }catch(e){}
-    setTimeout(()=>{ const d=$('agendaCompactDetail') || document.querySelector('.agendaCompact__right'); d?.scrollIntoView({behavior:'smooth',block:'start'}); },80);
-  }
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest && e.target.closest('#btnAddAgenda');
-    if(!btn) return;
-    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    createAgendaDraft();
-  },true);
-  window.handleCalendarRealizadoComFoto=function(ag){
-    if(!ag) return;
-    ag.status='Realizado'; ag.recebido=procPrice(ag.procedimento, ag.data); saveSoft();
-    try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderDashboard(); scheduleSync(); }catch(e){}
-    if(!canUseFeature || !canUseFeature('fotos')){ alert('Atendimento marcado como realizado ✅'); return; }
-    const ask=confirm('Atendimento marcado como realizado ✅\n\nDeseja tirar ou carregar uma foto do procedimento agora?');
-    if(!ask) return;
-    const input=document.createElement('input'); input.type='file'; input.accept='image/*'; input.style.position='fixed'; input.style.left='-9999px'; document.body.appendChild(input);
-    input.onchange=async()=>{
-      try{
-        const file=input.files&&input.files[0]; if(!file) return;
-        if(file.size>3_500_000){ alert('Foto muito pesada. Escolha uma foto menor, até aproximadamente 3,5 MB.'); return; }
-        const b64=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=rej; r.readAsDataURL(file); });
-        saveAgendaProcedurePhoto(ag,b64); saveSoft();
-        try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderClientes(); renderClientPhotoPanel(); renderAtendimentosHard(); renderDashboard(); scheduleSync(); }catch(e){}
-        const at=getAtendimentoByAgendaId(ag.id)||ag;
-        const txt=gratitudeMsgForAtendimento(at);
-        const phone=clientWpp(ag.cliente);
-        if(phone){
-          await copyToClipboardSafe(txt);
-          alert('Foto salva na pasta da cliente ✅\n\nA mensagem foi copiada. Toque em OK para abrir o WhatsApp.');
-          openWhatsAppSamePage(phone, txt);
-        }else{
-          alert('Foto salva na pasta da cliente ✅\n\nCliente sem WhatsApp cadastrado. Preencha o WhatsApp na aba Clientes para enviar.');
-        }
-      }catch(err){ console.error(err); alert('Não consegui salvar a foto. Tente novamente.'); }
-      finally{ try{ input.remove(); }catch(e){} }
+  function hexToRgb(hex){
+    hex = safeHex(hex).slice(1);
+    return {
+      r: parseInt(hex.slice(0,2),16),
+      g: parseInt(hex.slice(2,4),16),
+      b: parseInt(hex.slice(4,6),16)
     };
-    input.click();
-  };
-  document.addEventListener('DOMContentLoaded',()=>{ setTimeout(patchConfig,150); setTimeout(patchConfig,800); });
-  const oldBind=window.bindConfigUI;
-  if(typeof oldBind==='function'){
-    window.bindConfigUI=function(){ const r=oldBind.apply(this,arguments); setTimeout(patchConfig,50); return r; };
   }
-  document.addEventListener('click',e=>{ if(e.target.closest('[data-route="config"], [data-tab="config"], a[href$="#config"]')) setTimeout(patchConfig,200); },true);
+  function rgbToHex(r,g,b){
+    const clamp = n => Math.max(0, Math.min(255, parseInt(n || 0,10) || 0));
+    return '#' + [clamp(r),clamp(g),clamp(b)].map(n=>n.toString(16).padStart(2,'0')).join('').toUpperCase();
+  }
+  function refreshOneColor(baseId, saveNow){
+    const color = $(baseId); if(!color) return;
+    color.value = safeHex(color.value);
+    const rgb = hexToRgb(color.value);
+    const r=$(baseId+'R'), g=$(baseId+'G'), b=$(baseId+'B'), p=$(baseId+'Preview');
+    if(r) r.value = rgb.r;
+    if(g) g.value = rgb.g;
+    if(b) b.value = rgb.b;
+    if(p) p.style.background = color.value;
+    try{
+      if(baseId === 'cfgCorPrimaria') state.settings.corPrimaria = color.value;
+      if(baseId === 'cfgCorAcento') state.settings.corAcento = color.value;
+      applyTheme();
+      if(saveNow){ saveSoft(); scheduleSync(); }
+    }catch(e){}
+  }
+  function bindColor(baseId){
+    const color=$(baseId); if(!color || color.__allanColorBound) return;
+    color.__allanColorBound = true;
+    const preview=$(baseId+'Preview');
+    if(preview) preview.style.background = color.value;
+    color.addEventListener('input', ()=>refreshOneColor(baseId, false));
+    color.addEventListener('change', ()=>refreshOneColor(baseId, true));
+    ['R','G','B'].forEach(suf=>{
+      const el=$(baseId+suf); if(!el) return;
+      el.addEventListener('input', ()=>{
+        const r=$(baseId+'R')?.value, g=$(baseId+'G')?.value, b=$(baseId+'B')?.value;
+        color.value = rgbToHex(r,g,b);
+        refreshOneColor(baseId, false);
+      });
+      el.addEventListener('change', ()=>refreshOneColor(baseId, true));
+    });
+    refreshOneColor(baseId, false);
+  }
+  function initColors(){ bindColor('cfgCorPrimaria'); bindColor('cfgCorAcento'); }
+
+  function scrollAgendaDetail(){
+    setTimeout(()=>{
+      const detail = $('agendaCompactDetail') || document.querySelector('.agendaCompact__right');
+      if(detail){
+        try{ detail.scrollIntoView({behavior:'smooth', block:'start'}); }catch{ detail.scrollIntoView(); }
+        try{ detail.focus({preventScroll:true}); }catch{}
+      }
+    }, 80);
+  }
+  function createNewAgendaAt(dateISO){
+    const firstProc = (state.procedimentos || []).find(p=>p.nome)?.nome || 'Alongamento';
+    const ag = { id:uid(), data:dateISO || todayISO(), hora:'08:00', cliente:'', procedimento:firstProc, status:'Agendado', recebido:0, obs:'', atendId:'' };
+    state.agenda.unshift(ag);
+    window.__agendaSelectedId = ag.id;
+    try{ saveSoft(); renderAgendaHard(); renderCalendar(); scheduleSync(); }catch(e){ console.warn(e); }
+    try{ setRoute('agenda'); }catch{}
+    scrollAgendaDetail();
+  }
+
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#btnAddAgenda,#calNew') : null;
+    if(!btn) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const iso = btn.id === 'calNew' ? (window.__CAL_SELECTED_ISO || todayISO()) : todayISO();
+    createNewAgendaAt(iso);
+  }, true);
+
+  function overridePhotoWhatsapp(){
+    if(window.__allanPhotoPatchDone) return;
+    window.__allanPhotoPatchDone = true;
+    window.__SJM_PICK_GALLERY_FOR_AGENDA = function(ag){
+      return new Promise((resolve)=>{
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.position = 'fixed';
+        input.style.left = '-9999px';
+        input.style.top = '-9999px';
+        document.body.appendChild(input);
+        input.onchange = async ()=>{
+          const phoneBefore = clientWpp(ag?.cliente || '');
+          let waWin = null;
+          if(phoneBefore){ try{ waWin = window.open('', '_blank'); }catch{} }
+          try{
+            const file = input.files && input.files[0];
+            if(!file){ if(waWin) waWin.close(); resolve(false); return; }
+            if(file.size > 3_500_000){ alert('Foto muito pesada. Escolha uma imagem menor, até aproximadamente 3,5 MB.'); if(waWin) waWin.close(); resolve(false); return; }
+            const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result||'')); r.onerror=rej; r.readAsDataURL(file); });
+            saveAgendaProcedurePhoto(ag,b64); saveSoft();
+            try{ syncAgendaToAtendimentos(); renderAgendaHard(); renderCalendar(); renderClientes(); renderClientPhotoPanel(); renderAtendimentosHard(); renderDashboard(); scheduleSync(); }catch{}
+            const at = getAtendimentoByAgendaId(ag.id) || ag;
+            const txt = gratitudeMsgForAtendimento(at);
+            const phone = clientWpp(ag.cliente);
+            if(phone){
+              await copyToClipboardSafe(txt);
+              const link = waLink(phone, txt);
+              if(waWin){ waWin.location.href = link; } else { window.open(link, '_blank', 'noopener,noreferrer'); }
+              alert('Foto salva na pasta da cliente ✅\nMensagem copiada e WhatsApp aberto. No WhatsApp, anexe a foto salva para enviar.');
+            }else{
+              if(waWin) waWin.close();
+              alert('Foto salva na pasta da cliente ✅\nCliente sem WhatsApp cadastrado.');
+            }
+            resolve(true);
+          }catch(err){
+            console.error(err);
+            if(waWin) try{ waWin.close(); }catch{}
+            alert('Erro ao salvar foto: ' + (err?.message || err));
+            resolve(false);
+          }finally{ try{ input.remove(); }catch{} }
+        };
+        input.click();
+      });
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{ initColors(); overridePhotoWhatsapp(); setTimeout(initColors,400); setTimeout(overridePhotoWhatsapp,400); });
+  setTimeout(()=>{ initColors(); overridePhotoWhatsapp(); }, 900);
+  setTimeout(()=>{ initColors(); overridePhotoWhatsapp(); }, 1800);
 })();
