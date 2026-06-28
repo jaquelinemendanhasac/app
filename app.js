@@ -470,6 +470,9 @@ function sanitizeState(parsed){
       if(a.data === undefined) a.data = todayISO();
       if(a.cliente === undefined) a.cliente = "";
       if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Alongamento");
+      if(a.tipoAgendamento === undefined){
+        a.tipoAgendamento = (a.status === "Bloqueio") ? "Bloqueio" : "Atendimento";
+      }
     }
   });
 
@@ -920,10 +923,6 @@ applyTheme();
     }
     $$(".tab").forEach(t => t.classList.toggle("active", String(t.dataset.tab||"").toLowerCase()===r));
     $$(".panel").forEach(p => p.classList.toggle("active", String(p.dataset.route||"").toLowerCase()===r));
-    if(r === "agenda" && typeof openAgendaNewDraft === "function"){
-      openAgendaNewDraft(true);
-      if(typeof renderAgendaHard === "function") setTimeout(()=>renderAgendaHard(), 0);
-    }
     history.replaceState({}, "", `#${r}`);
     applyPlanUI();
   }
@@ -1016,12 +1015,30 @@ function procDuracao(nome){
   return p?.duracaoMin || 60;
 }
 
+/* =================== TIPO DE AGENDAMENTO =================== */
+const AGENDA_TIPOS = ["Atendimento","Médico","Reunião","Compromisso","Folga","Bloqueio"];
+function agendaTipo(ag){
+  if(!ag) return "Atendimento";
+  if(ag.tipoAgendamento) return ag.tipoAgendamento;
+  return (ag.status === "Bloqueio") ? "Bloqueio" : "Atendimento";
+}
+function isAgendaAtendimento(ag){
+  return agendaTipo(ag) === "Atendimento" && (ag.status||"Agendado") !== "Bloqueio";
+}
+function agendaTipoIcon(tipo){
+  return ({"Atendimento":"👤","Médico":"🩺","Reunião":"🤝","Compromisso":"📅","Folga":"🌴","Bloqueio":"🚫"})[tipo] || "📌";
+}
+function agendaTipoLabel(ag){
+  const tipo = agendaTipo(ag);
+  return tipo === "Atendimento" ? "Atendimento" : tipo;
+}
+
 /* =================== CONFLITO POR DURAÇÃO =================== */
 function isConflictByDuration(index){
   const a = state.agenda[index];
   if(!a?.data || !a?.hora) return false;
   if((a.status||"Agendado")==="Cancelado") return false;
-  if((a.status||"Agendado")==="Bloqueio") return false;
+  if(!isAgendaAtendimento(a)) return false;
 
   const inicioA = new Date(`${a.data}T${a.hora}`);
   const fimA = new Date(inicioA.getTime() + procDuracao(a.procedimento) * 60000);
@@ -1029,7 +1046,7 @@ function isConflictByDuration(index){
   return state.agenda.some((b, i) => {
     if(i === index) return false;
     if((b.status||"Agendado") === "Cancelado") return false;
-    if((b.status||"Agendado") === "Bloqueio") return false;
+    if(!isAgendaAtendimento(b)) return false;
     if(b.data !== a.data) return false;
     if(!b.hora) return false;
 
@@ -1047,8 +1064,8 @@ function enforceAgendaRecebidoRules(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
 
-    if(status === "Bloqueio"){
-      ag.procedimento = "—";
+    if(!isAgendaAtendimento(ag)){
+      if(agendaTipo(ag) === "Bloqueio") ag.procedimento = "—";
       ag.recebido = 0;
       return;
     }
@@ -1169,8 +1186,8 @@ function syncAgendaToAtendimentos(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
 
-    if(status === "Bloqueio"){
-      ag.procedimento = "—";
+    if(!isAgendaAtendimento(ag)){
+      if(agendaTipo(ag) === "Bloqueio") ag.procedimento = "—";
       ag.recebido = 0;
       removeAtendimentoFromAgenda(ag.id);
       return;
@@ -1348,7 +1365,7 @@ function agendaOfDay(iso){
 
 function conflictsInDay(iso){
   const items = agendaOfDay(iso)
-    .filter(x => (x.status||"Agendado") !== "Bloqueio")
+    .filter(x => isAgendaAtendimento(x))
     .map((a)=> {
       const inicio = new Date(`${a.data}T${a.hora||"00:00"}`);
       const fim = new Date(inicio.getTime() + procDuracao(a.procedimento)*60000);
@@ -1368,7 +1385,7 @@ function dayBadges(iso){
   const itens = agendaOfDay(iso);
   const totalAg = itens.length;
   const totalRec = itens
-    .filter(a => (a.status||"Agendado") === "Realizado")
+    .filter(a => isAgendaAtendimento(a) && (a.status||"Agendado") === "Realizado")
     .reduce((s,a)=> s + num(a.recebido), 0);
 
   return { totalAg, totalRec };
@@ -1384,6 +1401,7 @@ function calNewAtSelectedDay(){
     hora: "08:00",
     cliente:"",
     procedimento:firstProc,
+    tipoAgendamento:"Atendimento",
     status:"Agendado",
     recebido: 0,
     obs:"",
@@ -1420,14 +1438,15 @@ function renderCalendar(){
     const { totalAg, totalRec } = dayBadges(iso);
     const hasConflict = conflictsInDay(iso);
 
-    const mini = agendaOfDay(iso).slice(0,2).map(a=>{
-      const label = (a.status==="Bloqueio") ? "BLOQUEIO" : ((a.cliente||"").trim() || "Sem nome");
-      return `<div class="calMiniItem">${a.hora || ""} — ${label}</div>`;
+    const dayItems = agendaOfDay(iso);
+    const mini = dayItems.slice(0,3).map(a=>{
+      const tipo = agendaTipo(a);
+      return `<div class="calMiniItem calMiniItem--${agendaStatusClass(tipo)}"><span class="calDot"></span><span>${a.hora || "--:--"}</span></div>`;
     }).join("");
 
-    const badgeAg = totalAg ? `<span class="calBadge">${totalAg}x</span>` : "";
-    const badgeRec = totalRec ? `<span class="calBadge ok">${money(totalRec)}</span>` : "";
-    const badgeConf = hasConflict ? `<span class="calBadge danger">Conflito</span>` : "";
+    const badgeAg = totalAg ? `<span class="calBadge">${totalAg}</span>` : "";
+    const badgeRec = "";
+    const badgeConf = hasConflict ? `<span class="calBadge danger">!</span>` : "";
 
     cells.push(`
       <div class="calDay ${isOther?"isOther":""} ${isToday?"isToday":""} ${isSel?"isSelected":""}" data-iso="${iso}">
@@ -1464,11 +1483,13 @@ function renderCalendarDay(){
 
   const itens = agendaOfDay(iso);
   const totalAg = itens.length;
-  const totalRec = itens.filter(a => (a.status||"Agendado")==="Realizado").reduce((s,a)=> s + num(a.recebido), 0);
+  const totalComp = itens.filter(a => !isAgendaAtendimento(a)).length;
+  const totalRec = itens.filter(a => isAgendaAtendimento(a) && (a.status||"Agendado")==="Realizado").reduce((s,a)=> s + num(a.recebido), 0);
   const hasConflict = conflictsInDay(iso);
 
   resumo.innerHTML = `
-    <div class="calChip">Agendamentos: ${totalAg}</div>
+    <div class="calChip">Itens: ${totalAg}</div>
+    <div class="calChip">Compromissos/Folgas: ${totalComp}</div>
     <div class="calChip">Recebido: ${money(totalRec)}</div>
     <div class="calChip ${hasConflict ? "danger": ""}">${hasConflict ? "⚠️ Conflito de horário" : "Sem conflito"}</div>
   `;
@@ -1487,19 +1508,26 @@ function renderCalendarDay(){
   box.innerHTML = itens.map((a)=>{
     const st = (a.status||"Agendado");
     const rec = num(a.recebido);
-    const val = (st==="Bloqueio") ? 0 : procPrice(a.procedimento, a.data);
+    const isAtendimento = isAgendaAtendimento(a);
+    const tipo = agendaTipo(a);
+    const val = isAtendimento ? procPrice(a.procedimento, a.data) : 0;
 
     const idx = state.agenda.findIndex(x=>x && x.id===a.id);
     const conflita = (idx >= 0) ? isConflictByDuration(idx) : false;
 
-    const titulo = (st==="Bloqueio")
-      ? `${a.hora || ""} — BLOQUEIO`
-      : `${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}`;
+    const titulo = isAtendimento
+      ? `${a.hora || ""} — ${(a.cliente||"").trim() || "Sem nome"}`
+      : `${a.hora || ""} — ${agendaTipoIcon(tipo)} ${tipo}${a.cliente ? " — " + a.cliente : ""}`;
 
-    const isBlock = (st==="Bloqueio");
+    const isBlock = !isAtendimento;
 
     // ✅ botões: Realizado / Cancelado / Editar (Agenda)
-    const buttons = isBlock ? `` : `
+    const buttons = isBlock ? `
+      <div class="actions" style="margin-top:8px; gap:8px;">
+        <button class="btn btn--ghost" data-cal-act="cancel" data-id="${a.id}">Cancelar</button>
+        <button class="btn btn--ghost" data-cal-act="edit" data-id="${a.id}">Editar</button>
+      </div>
+    ` : `
       <div class="actions" style="margin-top:8px; gap:8px;">
         <button class="btn btn--ghost" data-cal-act="done" data-id="${a.id}">Realizado</button>
         <button class="btn btn--ghost" data-cal-act="cancel" data-id="${a.id}">Cancelado</button>
@@ -1513,7 +1541,7 @@ function renderCalendarDay(){
           <b>${titulo}</b>
           <span class="calListMeta">${st}</span>
         </div>
-        <div class="calListMeta">Procedimento: ${a.procedimento || "—"} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
+        <div class="calListMeta">Tipo: ${agendaTipoLabel(a)} • Procedimento: ${isAtendimento ? (a.procedimento || "—") : "Não financeiro"} • Valor: ${money(val)} • Recebido: ${money(rec)}</div>
         ${a.obs ? `<div class="calListMeta">Obs: ${String(a.obs)}</div>` : ``}
         ${buttons}
       </div>
@@ -1712,17 +1740,7 @@ function setAgendaViewMode(mode){
   if(list) list.hidden = window.__agendaViewMode !== "list";
 }
 
-function isAgendaDraftBlank(a){
-  if(!a) return false;
-  const st = String(a.status || "Agendado");
-  return st === "Agendado"
-    && !String(a.cliente || "").trim()
-    && !String(a.obs || "").trim()
-    && num(a.recebido) === 0
-    && !String(a.atendId || "").trim();
-}
-
-function createAgendaDraft(){
+onClick("btnAddAgenda", ()=>{
   const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
   const novo = {
     id:uid(),
@@ -1737,28 +1755,6 @@ function createAgendaDraft(){
   };
   state.agenda.unshift(novo);
   window.__agendaSelectedId = novo.id;
-  return novo;
-}
-
-function openAgendaNewDraft(saveNow=false){
-  const selected = state.agenda.find(a => a.id === window.__agendaSelectedId);
-  if(!isAgendaDraftBlank(selected)){
-    const topBlank = state.agenda.find(isAgendaDraftBlank);
-    if(topBlank){
-      window.__agendaSelectedId = topBlank.id;
-      const i = state.agenda.findIndex(a => a.id === topBlank.id);
-      if(i > 0){ state.agenda.splice(i,1); state.agenda.unshift(topBlank); }
-    }else{
-      createAgendaDraft();
-      saveNow = true;
-    }
-  }
-  setAgendaViewMode("form");
-  if(saveNow){ saveSoft(); scheduleSync(); }
-}
-
-onClick("btnAddAgenda", ()=>{
-  createAgendaDraft();
   setAgendaViewMode("form");
   saveSoft();
   renderAgendaHard();
@@ -1920,11 +1916,11 @@ function renderAgendaCompact(){
     const active = a.id === window.__agendaSelectedId ? ' isActive' : '';
     return `<button type="button" class="agendaItem${active}" data-agenda-id="${escAttr(a.id)}">
       <div>
-        <div class="agendaItem__name">${escapeHTML(a.cliente || (st==='Bloqueio' ? 'Bloqueio' : 'Cliente sem nome'))}</div>
+        <div class="agendaItem__name">${escapeHTML(isAgendaAtendimento(a) ? (a.cliente || 'Cliente sem nome') : (agendaTipoIcon(agendaTipo(a)) + ' ' + agendaTipo(a)))}</div>
         <div class="agendaItem__meta">
           <span>${a.data ? fmtBRDate(a.data) : 'Sem data'}</span>
           <span>${a.hora || 'Sem hora'}</span>
-          <span>${escapeHTML(a.procedimento || 'Sem procedimento')}</span>
+          <span>${escapeHTML(isAgendaAtendimento(a) ? (a.procedimento || 'Sem procedimento') : (a.obs || a.cliente || 'Não financeiro'))}</span>
         </div>
         <div style="margin-top:7px;"><span class="agendaBadge agendaBadge--${agendaStatusClass(st)}">${escapeHTML(st)}</span></div>
       </div>
@@ -1943,9 +1939,10 @@ function renderAgendaCompact(){
   const ag = state.agenda.find(x=>x.id===window.__agendaSelectedId) || items[0];
   if(!ag) return;
   const idx = state.agenda.findIndex(x=>x.id===ag.id);
-  const isBlock = (ag.status === 'Bloqueio');
+  const isBlock = !isAgendaAtendimento(ag);
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
   const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
+  const tiposAgenda = AGENDA_TIPOS;
   const wpp = clientWpp(ag.cliente);
   const val = isBlock ? 0 : procPrice(ag.procedimento, ag.data);
   const rec = num(ag.recebido);
@@ -1954,7 +1951,7 @@ function renderAgendaCompact(){
   detail.innerHTML = `
     <div class="agendaDetail__head">
       <div>
-        <h3>${escapeHTML(ag.cliente || (isBlock ? 'Bloqueio' : 'Novo agendamento'))}</h3>
+        <h3>${escapeHTML(isBlock ? (agendaTipoIcon(agendaTipo(ag)) + ' ' + agendaTipo(ag)) : (ag.cliente || 'Novo agendamento'))}</h3>
         <div class="hint">${ag.data ? fmtBRDate(ag.data) : 'Sem data'} ${ag.hora ? 'às ' + ag.hora : ''}</div>
       </div>
       <span class="agendaBadge agendaBadge--${agendaStatusClass(ag.status)}">${escapeHTML(ag.status||'Agendado')}</span>
@@ -1963,7 +1960,8 @@ function renderAgendaCompact(){
     <div class="agendaDetail__grid" data-detail-id="${escAttr(ag.id)}">
       <label class="field"><span>Data</span><input id="agDetData" type="date" value="${escAttr(ag.data||'')}"></label>
       <label class="field"><span>Hora</span><input id="agDetHora" type="time" step="60" value="${escAttr(ag.hora||'')}"></label>
-      <label class="field"><span>Cliente</span><input id="agDetCliente" list="agendaClientesDatalist" value="${escAttr(ag.cliente||'')}"></label>
+      <label class="field"><span>Tipo do agendamento</span><select id="agDetTipo">${tiposAgenda.map(n=>`<option value="${escAttr(n)}" ${n===agendaTipo(ag)?'selected':''}>${agendaTipoIcon(n)} ${escapeHTML(n)}</option>`).join('')}</select></label>
+      <label class="field"><span>Cliente / título</span><input id="agDetCliente" list="agendaClientesDatalist" value="${escAttr(ag.cliente||'')}"></label>
       <label class="field"><span>Contato</span><input id="agDetWpp" value="${escAttr(wpp)}" readonly></label>
       <label class="field"><span>Procedimento</span><select id="agDetProc" ${isBlock?'disabled':''}>${(isBlock?["—"]:(procNames.length?procNames:["Alongamento"])).map(n=>`<option value="${escAttr(n)}" ${n===(ag.procedimento||'')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
       <label class="field"><span>Valor</span><input id="agDetValor" type="text" value="${escAttr(val.toFixed(2))}" readonly></label>
@@ -1981,12 +1979,24 @@ function renderAgendaCompact(){
   const refresh = ()=>{ saveSoft(); syncAgendaToAtendimentos(); updateConflictUI(); scheduleSync(); renderAgendaCompact(); };
   byId('agDetData')?.addEventListener('change', e=>{ ag.data=e.target.value; refresh(); });
   byId('agDetHora')?.addEventListener('change', e=>{ ag.hora=e.target.value; refresh(); });
+  byId('agDetTipo')?.addEventListener('change', e=>{
+    ag.tipoAgendamento = e.target.value || 'Atendimento';
+    if(!isAgendaAtendimento(ag)){
+      ag.recebido = 0;
+      if(ag.tipoAgendamento === 'Bloqueio') ag.status = 'Bloqueio';
+      else if((ag.status||'Agendado') === 'Bloqueio') ag.status = 'Agendado';
+      removeAtendimentoFromAgenda(ag.id);
+    }else{
+      if((ag.status||'Agendado') === 'Bloqueio') ag.status = 'Agendado';
+    }
+    refresh();
+  });
   byId('agDetCliente')?.addEventListener('input', e=>{ ag.cliente=e.target.value; const w=byId('agDetWpp'); if(w) w.value=clientWpp(ag.cliente); saveSoftDebounced(); scheduleSyncDebounced(); });
   byId('agDetProc')?.addEventListener('change', e=>{ if(isBlock) return; ag.procedimento=e.target.value; const preco=procPrice(ag.procedimento, ag.data); if((ag.status||'Agendado')==='Realizado') ag.recebido=preco; refresh(); });
   byId('agDetStatus')?.addEventListener('change', e=>{
     ag.status=e.target.value;
-    if(ag.status==='Bloqueio'){ ag.procedimento='—'; ag.recebido=0; }
-    else if(ag.status==='Realizado'){ ag.recebido=procPrice(ag.procedimento, ag.data); }
+    if(ag.status==='Bloqueio'){ ag.tipoAgendamento='Bloqueio'; ag.procedimento='—'; ag.recebido=0; }
+    else if(ag.status==='Realizado' && isAgendaAtendimento(ag)){ ag.recebido=procPrice(ag.procedimento, ag.data); }
     else if(ag.status==='Cancelado' || ag.status==='Remarcado'){ ag.recebido=0; }
     refresh();
   });
@@ -1999,7 +2009,7 @@ function renderAgendaCompact(){
 }
 
 function renderAgendaHard(){
-  if(!window.__agendaViewMode) openAgendaNewDraft(false);
+  if(!window.__agendaViewMode) setAgendaViewMode("form");
   ensureAgendaClientesDatalist();
 
   const tblAgendaBody = getAgendaTbody();
@@ -2100,6 +2110,7 @@ function renderAgendaHard(){
       a.status = getInp(tdSta).value;
 
       if(a.status === "Bloqueio"){
+        a.tipoAgendamento = "Bloqueio";
         a.procedimento = "—";
         a.recebido = 0;
         if(inpRec) inpRec.value = "0.00";
