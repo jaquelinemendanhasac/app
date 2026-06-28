@@ -298,7 +298,7 @@
           <small class="hint">Variáveis: {cliente}, {data}, {hora}, {procedimento}, {valor}, {studio}</small>
         </div>
 
-        <div class="box">
+        <div class="box wppTemplatesBox">
           <h3>Templates editáveis</h3>
           <label class="field">
             <span>Confirmação (ao agendar)</span>
@@ -424,12 +424,12 @@
         </div>
       </div>
 
-      <div class="box" style="margin-top:12px;">
+      <div class="box crmRemarketingBox" style="margin-top:12px;">
         <h3>Fila de remarketing (1 clique)</h3>
         <div id="crmQueue"></div>
       </div>
 
-      <div class="tableWrap" style="margin-top:12px;">
+      <div class="tableWrap crmRemarketingTableWrap" style="margin-top:12px;">
         <table class="table" id="tblCRM">
           <thead>
             <tr>
@@ -647,9 +647,23 @@
       <div class="box" style="margin-top:12px;">
         <h3>Cores do aplicativo</h3>
         <p class="hint">A profissional pode alterar as cores principais do app.</p>
-        <div class="row">
-          <label class="field"><span>Cor primária</span><input id="cfgCorPrimaria" type="color" value="#7B2CBF" /></label>
-          <label class="field"><span>Cor acento</span><input id="cfgCorAcento" type="color" value="#F72585" /></label>
+        <div class="rgbColorPanel">
+          <input id="cfgCorPrimaria" type="color" value="#7B2CBF" hidden />
+          <input id="cfgCorAcento" type="color" value="#F72585" hidden />
+          <div class="rgbColorBox" data-rgb-box="primary">
+            <div class="rgbColorHead"><b>Cor primária</b><span id="cfgCorPrimariaPreview" class="rgbPreview"></span></div>
+            <label>R <input id="cfgCorPrimariaR" type="range" min="0" max="255" value="123"></label>
+            <label>G <input id="cfgCorPrimariaG" type="range" min="0" max="255" value="44"></label>
+            <label>B <input id="cfgCorPrimariaB" type="range" min="0" max="255" value="191"></label>
+            <small id="cfgCorPrimariaHex" class="hint">#7B2CBF</small>
+          </div>
+          <div class="rgbColorBox" data-rgb-box="accent">
+            <div class="rgbColorHead"><b>Cor acento</b><span id="cfgCorAcentoPreview" class="rgbPreview"></span></div>
+            <label>R <input id="cfgCorAcentoR" type="range" min="0" max="255" value="247"></label>
+            <label>G <input id="cfgCorAcentoG" type="range" min="0" max="255" value="37"></label>
+            <label>B <input id="cfgCorAcentoB" type="range" min="0" max="255" value="133"></label>
+            <small id="cfgCorAcentoHex" class="hint">#F72585</small>
+          </div>
         </div>
       </div>
 
