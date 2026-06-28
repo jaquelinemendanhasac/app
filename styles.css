@@ -1152,7 +1152,7 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .clienteFichaEmpty{height:100%;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--muted,#6b7280);gap:6px;border:1px dashed var(--line,#e5e7eb);border-radius:14px;}
 .compactEmpty{padding:12px;text-align:center;}
 .iconBtn.danger{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
-@media(max-width:760px){.clientesCompactLayout{grid-template-columns:1fr}.clienteFichaBox{order:-1}.clientesCompactSide{order:2}.clientesCompactList{max-height:260px}.clienteFichaGrid{grid-template-columns:1fr}.clienteFichaActions,.clienteFichaHead{flex-direction:column;align-items:stretch}}
+@media(max-width:760px){.clientesCompactLayout{grid-template-columns:1fr}.clientesCompactList{max-height:260px}.clienteFichaGrid{grid-template-columns:1fr}.clienteFichaActions,.clienteFichaHead{flex-direction:column;align-items:stretch}}
 
 /* Agenda compacta em duas colunas */
 .agendaCompact{
@@ -1203,3 +1203,32 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
   .agendaDetail__grid{ grid-template-columns:1fr; }
   .agendaCompact__filterRow{ grid-template-columns:1fr; }
 }
+
+/* Ajustes mobile solicitados — agenda, WhatsApp, clientes, CRM e RGB */
+@media(max-width:900px){
+  .agendaCompact{display:flex;flex-direction:column;gap:12px;}
+  .agendaCompact__right{order:1;min-height:auto;}
+  .agendaCompact__left{order:2;}
+  .agendaCompact__list{max-height:300px;}
+  .agendaDetail__head{margin-bottom:10px;}
+  .agendaDetail__actions .btn{width:100%;justify-content:center;}
+}
+@media(max-width:768px){
+  .panel__head{margin-bottom:10px;}
+  .actions{gap:8px;}
+  .actions .btn{flex:1 1 100%;}
+  .wppTemplatesBox{max-height:430px;overflow-y:auto;padding-right:12px;}
+  .wppTemplatesBox textarea{min-height:86px;}
+  .crmRemarketingBox #crmQueue{max-height:260px;overflow-y:auto;padding-right:6px;}
+  .crmRemarketingTableWrap{max-height:340px;overflow:auto;}
+  .clientesCompactList{max-height:230px;}
+  .clienteFichaActions{gap:8px;}
+  .clienteFichaActions .btn,.clienteFichaActions .iconBtn{width:100%;justify-content:center;}
+}
+.rgbColorPanel{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.rgbColorBox{border:1px solid var(--line,#e5e7eb);border-radius:16px;padding:12px;background:#fff;display:grid;gap:10px;}
+.rgbColorHead{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.rgbPreview{width:34px;height:34px;border-radius:999px;border:1px solid var(--line,#e5e7eb);box-shadow:0 4px 12px rgba(15,23,42,.12);background:#7B2CBF;}
+.rgbColorBox label{display:grid;grid-template-columns:22px 1fr;align-items:center;gap:8px;font-weight:900;color:var(--text,#111827);}
+.rgbColorBox input[type="range"]{width:100%;accent-color:var(--primary,#7B2CBF);}
+@media(max-width:768px){.rgbColorPanel{grid-template-columns:1fr}.rgbColorBox{padding:14px}.rgbColorBox input[type="range"]{height:32px}}
