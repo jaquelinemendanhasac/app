@@ -689,8 +689,19 @@
         </label>
       </div>
 
-      <div class="box" style="margin-top:12px;">
+      <div class="box planBox" style="margin-top:12px;">
         <h3>Plano de acesso</h3>
+        <div class="planSummary">
+          <div>
+            <span class="planSummary__badge">🟣 Premium</span>
+            <strong>Ativo</strong>
+            <small>Recursos liberados para gestão completa do estúdio.</small>
+          </div>
+          <div class="planSummary__renew">Renovação<br><b>15/08/2026</b></div>
+        </div>
+        <div class="planFeatures">
+          <span>✓ CRM</span><span>✓ WhatsApp</span><span>✓ Autoagendamento</span><span>✓ Backup</span>
+        </div>
         <label class="field">
           <span>Tipo de plano do profissional</span>
           <select id="cfgPlano">
@@ -703,8 +714,13 @@
         <div class="actions" style="margin-top:10px;"><button class="btn btn--ghost" id="btnOpenPlans" type="button">Ver planos e mudar plano</button></div>
       </div>
 
-      <div class="box" style="margin-top:12px;">
+      <div class="box backupBox" style="margin-top:12px;">
         <h3>Backup</h3>
+        <div class="backupStatus">
+          <span>Backup automático</span>
+          <b>Ativo</b>
+        </div>
+        <small class="hint">Último backup: hoje às 14:35</small>
         <div class="actions">
           <button class="btn btn--ghost" id="btnExport">Exportar backup</button>
           <button class="btn btn--ghost" id="btnImportBackupFinal" type="button">Importar backup</button>
@@ -752,6 +768,8 @@
         <a class="btn" id="btnSupportWpp" href="https://wa.me/5517999999999?text=Olá! Preciso de suporte no Studio Sync Pro." target="_blank" rel="noopener">WhatsApp do suporte</a>
         <a class="btn btn--ghost" href="mailto:suporte@jaquelinemendanha.com?subject=Suporte Studio Sync Pro">Enviar e-mail</a>
         <button class="btn btn--ghost" type="button" id="btnReportProblem">Reportar problema</button>
+        <button class="btn btn--ghost" type="button" id="btnSupportPrint">Enviar print da tela</button>
+        <button class="btn btn--ghost" type="button" id="btnSupportFaq">FAQ / Manual rápido</button>
       </div>
       <small class="hint">O suporte não altera nem apaga seus dados. Seus clientes, agenda e financeiro continuam preservados.</small>
     </div>
