@@ -9851,3 +9851,93 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(hideDevClientPatch, 100);
   setTimeout(hideDevClientPatch, 800);
 })();
+
+/* ===== Correção final: Clientes igual Agenda + cores fáceis ===== */
+(function(){
+  function $c(id){ return document.getElementById(id); }
+  function ehtml(v){ try{return escapeHTML(String(v??''));}catch{return String(v??'').replace(/[&<>'"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':'&quot;'}[m]));} }
+  function eattr(v){ return ehtml(v).replace(/"/g,'&quot;'); }
+  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+  function saveNow(){ try{ saveSoft(); }catch{} try{ scheduleSyncDebounced(); }catch{} }
+  function modeClientes(m){ window.__clienteViewMode=m; const f=$c('clienteFormPanel'), l=$c('clienteListPanel'); if(f) f.hidden=m!=='form'; if(l) l.hidden=m!=='list'; }
+  function filteredClientes(){ const q=norm($c('clienteFiltroBusca')?.value||''); return (state.clientes||[]).filter(c=>!q || norm(`${c.nome||''} ${c.wpp||''} ${c.tel||''} ${c.obs||''}`).includes(q)); }
+  function selectedCliente(items){ const ids=items.map(c=>c.id); if(!window.__clienteSelectedId || !ids.includes(window.__clienteSelectedId)) window.__clienteSelectedId=ids[0]||''; return (state.clientes||[]).find(c=>c.id===window.__clienteSelectedId) || items[0] || null; }
+  function bindClienteTop(){
+    const todos=$c('btnClientesTodos');
+    if(todos && !todos.__cliBound){ todos.__cliBound=true; todos.addEventListener('click',()=>{ modeClientes('list'); renderClientesCompactFinal(); }); }
+    const busca=$c('clienteFiltroBusca');
+    if(busca && !busca.__cliBound){ busca.__cliBound=true; busca.addEventListener('input',()=>{ window.__clienteSelectedId=''; renderClientesCompactFinal(); }); }
+  }
+  window.renderClientesCompactFinal = function(){
+    bindClienteTop();
+    if(!window.__clienteViewMode) modeClientes('form'); else modeClientes(window.__clienteViewMode);
+    const qtd=$c('clienteQtdResumo'); if(qtd) qtd.textContent=String((state.clientes||[]).length);
+    const list=$c('clienteCompactList');
+    const detail=$c('clienteCompactDetail');
+    const items=filteredClientes();
+    const cli=selectedCliente(items);
+    if(list){
+      list.innerHTML = items.length ? items.map(c=>`<button type="button" class="clienteItem${c.id===window.__clienteSelectedId?' isActive':''}" data-cliente-id="${eattr(c.id)}"><div><div class="clienteItem__name">${ehtml(c.nome||'Cliente sem nome')}</div><div class="clienteItem__meta">${ehtml(c.wpp||c.tel||'Sem telefone')}</div></div><div class="clienteItem__photos">${Array.isArray(c.fotos)?c.fotos.length:0} foto(s)</div></button>`).join('') : `<div class="hint" style="padding:16px;">Nenhuma cliente encontrada.</div>`;
+      list.querySelectorAll('[data-cliente-id]').forEach(b=>b.addEventListener('click',()=>{ window.__clienteSelectedId=b.dataset.clienteId||''; modeClientes('form'); renderClientesCompactFinal(); }));
+    }
+    if(detail){
+      if(!cli){ detail.innerHTML=`<div class="hint">Clique em + Nova cliente para cadastrar.</div>`; return; }
+      detail.innerHTML = `<div class="clienteDetail__head"><div><h3>${ehtml(cli.nome||'Nova cliente')}</h3><div class="hint">Preencha os dados e confirme o cadastro.</div></div></div>
+        <div class="clienteDetail__grid" data-cliente-id="${eattr(cli.id)}">
+          <label class="field"><span>Cliente</span><input id="cliDetNome" value="${eattr(cli.nome||'')}" placeholder="Nome completo"></label>
+          <label class="field"><span>WhatsApp</span><input id="cliDetWpp" value="${eattr(cli.wpp||'')}" placeholder="Ex: +55 17 99999-9999"></label>
+          <label class="field"><span>Telefone</span><input id="cliDetTel" value="${eattr(cli.tel||'')}"></label>
+          <label class="field"><span>Nascimento</span><input id="cliDetNasc" type="date" value="${eattr(cli.nasc||'')}"></label>
+          <label class="field"><span>Alergia</span><select id="cliDetAlergia"><option value="N" ${String(cli.alergia||'N')==='N'?'selected':''}>Não</option><option value="S" ${String(cli.alergia||'N')==='S'?'selected':''}>Sim</option></select></label>
+          <label class="field"><span>Quais alergias?</span><input id="cliDetQuais" value="${eattr(cli.quais||'')}"></label>
+          <label class="field"><span>Gestante</span><select id="cliDetGestante"><option value="N" ${String(cli.gestante||'N')==='N'?'selected':''}>Não</option><option value="S" ${String(cli.gestante||'N')==='S'?'selected':''}>Sim</option></select></label>
+          <label class="field"><span>N° do molde</span><input id="cliDetMolde" value="${eattr(cli.molde||'')}"></label>
+          <label class="field clienteDetail__wide"><span>Observação</span><textarea id="cliDetObs" rows="3">${ehtml(cli.obs||'')}</textarea></label>
+        </div>
+        <div class="clienteDetail__actions"><button class="btn btn--ghost" id="cliDetFotos" type="button">📁 Fotos da cliente (${Array.isArray(cli.fotos)?cli.fotos.length:0})</button><button class="btn btn--ghost" id="cliDetDel" type="button">Excluir</button></div>`;
+      const map=[['cliDetNome','nome','input'],['cliDetWpp','wpp','input'],['cliDetTel','tel','input'],['cliDetNasc','nasc','change'],['cliDetAlergia','alergia','change'],['cliDetQuais','quais','input'],['cliDetGestante','gestante','change'],['cliDetMolde','molde','input'],['cliDetObs','obs','input']];
+      map.forEach(([id,key,ev])=>$c(id)?.addEventListener(ev,evn=>{ cli[key]=evn.target.value; saveNow(); if(key==='nome') setTimeout(renderClientesCompactFinal,80); }));
+      $c('cliDetFotos')?.addEventListener('click',()=>{ try{ renderClientPhotoPanel(); }catch{} alert('As fotos continuam salvas na pasta da cliente.'); });
+      $c('cliDetDel')?.addEventListener('click',()=>{ if(!confirm('Excluir esta cliente?')) return; state.clientes=(state.clientes||[]).filter(x=>x.id!==cli.id); window.__clienteSelectedId=''; saveNow(); try{ updateAgendaAutoCells(); updateAtendimentosAutoCells(); }catch{} renderClientesCompactFinal(); });
+    }
+  };
+  const oldRender = window.renderClientes;
+  window.renderClientes = renderClientes = function(){
+    try{ if(oldRender && document.querySelector('#tblCli tbody')) oldRender(); }catch{}
+    renderClientesCompactFinal();
+  };
+  document.addEventListener('click', function(e){
+    const b=e.target && e.target.closest ? e.target.closest('#btnAddCliente') : null;
+    if(!b) return;
+    setTimeout(()=>{ const first=(state.clientes||[])[0]; if(first) window.__clienteSelectedId=first.id; modeClientes('form'); renderClientesCompactFinal(); },120);
+  }, true);
+})();
+
+(function(){
+  function $(id){return document.getElementById(id)}
+  function validHex(v){ v=String(v||'').trim(); if(!v.startsWith('#')) v='#'+v; return /^#[0-9a-fA-F]{6}$/.test(v)?v.toUpperCase():null; }
+  function syncColorInputs(){
+    const p=$('cfgCorPrimaria'), a=$('cfgCorAcento'), ph=$('cfgCorPrimariaHex'), ah=$('cfgCorAcentoHex');
+    if(ph && p) ph.value=(p.value||'#7B2CBF').toUpperCase();
+    if(ah && a) ah.value=(a.value||'#F72585').toUpperCase();
+  }
+  function applyFromHex(){
+    const p=$('cfgCorPrimaria'), a=$('cfgCorAcento'), ph=$('cfgCorPrimariaHex'), ah=$('cfgCorAcentoHex');
+    const hp=validHex(ph?.value||p?.value), ha=validHex(ah?.value||a?.value);
+    if(hp && p) p.value=hp; if(ha && a) a.value=ha;
+    try{ state.settings.corPrimaria=p?.value||hp||state.settings.corPrimaria; state.settings.corAcento=a?.value||ha||state.settings.corAcento; applyTheme(); saveSoft(); scheduleSync(); }catch{}
+    syncColorInputs();
+  }
+  function bindEasyColors(){
+    const p=$('cfgCorPrimaria'), a=$('cfgCorAcento'), ph=$('cfgCorPrimariaHex'), ah=$('cfgCorAcentoHex'), btn=$('btnApplyColors');
+    if(!p||!a) return;
+    syncColorInputs();
+    [p,a].forEach(el=>{ if(!el.__easyColor){ el.__easyColor=true; el.addEventListener('input',()=>{ syncColorInputs(); applyFromHex(); }); }});
+    [ph,ah].forEach(el=>{ if(el && !el.__easyColor){ el.__easyColor=true; el.addEventListener('change',applyFromHex); el.addEventListener('blur',applyFromHex); }});
+    if(btn && !btn.__easyColor){ btn.__easyColor=true; btn.addEventListener('click',applyFromHex); }
+  }
+  const oldBind = window.bindConfig;
+  if(typeof oldBind==='function') window.bindConfig = bindConfig = function(){ const r=oldBind.apply(this,arguments); setTimeout(bindEasyColors,50); return r; };
+  document.addEventListener('DOMContentLoaded',()=>setTimeout(bindEasyColors,500));
+  setTimeout(bindEasyColors,1000);
+})();
