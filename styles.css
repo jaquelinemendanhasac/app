@@ -1204,95 +1204,30 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
   .agendaCompact__filterRow{ grid-template-columns:1fr; }
 }
 
-/* Ajustes mobile solicitados — agenda, WhatsApp, clientes, CRM e RGB */
-@media(max-width:900px){
-  .agendaCompact{display:flex;flex-direction:column;gap:12px;}
-  .agendaCompact__right{order:1;min-height:auto;}
-  .agendaCompact__left{order:2;}
-  .agendaCompact__list{max-height:300px;}
-  .agendaDetail__head{margin-bottom:10px;}
-  .agendaDetail__actions .btn{width:100%;justify-content:center;}
-}
-@media(max-width:768px){
-  .panel__head{margin-bottom:10px;}
-  .actions{gap:8px;}
-  .actions .btn{flex:1 1 100%;}
-  .wppTemplatesBox{max-height:430px;overflow-y:auto;padding-right:12px;}
-  .wppTemplatesBox textarea{min-height:86px;}
-  .crmRemarketingBox #crmQueue{max-height:260px;overflow-y:auto;padding-right:6px;}
-  .crmRemarketingTableWrap{max-height:340px;overflow:auto;}
-  .clientesCompactList{max-height:230px;}
-  .clienteFichaActions{gap:8px;}
-  .clienteFichaActions .btn,.clienteFichaActions .iconBtn{width:100%;justify-content:center;}
-}
-.rgbColorPanel{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.rgbColorBox{border:1px solid var(--line,#e5e7eb);border-radius:16px;padding:12px;background:#fff;display:grid;gap:10px;}
-.rgbColorHead{display:flex;align-items:center;justify-content:space-between;gap:10px;}
-.rgbPreview{width:34px;height:34px;border-radius:999px;border:1px solid var(--line,#e5e7eb);box-shadow:0 4px 12px rgba(15,23,42,.12);background:#7B2CBF;}
-.rgbColorBox label{display:grid;grid-template-columns:22px 1fr;align-items:center;gap:8px;font-weight:900;color:var(--text,#111827);}
-.rgbColorBox input[type="range"]{width:100%;accent-color:var(--primary,#7B2CBF);}
-@media(max-width:768px){.rgbColorPanel{grid-template-columns:1fr}.rgbColorBox{padding:14px}.rgbColorBox input[type="range"]{height:32px}}
-
-/* Configurações: seletor de cor nativo, igual ao cursor do navegador/celular */
-.nativeColorPanel{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.nativeColorBox{border:1px solid var(--line,#e5e7eb);border-radius:18px;padding:16px;background:#fff;display:grid;gap:14px;}
-.nativeColorHead{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.nativeColorInput{width:88px;height:52px;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:#fff;padding:6px;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.08);}
-.nativeColorInput::-webkit-color-swatch-wrapper{padding:0;border-radius:8px;}
-.nativeColorInput::-webkit-color-swatch{border:none;border-radius:8px;}
-.nativeColorInput::-moz-color-swatch{border:none;border-radius:8px;}
-.nativeColorFields{display:grid;grid-template-columns:repeat(3,72px);gap:10px;align-items:center;}
-.nativeColorFields label{display:grid;gap:6px;text-align:center;font-weight:800;color:var(--text,#111827);}
-.nativeColorFields input{width:100%;height:42px;border:1px solid var(--line,#e5e7eb);border-radius:8px;text-align:center;font-weight:800;background:#f9fafb;}
-@media(max-width:768px){
-  .nativeColorPanel{grid-template-columns:1fr;}
-  .nativeColorBox{padding:14px;}
-  .nativeColorInput{width:110px;height:58px;}
-  .nativeColorFields{grid-template-columns:repeat(3,minmax(64px,1fr));}
-}
-
-/* v70 — Clientes organizado em botões internos para celular */
-.clientFolderActions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 14px;}
-.clientFolderBtn{border:1px solid var(--line,#e5e7eb);background:#fff;border-radius:999px;padding:13px 10px;font-weight:900;color:var(--text,#111827);box-shadow:0 1px 4px rgba(15,23,42,.04);cursor:pointer;}
-.clientFolderBtn.active{border-color:transparent;background:linear-gradient(135deg,var(--accent,#d765d7),var(--primary,#871844));color:#fff;}
-.clientesCompactPanel{margin-top:0;}
-.clienteFichaBox.is-new{border-color:rgba(215,101,215,.45);box-shadow:0 10px 28px rgba(135,24,68,.08);}
-.clienteModeTitle{margin:0 0 8px;font-size:1.05rem;font-weight:900;}
-.clienteModeHint{margin:0 0 12px;color:var(--muted,#6b7280);}
-@media(max-width:760px){
-  .clientFolderActions{grid-template-columns:1fr;gap:8px;}
-  .clientFolderBtn{width:100%;font-size:1rem;padding:14px 12px;}
-  [data-route="clientes"] .panel__head{margin-bottom:8px;}
-  [data-route="clientes"] .clientesCompactTop{margin-bottom:8px;}
-  [data-route="clientes"] .clientesCompactLayout{gap:10px;}
-  [data-route="clientes"] .clienteFichaBox{order:1;}
-  [data-route="clientes"] .clientesCompactSide{order:2;}
-  [data-route="clientes"] #clientesGaleriaBox{margin-top:0!important;}
-}
-
-/* PATCH FINAL MOBILE — logo, seletor de cores e agenda */
-.logoActionsFix{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:100%!important;}
-.logoActionsFix .btn{width:100%!important;max-width:100%!important;justify-content:center!important;}
-label[for="cfgLogoFile"], #btnClearLogo{max-width:100%;}
-
-.sjmColorPicker{margin-top:12px;border:1px solid var(--line,#e5e7eb);border-radius:22px;padding:16px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06);}
-.sjmColorPicker__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
-.sjmColorPicker__title{font-weight:800;font-size:18px;color:var(--ink,#202033);}
-.sjmColorPicker__swatch{width:54px;height:54px;border-radius:18px;border:1px solid #ddd;box-shadow:0 8px 18px rgba(0,0,0,.14);}
-.sjmColorPicker__area{position:relative;height:160px;border-radius:14px;overflow:hidden;border:1px solid #ddd;touch-action:none;background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--pickerHue,#7B2CBF));}
-.sjmColorPicker__cursor{position:absolute;width:22px;height:22px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.25);transform:translate(-50%,-50%);left:100%;top:0%;pointer-events:none;}
-.sjmColorPicker__hue{width:100%;height:26px;margin:14px 0 10px 0;accent-color:var(--accent,#F72585);}
-.sjmColorPicker__rgb{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px;}
-.sjmColorPicker__rgb label{display:flex;flex-direction:column-reverse;align-items:center;gap:6px;font-weight:800;color:var(--ink,#202033);}
-.sjmColorPicker__rgb input{width:100%;text-align:center;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px;font-weight:800;background:#fff;}
-.sjmColorPicker__hex{display:block;margin-top:12px;color:#6b7280;font-weight:700;}
-.nativeColorBox .nativeColorInput{display:none!important;}
-.nativeColorFields{display:none!important;}
-@media(max-width:760px){
-  .agendaCompact__right{scroll-margin-top:150px;}
-  .agendaCompact__left{max-height:420px;overflow:auto;-webkit-overflow-scrolling:touch;}
-  .sjmColorPicker{padding:14px;border-radius:20px;}
-  .sjmColorPicker__area{height:140px;}
-  .sjmColorPicker__rgb{gap:8px;}
-  .sjmColorPicker__rgb input{padding:10px 6px;}
+/* ===== Ajustes mobile Allan - WhatsApp, Agenda e Config ===== */
+.boxToggle{ padding:0; overflow:hidden; }
+.boxToggle__summary{ list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; font-weight:800; color:var(--primary); }
+.boxToggle__summary::-webkit-details-marker{ display:none; }
+.boxToggle__summary small{ font-weight:600; color:var(--muted); font-size:12px; }
+.boxToggle__summary:after{ content:'▾'; font-size:18px; transition:transform .2s ease; }
+.boxToggle[open] .boxToggle__summary:after{ transform:rotate(180deg); }
+.boxToggle > .field,
+.boxToggle > .actions{ margin-left:16px; margin-right:16px; }
+.boxToggle > .actions{ margin-bottom:16px; }
+.logoActions{ display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+.logoActions .btn{ width:100%; justify-content:center; }
+.colorPickerGrid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.colorPickerCard{ border:1px solid var(--line); border-radius:18px; padding:14px; background:rgba(255,255,255,.68); box-shadow:0 10px 26px rgba(24,24,27,.06); }
+.colorPickerCard__top{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-weight:800; margin-bottom:12px; }
+.colorPreview{ width:54px; height:38px; border-radius:12px; border:2px solid rgba(0,0,0,.12); box-shadow:inset 0 0 0 1px rgba(255,255,255,.7); cursor:pointer; display:block; }
+.nativeColor{ width:100%; height:46px; border:0; padding:0; background:transparent; cursor:pointer; }
+.rgbRow{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+.rgbRow label{ font-size:12px; color:var(--muted); font-weight:800; }
+.rgbRow input{ width:100%; min-width:0; padding:9px 7px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--text); font-weight:700; }
+.agendaCompact__right:focus{ outline:3px solid rgba(123,44,191,.18); outline-offset:4px; }
+@media (max-width:760px){
+  .colorPickerGrid{ grid-template-columns:1fr; }
+  .boxToggle__summary{ padding:13px 14px; }
+  .agendaCompact{ gap:10px; }
+  .agendaCompact__right{ scroll-margin-top:14px; }
 }
