@@ -1269,3 +1269,30 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
   [data-route="clientes"] .clientesCompactSide{order:2;}
   [data-route="clientes"] #clientesGaleriaBox{margin-top:0!important;}
 }
+
+/* PATCH FINAL MOBILE — logo, seletor de cores e agenda */
+.logoActionsFix{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:100%!important;}
+.logoActionsFix .btn{width:100%!important;max-width:100%!important;justify-content:center!important;}
+label[for="cfgLogoFile"], #btnClearLogo{max-width:100%;}
+
+.sjmColorPicker{margin-top:12px;border:1px solid var(--line,#e5e7eb);border-radius:22px;padding:16px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.06);}
+.sjmColorPicker__top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.sjmColorPicker__title{font-weight:800;font-size:18px;color:var(--ink,#202033);}
+.sjmColorPicker__swatch{width:54px;height:54px;border-radius:18px;border:1px solid #ddd;box-shadow:0 8px 18px rgba(0,0,0,.14);}
+.sjmColorPicker__area{position:relative;height:160px;border-radius:14px;overflow:hidden;border:1px solid #ddd;touch-action:none;background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,var(--pickerHue,#7B2CBF));}
+.sjmColorPicker__cursor{position:absolute;width:22px;height:22px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.25);transform:translate(-50%,-50%);left:100%;top:0%;pointer-events:none;}
+.sjmColorPicker__hue{width:100%;height:26px;margin:14px 0 10px 0;accent-color:var(--accent,#F72585);}
+.sjmColorPicker__rgb{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px;}
+.sjmColorPicker__rgb label{display:flex;flex-direction:column-reverse;align-items:center;gap:6px;font-weight:800;color:var(--ink,#202033);}
+.sjmColorPicker__rgb input{width:100%;text-align:center;border:1px solid var(--line,#e5e7eb);border-radius:14px;padding:12px;font-weight:800;background:#fff;}
+.sjmColorPicker__hex{display:block;margin-top:12px;color:#6b7280;font-weight:700;}
+.nativeColorBox .nativeColorInput{display:none!important;}
+.nativeColorFields{display:none!important;}
+@media(max-width:760px){
+  .agendaCompact__right{scroll-margin-top:150px;}
+  .agendaCompact__left{max-height:420px;overflow:auto;-webkit-overflow-scrolling:touch;}
+  .sjmColorPicker{padding:14px;border-radius:20px;}
+  .sjmColorPicker__area{height:140px;}
+  .sjmColorPicker__rgb{gap:8px;}
+  .sjmColorPicker__rgb input{padding:10px 6px;}
+}
