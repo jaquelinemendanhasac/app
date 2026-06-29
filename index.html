@@ -305,41 +305,44 @@
 
         <div class="box">
           <h3>Templates editáveis</h3>
-          <label class="field">
-            <span>Confirmação (ao agendar)</span>
-            <textarea id="tplConfirmacao" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Lembrete (1 dia antes)</span>
-            <textarea id="tplLembrete" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Agradecimento (após atendimento)</span>
-            <textarea id="tplAgradecimento" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Envio das fotos do procedimento</span>
-            <textarea id="tplFotoProcedimento" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Cartão fidelidade</span>
-            <textarea id="tplFidelidade" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Aniversário da cliente</span>
-            <textarea id="tplAniversario" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Reativação / cliente sumida</span>
-            <textarea id="tplReativacao" rows="3"></textarea>
-          </label>
-          <label class="field">
-            <span>Relatório diário (para você)</span>
-            <textarea id="tplRelatorio" rows="3"></textarea>
-          </label>
+          <button class="btn btn--ghost" id="btnToggleTemplatesWpp" type="button">Abrir textos dos templates</button>
+          <div id="wppTemplatesWrap" class="isHidden" style="margin-top:12px;">
+            <label class="field">
+              <span>Confirmação (ao agendar)</span>
+              <textarea id="tplConfirmacao" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Lembrete (1 dia antes)</span>
+              <textarea id="tplLembrete" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Agradecimento (após atendimento)</span>
+              <textarea id="tplAgradecimento" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Envio das fotos do procedimento</span>
+              <textarea id="tplFotoProcedimento" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Cartão fidelidade</span>
+              <textarea id="tplFidelidade" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Aniversário da cliente</span>
+              <textarea id="tplAniversario" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Reativação / cliente sumida</span>
+              <textarea id="tplReativacao" rows="3"></textarea>
+            </label>
+            <label class="field">
+              <span>Relatório diário (para você)</span>
+              <textarea id="tplRelatorio" rows="3"></textarea>
+            </label>
 
-          <div class="actions">
-            <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
+            <div class="actions">
+              <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
+            </div>
           </div>
         </div>
       </div>
