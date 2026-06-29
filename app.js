@@ -280,6 +280,48 @@ const num = (v)=> {
 };
 
 const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(2,6);
+
+/* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
+/* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
+   faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
+const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
+
+function normalizeProcName(nome){
+  return String(nome || "").trim().toUpperCase();
+}
+
+function isSpecialProcedure(nome){
+  return SPECIAL_PROC_NAMES.includes(normalizeProcName(nome));
+}
+
+function specialProceduresDefault(){
+  return [
+    { id: uid(), nome:"Médico", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Folga", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Compromisso", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Reunião", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+  ];
+}
+
+function ensureSpecialProcedures(targetState = state){
+  if(!targetState || !Array.isArray(targetState.procedimentos)) return;
+  const exists = (nome)=> targetState.procedimentos.some(p => normalizeProcName(p?.nome) === normalizeProcName(nome));
+  specialProceduresDefault().forEach((sp)=>{
+    if(!exists(sp.nome)) targetState.procedimentos.push(sp);
+  });
+  targetState.procedimentos.forEach((p)=>{
+    if(isSpecialProcedure(p?.nome)){
+      p.especial = true;
+      p.categoria = p.categoria || "Sistema";
+      p.preco = 0;
+      p.precoBase = 0;
+      p.reajuste = "";
+      p.historico = [];
+    }
+  });
+}
+
+
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 
 function fmtBRDate(iso){
@@ -1013,46 +1055,6 @@ function clientWpp(name){
 function procDuracao(nome){
   const p = state.procedimentos.find(x => x.nome === nome);
   return p?.duracaoMin || 60;
-}
-
-/* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
-/* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
-   faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
-const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
-
-function normalizeProcName(nome){
-  return String(nome || "").trim().toUpperCase();
-}
-
-function isSpecialProcedure(nome){
-  return SPECIAL_PROC_NAMES.includes(normalizeProcName(nome));
-}
-
-function specialProceduresDefault(){
-  return [
-    { id: uid(), nome:"Médico", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
-    { id: uid(), nome:"Folga", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
-    { id: uid(), nome:"Compromisso", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
-    { id: uid(), nome:"Reunião", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
-  ];
-}
-
-function ensureSpecialProcedures(targetState = state){
-  if(!targetState || !Array.isArray(targetState.procedimentos)) return;
-  const exists = (nome)=> targetState.procedimentos.some(p => normalizeProcName(p?.nome) === normalizeProcName(nome));
-  specialProceduresDefault().forEach((sp)=>{
-    if(!exists(sp.nome)) targetState.procedimentos.push(sp);
-  });
-  targetState.procedimentos.forEach((p)=>{
-    if(isSpecialProcedure(p?.nome)){
-      p.especial = true;
-      p.categoria = p.categoria || "Sistema";
-      p.preco = 0;
-      p.precoBase = 0;
-      p.reajuste = "";
-      p.historico = [];
-    }
-  });
 }
 
 /* =================== CONFLITO POR DURAÇÃO =================== */
