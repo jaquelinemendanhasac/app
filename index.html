@@ -305,40 +305,40 @@
 
         <div class="box">
           <h3>Templates editáveis</h3>
-          <button class="btn btn--ghost" id="btnToggleTemplatesWpp" type="button">Abrir textos dos templates</button>
-          <div id="wppTemplatesWrap" class="isHidden" style="margin-top:12px;">
-            <label class="field">
-              <span>Confirmação (ao agendar)</span>
-              <textarea id="tplConfirmacao" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Lembrete (1 dia antes)</span>
-              <textarea id="tplLembrete" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Agradecimento (após atendimento)</span>
-              <textarea id="tplAgradecimento" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Envio das fotos do procedimento</span>
-              <textarea id="tplFotoProcedimento" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Cartão fidelidade</span>
-              <textarea id="tplFidelidade" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Aniversário da cliente</span>
-              <textarea id="tplAniversario" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Reativação / cliente sumida</span>
-              <textarea id="tplReativacao" rows="3"></textarea>
-            </label>
-            <label class="field">
-              <span>Relatório diário (para você)</span>
-              <textarea id="tplRelatorio" rows="3"></textarea>
-            </label>
+          <p class="hint" style="margin-top:-4px;">Toque na seta para abrir e editar apenas o texto desejado.</p>
+          <div id="wppTemplatesWrap" class="wppTemplateAccordions" style="margin-top:12px;">
+            <details class="wppTplItem">
+              <summary>Confirmação (ao agendar)</summary>
+              <label class="field"><textarea id="tplConfirmacao" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Lembrete (1 dia antes)</summary>
+              <label class="field"><textarea id="tplLembrete" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Agradecimento (após atendimento)</summary>
+              <label class="field"><textarea id="tplAgradecimento" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Envio das fotos do procedimento</summary>
+              <label class="field"><textarea id="tplFotoProcedimento" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Cartão fidelidade</summary>
+              <label class="field"><textarea id="tplFidelidade" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Aniversário da cliente</summary>
+              <label class="field"><textarea id="tplAniversario" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Reativação / cliente sumida</summary>
+              <label class="field"><textarea id="tplReativacao" rows="5"></textarea></label>
+            </details>
+            <details class="wppTplItem">
+              <summary>Relatório diário (para você)</summary>
+              <label class="field"><textarea id="tplRelatorio" rows="5"></textarea></label>
+            </details>
 
             <div class="actions">
               <button class="btn" id="btnSaveWpp">Salvar WhatsApp</button>
