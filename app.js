@@ -2914,6 +2914,17 @@ function bindWppUI(){
   setV('tplReativacao', state.wpp.tplReativacao || '');
   setV('tplRelatorio', state.wpp.tplRelatorio || '');
 
+  const tplBtn = byId('btnToggleTemplatesWpp');
+  const tplWrap = byId('wppTemplatesWrap');
+  if(tplBtn && tplWrap && !tplBtn.__wppToggleBound){
+    tplBtn.__wppToggleBound = true;
+    tplBtn.addEventListener('click', ()=>{
+      const closed = tplWrap.classList.contains('isHidden');
+      tplWrap.classList.toggle('isHidden', !closed);
+      tplBtn.textContent = closed ? 'Fechar textos dos templates' : 'Abrir textos dos templates';
+    });
+  }
+
   const persistWpp = ()=>{
     state.wpp = state.wpp && typeof state.wpp === 'object' ? state.wpp : {};
     state.wpp.horaLembrete = normalizeHora(byId('wppHoraLembrete')?.value, '09:00');
@@ -9394,21 +9405,23 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
         <div class="box"><h3>Configuração do cartão</h3>
           <div class="row">
             <label class="field"><span>Cartão fidelidade</span><select id="fidCampanhaAtiva"><option value="true" ${cardOn?'selected':''}>Ativado</option><option value="false" ${!cardOn?'selected':''}>Desativado</option></select></label>
-            <label class="field"><span>Tipo de recompensa</span><select id="fidTipoRecompensa"><option ${s.fidelidade.tipoRecompensa==='Serviço gratuito'?'selected':''}>Serviço gratuito</option><option ${s.fidelidade.tipoRecompensa==='Desconto'?'selected':''}>Desconto</option><option ${s.fidelidade.tipoRecompensa==='Brinde'?'selected':''}>Brinde</option><option ${s.fidelidade.tipoRecompensa==='Selo extra'?'selected':''}>Selo extra</option></select></label>
           </div>
-          <div class="row">
-            <label class="field"><span>Data de início</span><input id="fidInicio" type="date" value="${esc(s.fidelidade.validadeInicio)}"></label>
-            <label class="field"><span>Data final</span><input id="fidFim" type="date" value="${esc(s.fidelidade.validadeFim)}"></label>
-          </div>
-          <div class="row">
-            <label class="field"><span>Selos necessários</span><input id="fidSelos" type="number" min="1" value="${esc(s.fidelidade.selos)}"></label>
-            <label class="field"><span>Selos iniciais</span><input id="fidIniciais" type="number" min="0" value="${esc(s.fidelidade.iniciais)}"></label>
-          </div>
-          <div class="row">
-            <label class="field"><span>Reiniciar após dias sem atendimento</span><input id="fidResetDias" type="number" min="1" value="${esc(s.fidelidade.resetDias)}"></label>
+          ${cardOn ? `
+            <div class="row">
+              <label class="field"><span>Tipo de recompensa</span><select id="fidTipoRecompensa"><option ${s.fidelidade.tipoRecompensa==='Serviço gratuito'?'selected':''}>Serviço gratuito</option><option ${s.fidelidade.tipoRecompensa==='Desconto'?'selected':''}>Desconto</option><option ${s.fidelidade.tipoRecompensa==='Brinde'?'selected':''}>Brinde</option><option ${s.fidelidade.tipoRecompensa==='Selo extra'?'selected':''}>Selo extra</option></select></label>
+              <label class="field"><span>Data de início</span><input id="fidInicio" type="date" value="${esc(s.fidelidade.validadeInicio)}"></label>
+            </div>
+            <div class="row">
+              <label class="field"><span>Data final</span><input id="fidFim" type="date" value="${esc(s.fidelidade.validadeFim)}"></label>
+              <label class="field"><span>Selos necessários</span><input id="fidSelos" type="number" min="1" value="${esc(s.fidelidade.selos)}"></label>
+            </div>
+            <div class="row">
+              <label class="field"><span>Selos iniciais</span><input id="fidIniciais" type="number" min="0" value="${esc(s.fidelidade.iniciais)}"></label>
+              <label class="field"><span>Reiniciar após dias sem atendimento</span><input id="fidResetDias" type="number" min="1" value="${esc(s.fidelidade.resetDias)}"></label>
+            </div>
             <label class="field"><span>Recompensa</span><input id="fidRecompensa" value="${esc(s.fidelidade.recompensa)}"></label>
-          </div>
-          <label class="field"><span>Regra da recompensa</span><textarea id="fidRegraRecompensa" rows="3">${esc(s.fidelidade.regraRecompensa)}</textarea></label>
+            <label class="field"><span>Regra da recompensa</span><textarea id="fidRegraRecompensa" rows="3">${esc(s.fidelidade.regraRecompensa)}</textarea></label>
+          ` : `<div class="hint">Cartão fidelidade desativado. Configurações, lista, alertas e tabela ficam ocultos.</div>`}
           <button class="btn" id="btnSalvarFidelidade" type="button">Salvar fidelidade</button>
           <p id="fidStatusLine" class="hint">${cardOn?'✅ Cartão fidelidade ativo.':'⚠️ Cartão fidelidade desativado.'} ${indOn?'✅ Programa de indicação ativo.':'⚠️ Programa de indicação desativado.'} ${cashOn?'✅ Cashback ativo.':'⚠️ Cashback desativado.'}</p>
         </div>
@@ -9436,13 +9449,18 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       const s=ensure();
       if(e.target.id==='btnSalvarFidelidade'){
         s.fidelidade.campanhaCartaoAtiva=$('fidCampanhaAtiva')?.value==='true';
-        s.fidelidade.programaIndicacaoAtivo=$('fidIndicacaoAtiva')?.value==='true';
-        s.fidelidade.cashbackAtivo=$('fidCashbackAtivo')?.value==='true';
-        s.fidelidade.tipoRecompensa=$('fidTipoRecompensa')?.value||'Serviço gratuito';
-        s.fidelidade.validadeInicio=$('fidInicio')?.value||''; s.fidelidade.validadeFim=$('fidFim')?.value||'';
-        s.fidelidade.selos=n($('fidSelos')?.value)||10; s.fidelidade.iniciais=n($('fidIniciais')?.value)||0; s.fidelidade.resetDias=n($('fidResetDias')?.value)||31;
-        s.fidelidade.recompensa=$('fidRecompensa')?.value||'1 manutenção grátis'; s.fidelidade.regraRecompensa=$('fidRegraRecompensa')?.value||'';
-        s.fidelidade.premioIndicacao=$('fidPremioIndicacao')?.value||s.fidelidade.premioIndicacao||''; s.fidelidade.regrasIndicacao=$('fidRegrasIndicacao')?.value||s.fidelidade.regrasIndicacao||'';
+        if($('fidIndicacaoAtiva')) s.fidelidade.programaIndicacaoAtivo=$('fidIndicacaoAtiva')?.value==='true';
+        if($('fidCashbackAtivo')) s.fidelidade.cashbackAtivo=$('fidCashbackAtivo')?.value==='true';
+        if($('fidTipoRecompensa')) s.fidelidade.tipoRecompensa=$('fidTipoRecompensa')?.value||'Serviço gratuito';
+        if($('fidInicio')) s.fidelidade.validadeInicio=$('fidInicio')?.value||'';
+        if($('fidFim')) s.fidelidade.validadeFim=$('fidFim')?.value||'';
+        if($('fidSelos')) s.fidelidade.selos=n($('fidSelos')?.value)||10;
+        if($('fidIniciais')) s.fidelidade.iniciais=n($('fidIniciais')?.value)||0;
+        if($('fidResetDias')) s.fidelidade.resetDias=n($('fidResetDias')?.value)||31;
+        if($('fidRecompensa')) s.fidelidade.recompensa=$('fidRecompensa')?.value||'1 manutenção grátis';
+        if($('fidRegraRecompensa')) s.fidelidade.regraRecompensa=$('fidRegraRecompensa')?.value||'';
+        if($('fidPremioIndicacao')) s.fidelidade.premioIndicacao=$('fidPremioIndicacao')?.value||s.fidelidade.premioIndicacao||'';
+        if($('fidRegrasIndicacao')) s.fidelidade.regrasIndicacao=$('fidRegrasIndicacao')?.value||s.fidelidade.regrasIndicacao||'';
         persist('fidelidade'); clearRewardAlerts(); renderFidelidadeFinal(); patchDashboard(); alert('Fidelidade salva ✅'); return;
       }
       if(e.target.id==='btnAddIndicacao'){
@@ -9453,6 +9471,25 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       }
       const w=e.target.closest('[data-fid-wpp]');
       if(w){ const nome=w.dataset.fidWpp; const c=(getState().clientes||[]).find(x=>String(x.nome||'').toLowerCase()===String(nome||'').toLowerCase()); const f=loyalty(nome); const txt=String(getState().wpp?.tplFidelidade||'Parabéns, {cliente}! Você ganhou mais um selo no cartão fidelidade de {studio}.').replaceAll('{cliente}',nome).replaceAll('{studio}',getState().settings?.studioNome||'Studio').replaceAll('{selo}',String(f.atual)).replaceAll('{faltam}',String(f.faltam)); const phone=c?.wpp||c?.tel||''; if(phone&&typeof waLink==='function') window.open(waLink(phone,txt),'_blank'); else alert('Cliente sem WhatsApp.'); }
+    });
+    sec.addEventListener('change', e=>{
+      const s=ensure();
+      if(e.target.id==='fidCampanhaAtiva'){
+        s.fidelidade.campanhaCartaoAtiva = e.target.value === 'true';
+        persist('fidelidade-toggle');
+        renderFidelidadeFinal();
+        patchDashboard();
+      }
+      if(e.target.id==='fidIndicacaoAtiva'){
+        s.fidelidade.programaIndicacaoAtivo = e.target.value === 'true';
+        persist('indicacao-toggle');
+        renderFidelidadeFinal();
+      }
+      if(e.target.id==='fidCashbackAtivo'){
+        s.fidelidade.cashbackAtivo = e.target.value === 'true';
+        persist('cashback-toggle');
+        renderFidelidadeFinal();
+      }
     });
   }
 
