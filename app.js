@@ -1061,25 +1061,37 @@ function procDuracao(nome){
 function isConflictByDuration(index){
   const a = state.agenda[index];
   if(!a?.data || !a?.hora) return false;
-  if((a.status||"Agendado")==="Cancelado") return false;
-  if((a.status||"Agendado")==="Bloqueio") return false;
+
+  const stA = (a.status || "Agendado");
+  if(stA === "Cancelado" || stA === "Remarcado") return false;
+  if(stA === "Bloqueio") return false;
 
   const inicioA = new Date(`${a.data}T${a.hora}`);
-  const fimA = new Date(inicioA.getTime() + procDuracao(a.procedimento) * 60000);
+  if(Number.isNaN(inicioA.getTime())) return false;
+
+  const durA = Math.max(1, Number(procDuracao(a.procedimento)) || 60);
+  const fimA = new Date(inicioA.getTime() + durA * 60000);
 
   return state.agenda.some((b, i) => {
     if(i === index) return false;
-    if((b.status||"Agendado") === "Cancelado") return false;
-    if((b.status||"Agendado") === "Bloqueio") return false;
+    if(a.id && b?.id && a.id === b.id) return false;
+
+    const stB = (b?.status || "Agendado");
+    if(stB === "Cancelado" || stB === "Remarcado") return false;
+    if(stB === "Bloqueio") return false;
     if(b.data !== a.data) return false;
     if(!b.hora) return false;
 
     const inicioB = new Date(`${b.data}T${b.hora}`);
-    const fimB = new Date(inicioB.getTime() + procDuracao(b.procedimento) * 60000);
+    if(Number.isNaN(inicioB.getTime())) return false;
+
+    const durB = Math.max(1, Number(procDuracao(b.procedimento)) || 60);
+    const fimB = new Date(inicioB.getTime() + durB * 60000);
 
     return inicioA < fimB && fimA > inicioB;
   });
 }
+
 
 function updateConflictUI(){}
 
@@ -1824,11 +1836,18 @@ onClick("btnReportToday", ()=> sendReportToday());
 function isConflict(i){
   const a = state.agenda[i];
   if(!a?.data || !a?.hora) return false;
-  if((a.status||"Agendado")==="Bloqueio") return false;
+  const stA = (a.status || "Agendado");
+  if(stA === "Cancelado" || stA === "Remarcado" || stA === "Bloqueio") return false;
   const key = `${a.data}|${a.hora}`;
-  const active = (x)=> (x.status||"Agendado") !== "Cancelado";
-  return state.agenda.some((x,idx)=> idx!==i && active(x) && active(a) && `${x.data}|${x.hora}` === key);
+  return state.agenda.some((x,idx)=>{
+    if(idx === i) return false;
+    if(a.id && x?.id && a.id === x.id) return false;
+    const st = (x?.status || "Agendado");
+    if(st === "Cancelado" || st === "Remarcado" || st === "Bloqueio") return false;
+    return `${x.data}|${x.hora}` === key;
+  });
 }
+
 
 
 function escAttr(v){
@@ -1860,31 +1879,33 @@ function agendaClienteInputHTML(valor=""){
 }
 
 function openAgendaEditorById(agendaId){
+  // Abre a Agenda no formulário compacto e carrega exatamente o registro selecionado.
+  // Corrige o erro em que "Editar" do Calendário abria um novo agendamento vazio.
+  const ag = state.agenda.find(x => x && x.id === agendaId);
+  if(!ag) return;
+
+  window.__agendaSelectedId = agendaId;
   setRoute("agenda");
+  setAgendaViewMode("form");
 
   const doOpen = ()=>{
-    const row = document.querySelector(`#tblAgenda tbody tr[data-id="${agendaId}"]`);
-    if(!row){
-      renderAgendaHard();
-    }
-    const row2 = document.querySelector(`#tblAgenda tbody tr[data-id="${agendaId}"]`);
-    if(!row2) return;
+    ensureAgendaClientesDatalist();
+    renderAgendaCompact();
+    updateAgendaAutoCells();
 
-    document.querySelectorAll('#tblAgenda tbody tr.ok').forEach(el=> el.classList.remove('ok'));
-    row2.scrollIntoView({ behavior: "smooth", block: "center" });
-    row2.classList.add("ok");
+    const detail = byId('agendaCompactDetail') || byId('agendaFormPanel');
+    if(detail) detail.scrollIntoView({ behavior:"smooth", block:"start" });
 
-    const inputNome = row2.querySelectorAll("td")[2]?.querySelector("input");
+    const inputNome = byId('agDetCliente');
     if(inputNome){
       inputNome.focus({ preventScroll:true });
-      inputNome.select();
+      try{ inputNome.select(); }catch{}
     }
-
-    setTimeout(()=> row2.classList.remove("ok"), 1800);
   };
 
   requestAnimationFrame(()=> setTimeout(doOpen, 80));
 }
+
 
 
 
@@ -2018,11 +2039,47 @@ function renderAgendaCompact(){
       <button class="btn btn--ghost" id="agDetDel" type="button">Excluir</button>
     </div>`;
 
-  const refresh = ()=>{ saveSoft(); syncAgendaToAtendimentos(); updateConflictUI(); scheduleSync(); renderAgendaCompact(); };
+  const refresh = ()=>{
+    if(!isSpecialProcedure(ag.procedimento) && (ag.status||'Agendado') !== 'Bloqueio'){
+      ag.valor = procPrice(ag.procedimento, ag.data);
+    } else {
+      ag.valor = 0;
+      ag.recebido = 0;
+    }
+    saveSoft();
+    syncAgendaToAtendimentos();
+    updateConflictUI();
+    scheduleSync();
+    renderAgendaCompact();
+  };
   byId('agDetData')?.addEventListener('change', e=>{ ag.data=e.target.value; refresh(); });
   byId('agDetHora')?.addEventListener('change', e=>{ ag.hora=e.target.value; refresh(); });
-  byId('agDetCliente')?.addEventListener('input', e=>{ ag.cliente=e.target.value; const w=byId('agDetWpp'); if(w) w.value=clientWpp(ag.cliente); saveSoftDebounced(); scheduleSyncDebounced(); });
-  byId('agDetProc')?.addEventListener('change', e=>{ if(isBlock) return; ag.procedimento=e.target.value; const preco=procPrice(ag.procedimento, ag.data); if((ag.status||'Agendado')==='Realizado') ag.recebido=preco; refresh(); });
+  byId('agDetCliente')?.addEventListener('input', e=>{
+    // A digitação aparece imediatamente; só o salvamento fica em lote.
+    ag.cliente = e.target.value;
+    const w = byId('agDetWpp');
+    if(w) w.value = clientWpp(ag.cliente);
+    saveSoftDebounced();
+    scheduleSyncDebounced();
+  });
+  byId('agDetProc')?.addEventListener('change', e=>{
+    if(isBlock) return;
+    ag.procedimento = e.target.value;
+    const preco = procPrice(ag.procedimento, ag.data);
+    ag.valor = preco;
+    const inpValor = byId('agDetValor');
+    if(inpValor) inpValor.value = preco.toFixed(2);
+    if(isSpecialProcedure(ag.procedimento)){
+      ag.recebido = 0;
+      const inpRec = byId('agDetRecebido');
+      if(inpRec) inpRec.value = '0.00';
+    }else if((ag.status||'Agendado')==='Realizado'){
+      ag.recebido = preco;
+      const inpRec = byId('agDetRecebido');
+      if(inpRec) inpRec.value = preco.toFixed(2);
+    }
+    refresh();
+  });
   byId('agDetStatus')?.addEventListener('change', e=>{
     ag.status=e.target.value;
     if(ag.status==='Bloqueio'){ ag.procedimento='—'; ag.recebido=0; }
@@ -2127,9 +2184,13 @@ function renderAgendaHard(){
       if(isBlock) return;
       a.procedimento = getInp(tdProc).value;
       const preco = procPrice(a.procedimento, a.data);
+      a.valor = preco;
       if(inpVal) inpVal.value = preco.toFixed(2);
 
-      if((a.status||"Agendado") === "Realizado"){
+      if(isSpecialProcedure(a.procedimento)){
+        a.recebido = 0;
+        if(inpRec) inpRec.value = "0.00";
+      }else if((a.status||"Agendado") === "Realizado"){
         a.recebido = preco;
         if(inpRec) inpRec.value = preco.toFixed(2);
       }
