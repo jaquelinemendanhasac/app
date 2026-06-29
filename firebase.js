@@ -127,11 +127,19 @@ function bindAuthUI() {
     const email = (document.getElementById("loginEmail")?.value || prompt("Digite seu email para recuperar a senha:") || "").trim();
     if (!email) return setMsg("Digite seu email para recuperar a senha.");
     try {
-      await sendPasswordResetEmail(auth, email);
-      setMsg("Email de recuperação enviado. Confira sua caixa de entrada.");
+      const actionCodeSettings = {
+        url: window.location.origin + window.location.pathname,
+        handleCodeInApp: false
+      };
+      await sendPasswordResetEmail(auth, email, actionCodeSettings);
+      setMsg("Email de recuperação enviado. Confira a caixa de entrada, spam e lixo eletrônico.");
     } catch (err) {
       console.error("Recuperação falhou:", err);
-      setMsg("Não foi possível enviar recuperação. Confira o email digitado.");
+      const code = String(err?.code || "");
+      if (code.includes("invalid-email")) setMsg("Email inválido. Confira o endereço digitado.");
+      else if (code.includes("user-not-found")) setMsg("Não encontrei conta com este email.");
+      else if (code.includes("too-many-requests")) setMsg("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+      else setMsg("Não foi possível enviar recuperação. Confira se o email está cadastrado e tente novamente.");
     }
   });
 }
