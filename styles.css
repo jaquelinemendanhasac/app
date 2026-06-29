@@ -1400,3 +1400,13 @@ button[id*="Cancel"],button[id*="Cancelar"]{background:#fff;color:#374151;border
   .planSummary{flex-direction:column;}
   .planSummary__renew{text-align:left;}
 }
+
+/* ===== WhatsApp templates recolhidos por seta ===== */
+.wppTemplateAccordions{ display:flex; flex-direction:column; gap:10px; }
+.wppTplItem{ border:1px solid var(--line); border-radius:18px; background:#fff; overflow:hidden; }
+.wppTplItem summary{ cursor:pointer; list-style:none; padding:14px 16px; font-weight:1000; color:var(--txt); display:flex; align-items:center; justify-content:space-between; }
+.wppTplItem summary::-webkit-details-marker{ display:none; }
+.wppTplItem summary::after{ content:'▾'; font-size:18px; color:var(--p); transition:transform .18s ease; }
+.wppTplItem[open] summary::after{ transform:rotate(180deg); }
+.wppTplItem .field{ padding:0 14px 14px; }
+.wppTplItem textarea{ min-height:130px; resize:vertical; }
