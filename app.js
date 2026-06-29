@@ -284,14 +284,30 @@ const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36
 /* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
 /* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
    faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
-const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
+const SPECIAL_PROC_CANONICAL = {
+  MEDICO: "Médico",
+  FOLGA: "Folga",
+  COMPROMISSO: "Compromisso",
+  REUNIAO: "Reunião",
+};
+const SPECIAL_PROC_NAMES = Object.keys(SPECIAL_PROC_CANONICAL);
 
 function normalizeProcName(nome){
-  return String(nome || "").trim().toUpperCase();
+  return String(nome || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+}
+
+function specialProcedureKey(nome){
+  const key = normalizeProcName(nome);
+  return Object.prototype.hasOwnProperty.call(SPECIAL_PROC_CANONICAL, key) ? key : "";
 }
 
 function isSpecialProcedure(nome){
-  return SPECIAL_PROC_NAMES.includes(normalizeProcName(nome));
+  return !!specialProcedureKey(nome);
 }
 
 function specialProceduresDefault(){
@@ -305,20 +321,47 @@ function specialProceduresDefault(){
 
 function ensureSpecialProcedures(targetState = state){
   if(!targetState || !Array.isArray(targetState.procedimentos)) return;
-  const exists = (nome)=> targetState.procedimentos.some(p => normalizeProcName(p?.nome) === normalizeProcName(nome));
-  specialProceduresDefault().forEach((sp)=>{
-    if(!exists(sp.nome)) targetState.procedimentos.push(sp);
+
+  // Remove duplicados de procedimentos do sistema sem apagar procedimentos normais.
+  // Ex.: "MEDICO", "Medico" e "Médico" viram apenas "Médico".
+  const seenSpecial = new Set();
+  targetState.procedimentos = targetState.procedimentos.filter((p)=>{
+    if(!p || typeof p !== "object") return false;
+    const key = specialProcedureKey(p.nome);
+    if(!key) return true;
+    if(seenSpecial.has(key)) return false;
+    seenSpecial.add(key);
+    p.nome = SPECIAL_PROC_CANONICAL[key];
+    p.especial = true;
+    p.categoria = "Sistema";
+    p.preco = 0;
+    p.precoBase = 0;
+    p.reajuste = "";
+    p.historico = [];
+    p.ativo = p.ativo || "S";
+    p.duracaoMin = Math.max(1, Number(p.duracaoMin) || 60);
+    return true;
   });
-  targetState.procedimentos.forEach((p)=>{
-    if(isSpecialProcedure(p?.nome)){
-      p.especial = true;
-      p.categoria = p.categoria || "Sistema";
-      p.preco = 0;
-      p.precoBase = 0;
-      p.reajuste = "";
-      p.historico = [];
+
+  specialProceduresDefault().forEach((sp)=>{
+    const key = specialProcedureKey(sp.nome);
+    if(!seenSpecial.has(key)){
+      targetState.procedimentos.push(sp);
+      seenSpecial.add(key);
     }
   });
+
+  // Normaliza referências antigas da agenda para o nome único exibido na lista.
+  if(Array.isArray(targetState.agenda)){
+    targetState.agenda.forEach((a)=>{
+      const key = specialProcedureKey(a?.procedimento);
+      if(key){
+        a.procedimento = SPECIAL_PROC_CANONICAL[key];
+        a.valor = 0;
+        a.recebido = 0;
+      }
+    });
+  }
 }
 
 
