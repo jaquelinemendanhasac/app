@@ -379,6 +379,7 @@ Total recebido: {total}`
       { id: uid(), nome:"Manutenção", preco:90, reajuste:"", duracaoMin: 120 },
       { id: uid(), nome:"Remoção + Nova Aplicação", preco:160, reajuste:"", duracaoMin: 150 },
       { id: uid(), nome:"Remoção de Alongamento", preco:60, reajuste:"", duracaoMin: 60 },
+      ...specialProceduresDefault(),
     ],
 
     clientes: [],
@@ -449,6 +450,7 @@ function sanitizeState(parsed){
       }
     }
   });
+  ensureSpecialProcedures(s);
   s.clientes = arr(s.clientes);
   s.agenda = arr(s.agenda);
   s.materiais = arr(s.materiais);
@@ -978,6 +980,7 @@ function scheduleSync(){
 
 /* =================== CORE LOOKUPS =================== */
 function procPrice(nome, data=null){
+  if(isSpecialProcedure(nome)) return 0;
   const p = state.procedimentos.find(x => x.nome === nome);
   if(!p) return 0;
 
@@ -1010,6 +1013,46 @@ function clientWpp(name){
 function procDuracao(nome){
   const p = state.procedimentos.find(x => x.nome === nome);
   return p?.duracaoMin || 60;
+}
+
+/* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
+/* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
+   faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
+const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
+
+function normalizeProcName(nome){
+  return String(nome || "").trim().toUpperCase();
+}
+
+function isSpecialProcedure(nome){
+  return SPECIAL_PROC_NAMES.includes(normalizeProcName(nome));
+}
+
+function specialProceduresDefault(){
+  return [
+    { id: uid(), nome:"Médico", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Folga", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Compromisso", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+    { id: uid(), nome:"Reunião", preco:0, reajuste:"", duracaoMin:60, categoria:"Sistema", especial:true, ativo:"S" },
+  ];
+}
+
+function ensureSpecialProcedures(targetState = state){
+  if(!targetState || !Array.isArray(targetState.procedimentos)) return;
+  const exists = (nome)=> targetState.procedimentos.some(p => normalizeProcName(p?.nome) === normalizeProcName(nome));
+  specialProceduresDefault().forEach((sp)=>{
+    if(!exists(sp.nome)) targetState.procedimentos.push(sp);
+  });
+  targetState.procedimentos.forEach((p)=>{
+    if(isSpecialProcedure(p?.nome)){
+      p.especial = true;
+      p.categoria = p.categoria || "Sistema";
+      p.preco = 0;
+      p.precoBase = 0;
+      p.reajuste = "";
+      p.historico = [];
+    }
+  });
 }
 
 /* =================== CONFLITO POR DURAÇÃO =================== */
@@ -1045,6 +1088,11 @@ function enforceAgendaRecebidoRules(){
 
     if(status === "Bloqueio"){
       ag.procedimento = "—";
+      ag.recebido = 0;
+      return;
+    }
+
+    if(isSpecialProcedure(ag.procedimento)){
       ag.recebido = 0;
       return;
     }
@@ -1124,6 +1172,14 @@ function custoMateriaisPorCliente(){
 
 /* =================== CRM (Atendimentos) — DERIVED =================== */
 function calcularAtendimento(a){
+  if(isSpecialProcedure(a.procedimento)){
+    a.valor = 0;
+    a.recebido = 0;
+    a.custoMaterial = 0;
+    a.custoTotal = 0;
+    a.lucro = 0;
+    return;
+  }
   a.valor = procPrice(a.procedimento, a.data);
   a.custoMaterial = custoMateriaisPorCliente();
   a.custoTotal = num(a.custoMaterial) + num(a.maoObra);
@@ -1167,6 +1223,12 @@ function syncAgendaToAtendimentos(){
 
     if(status === "Bloqueio"){
       ag.procedimento = "—";
+      ag.recebido = 0;
+      removeAtendimentoFromAgenda(ag.id);
+      return;
+    }
+
+    if(isSpecialProcedure(ag.procedimento)){
       ag.recebido = 0;
       removeAtendimentoFromAgenda(ag.id);
       return;
@@ -1583,11 +1645,16 @@ function handleCalendarRealizadoComFoto(ag){
   if(!ag) return;
 
   ag.status = "Realizado";
-  ag.recebido = procPrice(ag.procedimento, ag.data);
+  ag.recebido = isSpecialProcedure(ag.procedimento) ? 0 : procPrice(ag.procedimento, ag.data);
   saveSoft();
   renderAgendaHard();
   renderCalendar();
   scheduleSync();
+
+  if(isSpecialProcedure(ag.procedimento)){
+    alert('Compromisso marcado como realizado ✅');
+    return;
+  }
 
   if(!canUseFeature('fotos')){
     alert('Atendimento marcado como realizado ✅');
@@ -1657,6 +1724,7 @@ function handleCalendarRealizadoComFoto(ag){
 
 /* =================== SYNC ENGINE =================== */
 function syncDerivedAndUI(){
+  ensureSpecialProcedures();
   __SJM_IS_SYNCING = true;
   try{
     enforceAgendaRecebidoRules();
@@ -2230,11 +2298,11 @@ function renderProcedimentos(){
   body.innerHTML = state.procedimentos.map((p)=>{
     return `
       <tr data-id="${p.id}">
-        <td>${inputHTML({value:p.nome||""})}</td>
-        <td>${inputHTML({value:num(p.preco).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal"})}</td>
-        <td>${inputHTML({value:p.reajuste||"", type:"date"})}</td>
+        <td>${inputHTML({value:p.nome||"", readonly: !!p.especial})}</td>
+        <td>${inputHTML({value:num(p.preco).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly: !!p.especial})}</td>
+        <td>${inputHTML({value:p.reajuste||"", type:"date", readonly: !!p.especial})}</td>
         <td>${inputHTML({value:(p.duracaoMin??60), type:"number", step:"1"})}</td>
-        <td><button class="iconBtn" data-del>✕</button></td>
+        <td>${p.especial ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
       </tr>
     `;
   }).join('');
@@ -2249,9 +2317,10 @@ function renderProcedimentos(){
     const inpReaj = getInp(getCell(tr,2));
     const inpDur  = getInp(getCell(tr,3));
 
-    inpNome?.addEventListener('input', ()=>{ p.nome = inpNome.value; saveSoft(); scheduleSync(); });
+    inpNome?.addEventListener('input', ()=>{ if(p.especial){ inpNome.value = p.nome || ""; return; } p.nome = inpNome.value; saveSoft(); scheduleSync(); });
 
     inpPreco?.addEventListener('input', ()=>{
+      if(p.especial){ p.preco = 0; inpPreco.value = "0.00"; return; }
       const novoPreco = num(inpPreco.value);
       const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
       p.preco = novoPreco;
@@ -2263,6 +2332,7 @@ function renderProcedimentos(){
     });
 
     inpReaj?.addEventListener('change',()=>{
+      if(p.especial){ p.reajuste = ""; inpReaj.value = ""; return; }
       p.reajuste = inpReaj.value || "";
       if(!Array.isArray(p.historico)) p.historico = [];
       if(p.reajuste){
