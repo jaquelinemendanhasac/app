@@ -284,30 +284,14 @@ const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36
 /* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
 /* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
    faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
-const SPECIAL_PROC_CANONICAL = {
-  MEDICO: "Médico",
-  FOLGA: "Folga",
-  COMPROMISSO: "Compromisso",
-  REUNIAO: "Reunião",
-};
-const SPECIAL_PROC_NAMES = Object.keys(SPECIAL_PROC_CANONICAL);
+const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
 
 function normalizeProcName(nome){
-  return String(nome || "")
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ")
-    .toUpperCase();
-}
-
-function specialProcedureKey(nome){
-  const key = normalizeProcName(nome);
-  return Object.prototype.hasOwnProperty.call(SPECIAL_PROC_CANONICAL, key) ? key : "";
+  return String(nome || "").trim().toUpperCase();
 }
 
 function isSpecialProcedure(nome){
-  return !!specialProcedureKey(nome);
+  return SPECIAL_PROC_NAMES.includes(normalizeProcName(nome));
 }
 
 function specialProceduresDefault(){
@@ -321,47 +305,20 @@ function specialProceduresDefault(){
 
 function ensureSpecialProcedures(targetState = state){
   if(!targetState || !Array.isArray(targetState.procedimentos)) return;
-
-  // Remove duplicados de procedimentos do sistema sem apagar procedimentos normais.
-  // Ex.: "MEDICO", "Medico" e "Médico" viram apenas "Médico".
-  const seenSpecial = new Set();
-  targetState.procedimentos = targetState.procedimentos.filter((p)=>{
-    if(!p || typeof p !== "object") return false;
-    const key = specialProcedureKey(p.nome);
-    if(!key) return true;
-    if(seenSpecial.has(key)) return false;
-    seenSpecial.add(key);
-    p.nome = SPECIAL_PROC_CANONICAL[key];
-    p.especial = true;
-    p.categoria = "Sistema";
-    p.preco = 0;
-    p.precoBase = 0;
-    p.reajuste = "";
-    p.historico = [];
-    p.ativo = p.ativo || "S";
-    p.duracaoMin = Math.max(1, Number(p.duracaoMin) || 60);
-    return true;
-  });
-
+  const exists = (nome)=> targetState.procedimentos.some(p => normalizeProcName(p?.nome) === normalizeProcName(nome));
   specialProceduresDefault().forEach((sp)=>{
-    const key = specialProcedureKey(sp.nome);
-    if(!seenSpecial.has(key)){
-      targetState.procedimentos.push(sp);
-      seenSpecial.add(key);
+    if(!exists(sp.nome)) targetState.procedimentos.push(sp);
+  });
+  targetState.procedimentos.forEach((p)=>{
+    if(isSpecialProcedure(p?.nome)){
+      p.especial = true;
+      p.categoria = p.categoria || "Sistema";
+      p.preco = 0;
+      p.precoBase = 0;
+      p.reajuste = "";
+      p.historico = [];
     }
   });
-
-  // Normaliza referências antigas da agenda para o nome único exibido na lista.
-  if(Array.isArray(targetState.agenda)){
-    targetState.agenda.forEach((a)=>{
-      const key = specialProcedureKey(a?.procedimento);
-      if(key){
-        a.procedimento = SPECIAL_PROC_CANONICAL[key];
-        a.valor = 0;
-        a.recebido = 0;
-      }
-    });
-  }
 }
 
 
@@ -10283,4 +10240,188 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       localStorage.setItem(KEY, JSON.stringify(state));
     }catch(e){}
   });
+})();
+
+/* =========================================================
+   v61 — ESTABILIDADE FINAL: salvar sempre + remover duplicados especiais
+   Base: correcao_agenda_whatsapp. Não altera layout.
+   ========================================================= */
+(function(){
+  'use strict';
+
+  function getStateV61(){
+    try{ return window.state || state; }catch(e){ return window.state || null; }
+  }
+  function setStateV61(s){
+    try{ window.state = s; state = s; }catch(e){ window.state = s; }
+  }
+  function stripV61(txt){
+    return String(txt || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Z0-9]/gi,'')
+      .toUpperCase();
+  }
+  const canonicalV61 = {
+    MEDICO: 'Médico',
+    FOLGA: 'Folga',
+    COMPROMISSO: 'Compromisso',
+    REUNIAO: 'Reunião'
+  };
+  function isSpecialKeyV61(k){ return Object.prototype.hasOwnProperty.call(canonicalV61, k); }
+  function makeSpecialV61(key){
+    return { id: (typeof uid === 'function' ? uid() : ('sp_'+Date.now()+'_'+Math.random().toString(36).slice(2))), nome: canonicalV61[key], preco:0, precoBase:0, reajuste:'', historico:[], duracaoMin:60, categoria:'Sistema', especial:true, ativo:'S' };
+  }
+  function normalizeSpecialRecordV61(p, key){
+    p.nome = canonicalV61[key];
+    p.preco = 0;
+    p.precoBase = 0;
+    p.reajuste = '';
+    p.historico = [];
+    p.categoria = 'Sistema';
+    p.especial = true;
+    if(!p.duracaoMin) p.duracaoMin = 60;
+    if(!p.ativo) p.ativo = 'S';
+    if(!p.id) p.id = (typeof uid === 'function' ? uid() : ('sp_'+Date.now()+'_'+Math.random().toString(36).slice(2)));
+    return p;
+  }
+
+  function cleanSpecialProceduresV61(st){
+    if(!st || !Array.isArray(st.procedimentos)) return false;
+    const before = JSON.stringify(st.procedimentos.map(p=>({id:p&&p.id,nome:p&&p.nome,preco:p&&p.preco,especial:p&&p.especial})));
+    const kept = [];
+    const firstSpecial = {};
+
+    (st.procedimentos || []).forEach(function(p){
+      if(!p || typeof p !== 'object') return;
+      const key = stripV61(p.nome);
+      if(isSpecialKeyV61(key)){
+        if(!firstSpecial[key]) firstSpecial[key] = normalizeSpecialRecordV61(p, key);
+        return;
+      }
+      kept.push(p);
+    });
+
+    ['MEDICO','FOLGA','COMPROMISSO','REUNIAO'].forEach(function(key){
+      kept.push(firstSpecial[key] ? normalizeSpecialRecordV61(firstSpecial[key], key) : makeSpecialV61(key));
+    });
+
+    st.procedimentos = kept;
+    const after = JSON.stringify(st.procedimentos.map(p=>({id:p&&p.id,nome:p&&p.nome,preco:p&&p.preco,especial:p&&p.especial})));
+    return before !== after;
+  }
+
+  function writeStableV61(st){
+    if(!st) return;
+    try{ if(typeof ensureMeta === 'function') ensureMeta(st); }catch(e){}
+    try{
+      if(st.meta && typeof st.meta === 'object'){
+        st.meta.updatedAt = Date.now();
+        st.meta.rev = Number(st.meta.rev || 0) + 1;
+      }
+    }catch(e){}
+
+    const raw = JSON.stringify(st);
+    const keys = new Set();
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch(e){}
+    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch(e){}
+    keys.add('studio_sync_pro_banco_unico_v1');
+    try{
+      Object.keys(localStorage || {}).forEach(function(k){
+        if(k === 'studio_sync_pro_banco_unico_v1' || k.indexOf('sjm_sync_pro') === 0 || k.indexOf('studio_sync_pro') === 0) keys.add(k);
+      });
+    }catch(e){}
+    keys.forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
+    try{ sessionStorage.setItem('studio_sync_pro_banco_unico_v1', raw); }catch(e){}
+  }
+
+  let cloudTimerV61 = null;
+  function pushCloudLaterV61(){
+    clearTimeout(cloudTimerV61);
+    cloudTimerV61 = setTimeout(function(){
+      const st = getStateV61();
+      try{ if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') window.__SJM_PUSH_TO_CLOUD(st); }catch(e){}
+      try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+    }, 700);
+  }
+
+  function persistNowV61(reason){
+    const st = getStateV61();
+    if(!st) return;
+    cleanSpecialProceduresV61(st);
+    setStateV61(st);
+    writeStableV61(st);
+    if(reason !== 'boot' && reason !== 'render') pushCloudLaterV61();
+  }
+
+  // substitui salvamento atrasado por gravação local imediata (cloud continua em lote)
+  const previousSaveSoftV61 = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
+  window.saveSoft = function(){
+    try{ persistNowV61('save'); }catch(e){ console.warn('v61 save:', e); }
+    try{
+      if(previousSaveSoftV61 && previousSaveSoftV61.__v61 !== true){
+        // mantém integrações antigas sem depender delas para salvar
+        previousSaveSoftV61();
+      }
+    }catch(e){}
+  };
+  window.saveSoft.__v61 = true;
+  try{ saveSoft = window.saveSoft; }catch(e){}
+  try{ globalThis.saveSoft = window.saveSoft; }catch(e){}
+
+  // limpa remoto antes de aplicar, para não trazer duplicado de volta
+  const oldApplyRemoteV61 = window.__SJM_APPLY_REMOTE_STATE;
+  if(typeof oldApplyRemoteV61 === 'function'){
+    window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+      try{ cleanSpecialProceduresV61(remoteState); }catch(e){}
+      return oldApplyRemoteV61(remoteState);
+    };
+  }
+
+  // protege sanitizeState quando existir
+  if(typeof sanitizeState === 'function'){
+    const oldSanitizeV61 = sanitizeState;
+    try{
+      sanitizeState = function(s){
+        const out = oldSanitizeV61(s);
+        try{ cleanSpecialProceduresV61(out); }catch(e){}
+        return out;
+      };
+      window.sanitizeState = sanitizeState;
+    }catch(e){}
+  }
+
+  // antes de renderizar procedimentos, garante tela sem duplicados
+  function wrapV61(name){
+    let fn = null;
+    try{ fn = window[name] || eval(name); }catch(e){ fn = window[name]; }
+    if(typeof fn !== 'function' || fn.__v61) return;
+    const wrapped = function(){
+      try{ persistNowV61('render'); }catch(e){}
+      return fn.apply(this, arguments);
+    };
+    wrapped.__v61 = true;
+    try{ window[name] = wrapped; }catch(e){}
+    try{ globalThis[name] = wrapped; }catch(e){}
+    try{ eval(name + ' = wrapped'); }catch(e){}
+  }
+  ['renderProcedimentos','renderAllHard','renderAllOnce'].forEach(wrapV61);
+
+  // execução inicial e reforços leves
+  function bootV61(){
+    try{ persistNowV61('boot'); }catch(e){ console.warn('v61 boot:', e); }
+    try{ if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){}
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootV61);
+  else bootV61();
+  setTimeout(bootV61, 300);
+  setTimeout(bootV61, 1200);
+  window.addEventListener('beforeunload', function(){ try{ persistNowV61('beforeunload'); }catch(e){} });
+
+  window.__SJM_CLEAN_SPECIAL_PROCEDURES_V61 = function(){
+    persistNowV61('manual');
+    try{ if(typeof renderAllHard === 'function') renderAllHard(); }catch(e){}
+    return (getStateV61()?.procedimentos || []).map(p=>p.nome);
+  };
 })();
