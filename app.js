@@ -10243,185 +10243,199 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 /* =========================================================
-   v61 — ESTABILIDADE FINAL: salvar sempre + remover duplicados especiais
+   v62 — Correção definitiva: salvar agendamentos + limpar procedimentos especiais
    Base: correcao_agenda_whatsapp. Não altera layout.
    ========================================================= */
 (function(){
   'use strict';
+  if(window.__SJM_SAVE_FIX_V62) return;
+  window.__SJM_SAVE_FIX_V62 = true;
 
-  function getStateV61(){
-    try{ return window.state || state; }catch(e){ return window.state || null; }
-  }
-  function setStateV61(s){
-    try{ window.state = s; state = s; }catch(e){ window.state = s; }
-  }
-  function stripV61(txt){
-    return String(txt || '')
+  function st(){ try{ return window.state || state; }catch(e){ return window.state; } }
+  function setSt(s){ try{ window.state = s; state = s; }catch(e){ window.state = s; } }
+  function uid62(){ try{ return typeof uid === 'function' ? uid() : ('id_'+Date.now()+'_'+Math.random().toString(36).slice(2)); }catch(e){ return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2); } }
+  function canonKey(v){
+    return String(v||'')
       .trim()
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g,'')
-      .replace(/[^A-Z0-9]/gi,'')
+      .replace(/[^a-z0-9]/gi,'')
       .toUpperCase();
   }
-  const canonicalV61 = {
-    MEDICO: 'Médico',
-    FOLGA: 'Folga',
-    COMPROMISSO: 'Compromisso',
-    REUNIAO: 'Reunião'
-  };
-  function isSpecialKeyV61(k){ return Object.prototype.hasOwnProperty.call(canonicalV61, k); }
-  function makeSpecialV61(key){
-    return { id: (typeof uid === 'function' ? uid() : ('sp_'+Date.now()+'_'+Math.random().toString(36).slice(2))), nome: canonicalV61[key], preco:0, precoBase:0, reajuste:'', historico:[], duracaoMin:60, categoria:'Sistema', especial:true, ativo:'S' };
-  }
-  function normalizeSpecialRecordV61(p, key){
-    p.nome = canonicalV61[key];
+  const CANON = { MEDICO:'Médico', FOLGA:'Folga', COMPROMISSO:'Compromisso', REUNIAO:'Reunião' };
+  function isCanon(k){ return Object.prototype.hasOwnProperty.call(CANON, k); }
+  function normalizeSpecial(p, key){
+    p = (p && typeof p === 'object') ? p : {};
+    p.id = p.id || uid62();
+    p.nome = CANON[key];
     p.preco = 0;
     p.precoBase = 0;
     p.reajuste = '';
     p.historico = [];
     p.categoria = 'Sistema';
     p.especial = true;
-    if(!p.duracaoMin) p.duracaoMin = 60;
-    if(!p.ativo) p.ativo = 'S';
-    if(!p.id) p.id = (typeof uid === 'function' ? uid() : ('sp_'+Date.now()+'_'+Math.random().toString(36).slice(2)));
+    p.ativo = p.ativo || 'S';
+    p.duracaoMin = Number(p.duracaoMin || 60);
+    if(!Number.isFinite(p.duracaoMin) || p.duracaoMin <= 0) p.duracaoMin = 60;
     return p;
   }
+  function makeSpecial(key){ return normalizeSpecial({ id: uid62() }, key); }
 
-  function cleanSpecialProceduresV61(st){
-    if(!st || !Array.isArray(st.procedimentos)) return false;
-    const before = JSON.stringify(st.procedimentos.map(p=>({id:p&&p.id,nome:p&&p.nome,preco:p&&p.preco,especial:p&&p.especial})));
-    const kept = [];
-    const firstSpecial = {};
-
-    (st.procedimentos || []).forEach(function(p){
+  function cleanSpecials(s){
+    if(!s || !Array.isArray(s.procedimentos)) return false;
+    const before = JSON.stringify((s.procedimentos||[]).map(p=>[p&&p.id,p&&p.nome,p&&p.preco,p&&p.especial]));
+    const normal = [];
+    const found = {};
+    (s.procedimentos || []).forEach(function(p){
       if(!p || typeof p !== 'object') return;
-      const key = stripV61(p.nome);
-      if(isSpecialKeyV61(key)){
-        if(!firstSpecial[key]) firstSpecial[key] = normalizeSpecialRecordV61(p, key);
+      const key = canonKey(p.nome);
+      if(isCanon(key)){
+        if(!found[key]) found[key] = normalizeSpecial(p, key);
         return;
       }
-      kept.push(p);
+      normal.push(p);
     });
-
     ['MEDICO','FOLGA','COMPROMISSO','REUNIAO'].forEach(function(key){
-      kept.push(firstSpecial[key] ? normalizeSpecialRecordV61(firstSpecial[key], key) : makeSpecialV61(key));
+      normal.push(found[key] ? normalizeSpecial(found[key], key) : makeSpecial(key));
     });
-
-    st.procedimentos = kept;
-    const after = JSON.stringify(st.procedimentos.map(p=>({id:p&&p.id,nome:p&&p.nome,preco:p&&p.preco,especial:p&&p.especial})));
+    s.procedimentos = normal;
+    const after = JSON.stringify((s.procedimentos||[]).map(p=>[p&&p.id,p&&p.nome,p&&p.preco,p&&p.especial]));
     return before !== after;
   }
 
-  function writeStableV61(st){
-    if(!st) return;
-    try{ if(typeof ensureMeta === 'function') ensureMeta(st); }catch(e){}
-    try{
-      if(st.meta && typeof st.meta === 'object'){
-        st.meta.updatedAt = Date.now();
-        st.meta.rev = Number(st.meta.rev || 0) + 1;
-      }
-    }catch(e){}
+  function ensureAgendaShape(s){
+    if(!s) return;
+    s.agenda = Array.isArray(s.agenda) ? s.agenda : [];
+    s.agenda.forEach(function(a){
+      if(!a || typeof a !== 'object') return;
+      a.id = a.id || uid62();
+      a.data = a.data || (typeof todayISO === 'function' ? todayISO() : new Date().toISOString().slice(0,10));
+      a.hora = a.hora || '08:00';
+      a.status = a.status || 'Agendado';
+      a.cliente = a.cliente || '';
+      a.procedimento = a.procedimento || '';
+      a.obs = a.obs || '';
+      if(a.recebido === undefined || a.recebido === null || a.recebido === '') a.recebido = 0;
+    });
+  }
 
-    const raw = JSON.stringify(st);
+  function localKeys(){
     const keys = new Set();
     try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch(e){}
     try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch(e){}
-    keys.add('studio_sync_pro_banco_unico_v1');
+    keys.add('sjm_sync_pro_v1');
     try{
-      Object.keys(localStorage || {}).forEach(function(k){
-        if(k === 'studio_sync_pro_banco_unico_v1' || k.indexOf('sjm_sync_pro') === 0 || k.indexOf('studio_sync_pro') === 0) keys.add(k);
-      });
-    }catch(e){}
-    keys.forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
-    try{ sessionStorage.setItem('studio_sync_pro_banco_unico_v1', raw); }catch(e){}
-  }
-
-  let cloudTimerV61 = null;
-  function pushCloudLaterV61(){
-    clearTimeout(cloudTimerV61);
-    cloudTimerV61 = setTimeout(function(){
-      const st = getStateV61();
-      try{ if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') window.__SJM_PUSH_TO_CLOUD(st); }catch(e){}
-      try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-    }, 700);
-  }
-
-  function persistNowV61(reason){
-    const st = getStateV61();
-    if(!st) return;
-    cleanSpecialProceduresV61(st);
-    setStateV61(st);
-    writeStableV61(st);
-    if(reason !== 'boot' && reason !== 'render') pushCloudLaterV61();
-  }
-
-  // substitui salvamento atrasado por gravação local imediata (cloud continua em lote)
-  const previousSaveSoftV61 = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
-  window.saveSoft = function(){
-    try{ persistNowV61('save'); }catch(e){ console.warn('v61 save:', e); }
-    try{
-      if(previousSaveSoftV61 && previousSaveSoftV61.__v61 !== true){
-        // mantém integrações antigas sem depender delas para salvar
-        previousSaveSoftV61();
+      for(let i=0; i<localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(k === 'sjm_sync_pro_v1' || k.indexOf('sjm_sync_pro_v1__user__') === 0) keys.add(k);
       }
     }catch(e){}
+    return Array.from(keys);
+  }
+
+  let pushingTimer = null;
+  function pushCloudDebounced(){
+    clearTimeout(pushingTimer);
+    pushingTimer = setTimeout(function(){
+      const s = st();
+      try{ if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') window.__SJM_PUSH_TO_CLOUD(s); }catch(e){ console.warn('cloud push v62:', e); }
+      try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+    }, 500);
+  }
+
+  function persist(reason, push){
+    const s = st();
+    if(!s) return;
+    ensureAgendaShape(s);
+    cleanSpecials(s);
+    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch(e){ s.meta = s.meta || {}; }
+    try{
+      s.meta = s.meta || {};
+      s.meta.clientId = (typeof CLIENT_ID !== 'undefined' ? CLIENT_ID : (s.meta.clientId || 'local'));
+      s.meta.rev = Number(s.meta.rev || 0) + 1;
+      s.meta.updatedAt = Date.now();
+    }catch(e){}
+    setSt(s);
+    const raw = JSON.stringify(s);
+    localKeys().forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
+    try{ sessionStorage.setItem('sjm_sync_pro_v1_last_good', raw); }catch(e){}
+    if(push !== false) pushCloudDebounced();
+  }
+
+  // Salvar oficial: grava local imediato e envia remoto em lote.
+  const oldSave = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
+  window.saveSoft = function(){
+    persist('save', true);
+    // Não dependemos do save antigo, mas mantemos compatibilidade sem permitir que erro interrompa.
+    try{ if(oldSave && !oldSave.__v62) oldSave(); }catch(e){}
   };
-  window.saveSoft.__v61 = true;
+  window.saveSoft.__v62 = true;
   try{ saveSoft = window.saveSoft; }catch(e){}
   try{ globalThis.saveSoft = window.saveSoft; }catch(e){}
 
-  // limpa remoto antes de aplicar, para não trazer duplicado de volta
-  const oldApplyRemoteV61 = window.__SJM_APPLY_REMOTE_STATE;
-  if(typeof oldApplyRemoteV61 === 'function'){
-    window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-      try{ cleanSpecialProceduresV61(remoteState); }catch(e){}
-      return oldApplyRemoteV61(remoteState);
-    };
-  }
-
-  // protege sanitizeState quando existir
-  if(typeof sanitizeState === 'function'){
-    const oldSanitizeV61 = sanitizeState;
-    try{
-      sanitizeState = function(s){
-        const out = oldSanitizeV61(s);
-        try{ cleanSpecialProceduresV61(out); }catch(e){}
-        return out;
-      };
-      window.sanitizeState = sanitizeState;
-    }catch(e){}
-  }
-
-  // antes de renderizar procedimentos, garante tela sem duplicados
-  function wrapV61(name){
-    let fn = null;
-    try{ fn = window[name] || eval(name); }catch(e){ fn = window[name]; }
-    if(typeof fn !== 'function' || fn.__v61) return;
-    const wrapped = function(){
-      try{ persistNowV61('render'); }catch(e){}
-      return fn.apply(this, arguments);
-    };
-    wrapped.__v61 = true;
-    try{ window[name] = wrapped; }catch(e){}
-    try{ globalThis[name] = wrapped; }catch(e){}
-    try{ eval(name + ' = wrapped'); }catch(e){}
-  }
-  ['renderProcedimentos','renderAllHard','renderAllOnce'].forEach(wrapV61);
-
-  // execução inicial e reforços leves
-  function bootV61(){
-    try{ persistNowV61('boot'); }catch(e){ console.warn('v61 boot:', e); }
-    try{ if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){}
-  }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootV61);
-  else bootV61();
-  setTimeout(bootV61, 300);
-  setTimeout(bootV61, 1200);
-  window.addEventListener('beforeunload', function(){ try{ persistNowV61('beforeunload'); }catch(e){} });
-
-  window.__SJM_CLEAN_SPECIAL_PROCEDURES_V61 = function(){
-    persistNowV61('manual');
-    try{ if(typeof renderAllHard === 'function') renderAllHard(); }catch(e){}
-    return (getStateV61()?.procedimentos || []).map(p=>p.nome);
+  // Sync derivado não pode terminar sem salvar o estado atualizado.
+  const oldSchedule = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
+  window.scheduleSync = function(){
+    try{ if(oldSchedule && !oldSchedule.__v62) oldSchedule(); }catch(e){}
+    setTimeout(function(){
+      try{ if(!window.__SJM_IS_EDITING) persist('schedule', true); }catch(e){}
+    }, 260);
   };
+  window.scheduleSync.__v62 = true;
+  try{ scheduleSync = window.scheduleSync; }catch(e){}
+  try{ globalThis.scheduleSync = window.scheduleSync; }catch(e){}
+
+  // Quando remoto chegar antigo, não deixar apagar agenda recém salva.
+  const oldApply = window.__SJM_APPLY_REMOTE_STATE;
+  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+    try{ cleanSpecials(remoteState); ensureAgendaShape(remoteState); }catch(e){}
+    const local = st();
+    const rt = Number(remoteState?.meta?.updatedAt || 0);
+    const lt = Number(local?.meta?.updatedAt || 0);
+    const rAgenda = Array.isArray(remoteState?.agenda) ? remoteState.agenda.length : 0;
+    const lAgenda = Array.isArray(local?.agenda) ? local.agenda.length : 0;
+    if(local && (lt > rt || lAgenda > rAgenda)){
+      persist('remote-ignored', true);
+      try{ window.__SJM_SET_SYNC_STATUS && window.__SJM_SET_SYNC_STATUS('Sync: local preservado ✅'); }catch(e){}
+      return;
+    }
+    if(typeof oldApply === 'function') return oldApply(remoteState);
+    try{ setSt(remoteState); persist('remote-applied', false); if(typeof renderAllHard === 'function') renderAllHard(); }catch(e){}
+  };
+
+  // Agenda: garante persistência depois de qualquer input/change/click relevante.
+  function isAgendaTarget(el){
+    if(!el) return false;
+    if(el.closest && (el.closest('#agendaCompactDetail') || el.closest('#tblAgenda') || el.closest('#agendaFormPanel') || el.closest('#agendaListPanel'))) return true;
+    const id = String(el.id || '');
+    return id.indexOf('agDet') === 0 || id.indexOf('agenda') === 0 || id === 'btnAddAgenda' || id === 'btnAgendaTodos';
+  }
+  ['input','change','blur'].forEach(function(ev){
+    document.addEventListener(ev, function(e){
+      if(!isAgendaTarget(e.target)) return;
+      setTimeout(function(){ persist('agenda-'+ev, true); }, ev === 'input' ? 120 : 0);
+    }, true);
+  });
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest && e.target.closest('button');
+    if(!b || !isAgendaTarget(b)) return;
+    setTimeout(function(){ persist('agenda-click', true); }, 80);
+  }, true);
+
+  // Reforça criação de novo agendamento sem mexer no layout.
+  const oldOpenEdit = (typeof openAgendaEditorById === 'function') ? openAgendaEditorById : window.openAgendaEditorById;
+  if(typeof oldOpenEdit === 'function'){
+    window.openAgendaEditorById = function(id){
+      const r = oldOpenEdit.apply(this, arguments);
+      setTimeout(function(){ persist('open-edit', true); }, 120);
+      return r;
+    };
+    try{ openAgendaEditorById = window.openAgendaEditorById; }catch(e){}
+  }
+
+  // Inicialização: limpa duplicados e salva de verdade antes da primeira renderização seguinte.
+  try{ persist('boot', false); }catch(e){ console.warn('boot v62:', e); }
+  setTimeout(function(){ try{ persist('boot-late', true); if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){} }, 350);
+  window.addEventListener('beforeunload', function(){ try{ persist('beforeunload', true); }catch(e){} });
 })();
