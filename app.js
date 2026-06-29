@@ -10028,3 +10028,118 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   document.addEventListener('DOMContentLoaded',()=>setTimeout(bindEasyColors,500));
   setTimeout(bindEasyColors,1000);
 })();
+
+/* =========================================================
+   ✅ v58 — Correção de velocidade na digitação
+   - Não redesenha a tela enquanto a profissional está digitando.
+   - Salva local/sync em lote, sem travar cada tecla.
+   - Mantém todas as funções existentes.
+   ========================================================= */
+(function(){
+  if(window.__SJM_FAST_INPUT_V58) return;
+  window.__SJM_FAST_INPUT_V58 = true;
+
+  function isFieldV58(el){
+    return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
+  }
+  function activeFieldV58(){ return isFieldV58(document.activeElement); }
+  function isTextTypingV58(el){
+    if(!isFieldV58(el)) return false;
+    if(el.tagName === 'SELECT') return false;
+    const type = String(el.type || 'text').toLowerCase();
+    return !['button','checkbox','radio','file','submit','reset','date','time','color'].includes(type);
+  }
+  function debounceV58(fn, ms){
+    let t = null;
+    return function(){
+      const ctx = this, args = arguments;
+      clearTimeout(t);
+      t = setTimeout(function(){ fn.apply(ctx, args); }, ms);
+    };
+  }
+
+  let editingTimerV58 = null;
+  function markEditingV58(){
+    window.__SJM_IS_EDITING = true;
+    clearTimeout(editingTimerV58);
+    editingTimerV58 = setTimeout(function(){ window.__SJM_IS_EDITING = false; }, 700);
+  }
+  document.addEventListener('input', function(e){ if(isTextTypingV58(e.target)) markEditingV58(); }, true);
+  document.addEventListener('focusout', function(){
+    clearTimeout(editingTimerV58);
+    editingTimerV58 = setTimeout(function(){ window.__SJM_IS_EDITING = false; }, 250);
+  }, true);
+
+  const originalSaveSoftV58 = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
+  const originalScheduleSyncV58 = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
+  const originalScheduleCloudPushV58 = (typeof scheduleCloudPush === 'function') ? scheduleCloudPush : window.scheduleCloudPush;
+
+  const flushLocalV58 = debounceV58(function(){
+    try{
+      if(typeof ensureMeta === 'function') ensureMeta(state);
+      localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(KEY, JSON.stringify(state));
+    }catch(e){ console.warn('Save rápido falhou:', e); }
+    try{ if(typeof originalScheduleCloudPushV58 === 'function') originalScheduleCloudPushV58(); }catch(e){}
+  }, 350);
+
+  const fastSaveV58 = function(){
+    try{ if(!window.__SJM_FAST_SAVING && typeof bumpRev === 'function') bumpRev(); }catch(e){}
+    flushLocalV58();
+  };
+
+  // Substitui salvamento pesado por salvamento em lote.
+  try{ window.saveSoft = fastSaveV58; }catch(e){}
+  try{ saveSoft = fastSaveV58; }catch(e){}
+  try{ globalThis.saveSoft = fastSaveV58; }catch(e){}
+
+  // Sincronização também em lote, principalmente durante digitação.
+  if(typeof originalScheduleSyncV58 === 'function'){
+    const syncDebouncedV58 = debounceV58(function(){
+      if(activeFieldV58()){
+        flushLocalV58();
+        return;
+      }
+      try{ originalScheduleSyncV58(); }catch(e){}
+    }, 450);
+    try{ window.scheduleSync = syncDebouncedV58; }catch(e){}
+    try{ scheduleSync = syncDebouncedV58; }catch(e){}
+    try{ globalThis.scheduleSync = syncDebouncedV58; }catch(e){}
+  }
+
+  // Evita render geral roubar foco enquanto digita.
+  function wrapRenderV58(name){
+    const fn = window[name] || (typeof globalThis[name] === 'function' ? globalThis[name] : null);
+    if(typeof fn !== 'function' || fn.__v58Wrapped) return;
+    const wrapped = function(){
+      if(activeFieldV58() && window.__SJM_IS_EDITING){
+        flushLocalV58();
+        return;
+      }
+      return fn.apply(this, arguments);
+    };
+    wrapped.__v58Wrapped = true;
+    try{ window[name] = wrapped; }catch(e){}
+    try{ globalThis[name] = wrapped; }catch(e){}
+    try{ eval(name + ' = wrapped'); }catch(e){}
+  }
+  ['renderAllHard','renderAllOnce','renderDashboard','renderCRM','renderCalendar','renderAgendaHard','renderAgendaCompact','renderClientes','renderClientesCompactFinal','renderProcedimentos','renderMateriaisHard','renderAtendimentosHard','renderDespesas'].forEach(wrapRenderV58);
+
+  // Corrige especificamente Clientes: não redesenha a ficha a cada letra do nome.
+  document.addEventListener('input', function(e){
+    const el = e.target;
+    if(!el) return;
+    if(el.id === 'cliDetNome' || el.id === 'clientesCompactBusca' || el.id === 'clienteFiltroBusca'){
+      markEditingV58();
+    }
+  }, true);
+
+  // Salva imediatamente antes de sair/fechar, para não perder última digitação.
+  window.addEventListener('beforeunload', function(){
+    try{
+      if(typeof ensureMeta === 'function') ensureMeta(state);
+      localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(KEY, JSON.stringify(state));
+    }catch(e){}
+  });
+})();
