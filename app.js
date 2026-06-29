@@ -1416,14 +1416,16 @@ function renderCalendar(){
     const { totalAg, totalRec } = dayBadges(iso);
     const hasConflict = conflictsInDay(iso);
 
-    const mini = agendaOfDay(iso).slice(0,2).map(a=>{
-      const label = (a.status==="Bloqueio") ? "BLOQUEIO" : ((a.cliente||"").trim() || "Sem nome");
-      return `<div class="calMiniItem">${a.hora || ""} — ${label}</div>`;
+    const dayItems = agendaOfDay(iso);
+    const times = dayItems.slice(0,3).map(a=>{
+      const status = (a.status || "Agendado");
+      const kindClass = status === "Bloqueio" ? "block" : (status === "Cancelado" ? "cancel" : (status === "Realizado" ? "done" : "book"));
+      return `<span class="calTime ${kindClass}">${a.hora || "--:--"}</span>`;
     }).join("");
 
-    const badgeAg = totalAg ? `<span class="calBadge">${totalAg}x</span>` : "";
-    const badgeRec = totalRec ? `<span class="calBadge ok">${money(totalRec)}</span>` : "";
-    const badgeConf = hasConflict ? `<span class="calBadge danger">Conflito</span>` : "";
+    const badgeAg = totalAg ? `<span class="calCount">${totalAg}x</span>` : "";
+    const badgeRec = totalRec ? `<span class="calMoney">R$</span>` : "";
+    const badgeConf = hasConflict ? `<span class="calConflict">!</span>` : "";
 
     cells.push(`
       <div class="calDay ${isOther?"isOther":""} ${isToday?"isToday":""} ${isSel?"isSelected":""}" data-iso="${iso}">
@@ -1431,7 +1433,7 @@ function renderCalendar(){
           <div class="calNum">${d.getDate()}</div>
           <div class="calBadges">${badgeAg}${badgeRec}${badgeConf}</div>
         </div>
-        <div class="calMiniList">${mini}</div>
+        <div class="calMiniList">${times}</div>
       </div>
     `);
   }
@@ -1443,6 +1445,10 @@ function renderCalendar(){
       __CAL_SELECTED_ISO = el.dataset.iso;
       renderCalendar();
       renderCalendarDay();
+      setTimeout(()=>{
+        const dayBox = byId("calDayTitle");
+        if(dayBox) dayBox.scrollIntoView({behavior:"smooth", block:"start"});
+      }, 80);
     });
   });
 
