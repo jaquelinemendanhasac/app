@@ -10441,191 +10441,166 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 /* =========================================================
-   v73 — Persistência estável da agenda
-   Objetivo: impedir que Firebase/localStorage antigo apague agendamentos salvos.
-   Não altera layout nem remove funcionalidades.
+   v70 — Persistência blindada da Agenda (merge, não substitui)
+   Objetivo: Firebase/localStorage antigo nunca apaga agendamento local.
+   Não altera aparência.
    ========================================================= */
 (function(){
   'use strict';
-  if(window.__SJM_SAVE_FIX_V73) return;
-  window.__SJM_SAVE_FIX_V73 = true;
+  if(window.__SJM_AGENDA_PERSIST_V70) return;
+  window.__SJM_AGENDA_PERSIST_V70 = true;
 
-  function getState(){ try{ return state || window.state || window.__SJM_GET_STATE?.(); }catch(e){ return window.state || window.__SJM_GET_STATE?.(); } }
+  function getState(){ try{ return state; }catch(e){ return window.state; } }
   function setState(s){ try{ state = s; }catch(e){} try{ window.state = s; }catch(e){} }
   function now(){ return Date.now(); }
-  function newId(){ try{ return typeof uid === 'function' ? uid() : ('id_'+now()+'_'+Math.random().toString(36).slice(2)); }catch(e){ return 'id_'+now()+'_'+Math.random().toString(36).slice(2); } }
-  function clone(v){ try{ return JSON.parse(JSON.stringify(v)); }catch(e){ return v; } }
+  function id(){ return 'ag_'+now()+'_'+Math.random().toString(36).slice(2); }
   function arr(v){ return Array.isArray(v) ? v : []; }
-  function activeKey(){ try{ return ACTIVE_STORAGE_KEY || KEY || 'sjm_sync_pro_v1'; }catch(e){ return 'sjm_sync_pro_v1'; } }
-  function baseKey(){ try{ return KEY || 'sjm_sync_pro_v1'; }catch(e){ return 'sjm_sync_pro_v1'; } }
-  function clientId(){ try{ return CLIENT_ID || 'local'; }catch(e){ return 'local'; } }
-
-  const ARRAY_KEYS = ['agenda','clientes','procedimentos','materiais','atendimentos','despesas','receitasExtras','wppQueue','crmQueue'];
-
-  function normalizeAgendaItem(a){
-    if(!a || typeof a !== 'object') return null;
-    a.id = a.id || newId();
-    a.data = String(a.data || (typeof todayISO === 'function' ? todayISO() : new Date().toISOString().slice(0,10))).slice(0,10);
-    a.hora = String(a.hora || '08:00').slice(0,5);
-    a.cliente = a.cliente || '';
-    a.procedimento = a.procedimento || '';
-    a.status = a.status || 'Agendado';
-    if(a.recebido === undefined || a.recebido === null || a.recebido === '') a.recebido = 0;
-    a.obs = a.obs || '';
-    a.atendId = a.atendId || '';
-    return a;
-  }
-
-  function normalizeState(s){
-    s = (s && typeof s === 'object') ? s : {};
-    try{ if(typeof sanitizeState === 'function') s = sanitizeState(s); }catch(e){}
-    s.meta = (s.meta && typeof s.meta === 'object') ? s.meta : {};
-    s.meta.clientId = s.meta.clientId || clientId();
-    s.meta.rev = Number(s.meta.rev || 0);
-    s.meta.updatedAt = Number(s.meta.updatedAt || 0) || now();
-    ARRAY_KEYS.forEach(function(k){ s[k] = arr(s[k]); });
-    s.agenda = s.agenda.map(normalizeAgendaItem).filter(Boolean);
+  function clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return o; } }
+  function touch(s){
+    if(!s || typeof s !== 'object') return s;
+    s.meta = s.meta && typeof s.meta === 'object' ? s.meta : {};
+    try{ if(typeof CLIENT_ID !== 'undefined') s.meta.clientId = CLIENT_ID; }catch(e){}
+    s.meta.rev = Number(s.meta.rev || 0) + 1;
+    s.meta.updatedAt = now();
     return s;
   }
-
-  function itemStamp(x){ return Number(x && (x.updatedAt || x.criadoEm || x.createdAt || x.alteradoEm || x.modifiedAt) || 0); }
-  function mergeById(oldArr, newArr){
+  function normAgenda(a){
+    if(!a || typeof a !== 'object') return null;
+    const x = Object.assign({}, a);
+    x.id = String(x.id || id());
+    x.data = String(x.data || '').slice(0,10) || (new Date()).toISOString().slice(0,10);
+    x.hora = String(x.hora || '08:00').slice(0,5);
+    x.cliente = String(x.cliente || '');
+    x.procedimento = String(x.procedimento || '');
+    x.status = String(x.status || 'Agendado');
+    x.obs = String(x.obs || '');
+    if(x.recebido === undefined || x.recebido === null || x.recebido === '') x.recebido = 0;
+    x.__savedAt = Number(x.__savedAt || x.updatedAt || x.criadoEm || 0) || now();
+    return x;
+  }
+  function agendaKey(a){
+    if(a.id) return 'id:'+a.id;
+    return ['k',a.data||'',a.hora||'',a.cliente||'',a.procedimento||'',a.status||''].join('|').toLowerCase();
+  }
+  function mergeAgenda(){
     const map = new Map();
-    arr(oldArr).forEach(function(item){ if(item && typeof item === 'object'){ map.set(String(item.id || newId()), clone(item)); } });
-    arr(newArr).forEach(function(item){
-      if(!item || typeof item !== 'object') return;
-      const id = String(item.id || newId());
-      item.id = id;
-      const prev = map.get(id);
-      if(!prev){ map.set(id, clone(item)); return; }
-      const ps = itemStamp(prev), ns = itemStamp(item);
-      if(ns > ps) map.set(id, clone(item));
-      else map.set(id, Object.assign({}, clone(item), clone(prev)));
+    for(const list of arguments){
+      arr(list).forEach(function(raw){
+        const a = normAgenda(raw); if(!a) return;
+        const k = agendaKey(a);
+        const old = map.get(k);
+        if(!old){ map.set(k,a); return; }
+        const scoreOld = Number(old.__savedAt || old.metaUpdatedAt || 0);
+        const scoreNew = Number(a.__savedAt || a.metaUpdatedAt || 0);
+        map.set(k, Object.assign({}, old, a, scoreNew >= scoreOld ? a : old));
+      });
+    }
+    return Array.from(map.values()).sort(function(a,b){
+      return String(b.data||'').localeCompare(String(a.data||'')) || String(a.hora||'').localeCompare(String(b.hora||''));
     });
-    return Array.from(map.values());
   }
-
-  function mergeStates(a, b){
-    a = normalizeState(clone(a || {}));
-    b = normalizeState(clone(b || {}));
-    const newer = Number(b.meta.updatedAt || 0) >= Number(a.meta.updatedAt || 0) ? b : a;
-    const merged = Object.assign({}, a, b);
-    merged.settings = Object.assign({}, a.settings || {}, b.settings || {});
-    merged.wpp = Object.assign({}, a.wpp || {}, b.wpp || {});
-    merged.crm = Object.assign({}, a.crm || {}, b.crm || {});
-    ARRAY_KEYS.forEach(function(k){ merged[k] = mergeById(a[k], b[k]); });
-    merged.agenda = merged.agenda.map(normalizeAgendaItem).filter(Boolean);
-    merged.meta = Object.assign({}, newer.meta || {});
-    merged.meta.clientId = clientId();
-    merged.meta.rev = Math.max(Number(a.meta.rev||0), Number(b.meta.rev||0));
-    merged.meta.updatedAt = Math.max(Number(a.meta.updatedAt||0), Number(b.meta.updatedAt||0), now());
-    return normalizeState(merged);
+  function stateScore(s){
+    if(!s || typeof s !== 'object') return 0;
+    return arr(s.agenda).length*100000 + arr(s.clientes).length*1000 + arr(s.atendimentos).length*500 + arr(s.procedimentos).length*100 + arr(s.materiais).length*50 + arr(s.despesas).length*50;
   }
-
-  function allLocalKeys(){
-    const keys = new Set([activeKey(), baseKey(), 'sjm_sync_pro_v1']);
+  function mergeState(base, incoming){
+    if(!base) return clone(incoming);
+    if(!incoming) return clone(base);
+    const a = stateScore(base) >= stateScore(incoming) ? clone(base) : clone(incoming);
+    const b = stateScore(base) >= stateScore(incoming) ? incoming : base;
+    a.agenda = mergeAgenda(base.agenda, incoming.agenda);
+    // Não força merge de tudo para não duplicar cadastros; só preserva arrays vazios contra apagar dados.
+    ['clientes','atendimentos','procedimentos','materiais','despesas'].forEach(function(k){
+      if(arr(a[k]).length === 0 && arr(b[k]).length > 0) a[k] = clone(b[k]);
+    });
+    a.settings = Object.assign({}, b.settings || {}, a.settings || {});
+    return touch(a);
+  }
+  function storageKeys(){
+    const keys = new Set(['sjm_sync_pro_v1']);
+    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch(e){}
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch(e){}
     try{
-      for(let i=0; i<localStorage.length; i++){
-        const k = localStorage.key(i);
-        if(!k) continue;
-        if(k === activeKey() || k === baseKey() || k.indexOf('sjm_sync_pro_v1') >= 0) keys.add(k);
+      for(let i=0;i<localStorage.length;i++){
+        const k = localStorage.key(i) || '';
+        if(k.indexOf('sjm_sync_pro') !== -1 || k.indexOf('studio_sync_pro') !== -1) keys.add(k);
       }
     }catch(e){}
-    return Array.from(keys);
+    return Array.from(keys).filter(Boolean);
   }
-
-  let pushTimer = null;
-  function writeEverywhere(s, push){
-    s = normalizeState(s || getState());
-    setState(s);
+  function readKey(k){ try{ const raw=localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }catch(e){ return null; } }
+  function writeAll(s){
+    if(!s) return;
     const raw = JSON.stringify(s);
-    allLocalKeys().forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
+    storageKeys().forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
     try{ sessionStorage.setItem('sjm_sync_pro_v1_last_good', raw); }catch(e){}
-    if(push !== false && typeof window.__SJM_PUSH_TO_CLOUD === 'function'){
-      clearTimeout(pushTimer);
-      pushTimer = setTimeout(function(){
-        try{ window.__SJM_PUSH_TO_CLOUD(normalizeState(getState())); }catch(e){ console.warn('Sync cloud v73:', e); }
-      }, 300);
-    }
+  }
+  let cloudTimer = null;
+  function pushCloud(s){
+    clearTimeout(cloudTimer);
+    cloudTimer = setTimeout(function(){
+      try{ if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') window.__SJM_PUSH_TO_CLOUD(s || getState()); }catch(e){ console.warn('push cloud v70', e); }
+    }, 250);
+  }
+  function persist(push){
+    let s = getState(); if(!s) return;
+    s.agenda = mergeAgenda(s.agenda);
+    touch(s); setState(s); writeAll(s);
+    if(push !== false) pushCloud(s);
   }
 
-  function loadBestLocalIntoCurrent(){
-    let merged = normalizeState(getState());
-    allLocalKeys().forEach(function(k){
-      try{
-        const raw = localStorage.getItem(k);
-        if(raw && raw.trim().startsWith('{')) merged = mergeStates(merged, JSON.parse(raw));
-      }catch(e){}
-    });
-    setState(merged);
-    writeEverywhere(merged, false);
-  }
+  // Recupera qualquer agenda que esteja em alguma chave local antes de renderizar/receber remoto.
+  try{
+    let merged = getState();
+    storageKeys().forEach(function(k){ const x = readKey(k); if(x) merged = mergeState(merged, x); });
+    if(merged){ setState(merged); writeAll(merged); }
+  }catch(e){ console.warn('boot merge v70', e); }
 
   const oldSave = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
   window.saveSoft = function(){
-    const s = normalizeState(getState());
-    s.meta.clientId = clientId();
-    s.meta.rev = Number(s.meta.rev || 0) + 1;
-    s.meta.updatedAt = now();
-    writeEverywhere(s, true);
-    try{ if(oldSave && oldSave !== window.saveSoft && !oldSave.__v73) oldSave(); }catch(e){}
+    try{ persist(true); }catch(e){ console.warn('save v70', e); }
+    try{ if(oldSave && oldSave !== window.saveSoft) oldSave.apply(this, arguments); }catch(e){}
+    try{ persist(true); }catch(e){}
   };
-  window.saveSoft.__v73 = true;
   try{ saveSoft = window.saveSoft; }catch(e){}
-
-  const oldSchedule = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
-  window.scheduleSync = function(){
-    try{ if(oldSchedule && oldSchedule !== window.scheduleSync && !oldSchedule.__v73) oldSchedule(); }catch(e){}
-    setTimeout(function(){ try{ if(!window.__SJM_IS_EDITING) window.saveSoft(); }catch(e){} }, 180);
-  };
-  window.scheduleSync.__v73 = true;
-  try{ scheduleSync = window.scheduleSync; }catch(e){}
 
   const oldApply = window.__SJM_APPLY_REMOTE_STATE;
   window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-    const local = normalizeState(getState());
-    const remote = normalizeState(remoteState);
-    const merged = mergeStates(remote, local);
-    setState(merged);
-    writeEverywhere(merged, true);
     try{
-      if(typeof enforceAgendaRecebidoRules === 'function') enforceAgendaRecebidoRules();
-      if(typeof syncAgendaToAtendimentos === 'function') syncAgendaToAtendimentos();
-      if(Array.isArray(merged.materiais) && typeof calcularMaterial === 'function') merged.materiais.forEach(calcularMaterial);
-      if(Array.isArray(merged.atendimentos) && typeof calcularAtendimento === 'function') merged.atendimentos.forEach(calcularAtendimento);
-      if(typeof applyTheme === 'function') applyTheme();
-      if(typeof renderAllHard === 'function') renderAllHard();
-      window.__SJM_SET_SYNC_STATUS?.('Sync: dados preservados ✅');
-    }catch(e){
+      const merged = mergeState(getState(), remoteState);
+      setState(merged);
+      writeAll(merged);
       if(typeof oldApply === 'function'){
-        try{ oldApply(merged); }catch(_){}
+        // Entrega o estado já mesclado ao aplicador original; assim ele nunca recebe agenda vazia/antiga.
+        oldApply(merged);
+      }else{
+        try{ if(typeof renderAllHard === 'function') renderAllHard(); }catch(e){}
       }
+      persist(true);
+      try{ window.__SJM_SET_SYNC_STATUS && window.__SJM_SET_SYNC_STATUS('Sync: agenda preservada ✅'); }catch(e){}
+      return;
+    }catch(e){
+      console.warn('apply remote v70', e);
+      if(typeof oldApply === 'function') return oldApply(remoteState);
     }
   };
 
-  document.addEventListener('click', function(e){
-    const el = e.target && e.target.closest ? e.target.closest('button,[data-cal-act]') : null;
-    if(!el) return;
-    const txt = String(el.textContent || '');
-    const id = String(el.id || '');
-    const act = String(el.getAttribute('data-cal-act') || '');
-    if(id.indexOf('Agenda') >= 0 || id.indexOf('agenda') >= 0 || act || /agendamento|Realizado|Cancelado|Editar/i.test(txt)){
-      setTimeout(function(){ try{ window.saveSoft(); }catch(e){} }, 120);
-      setTimeout(function(){ try{ window.saveSoft(); }catch(e){} }, 700);
-    }
-  }, true);
+  window.__SJM_GET_STATE = function(){ return getState(); };
 
-  ['change','blur'].forEach(function(ev){
+  // Depois de qualquer ação na agenda, salva de novo quando o DOM já terminou o evento.
+  function isAgenda(el){
+    if(!el) return false;
+    if(el.closest && (el.closest('#agendaCompactDetail') || el.closest('#tblAgenda') || el.closest('#agendaFormPanel') || el.closest('#agendaListPanel') || el.closest('#calendarGrid'))) return true;
+    const id = String(el.id || '');
+    return id.indexOf('ag') === 0 || id.indexOf('agenda') === 0 || id.indexOf('btnAddAgenda') === 0;
+  }
+  ['click','change','input','blur','submit'].forEach(function(ev){
     document.addEventListener(ev, function(e){
-      const el = e.target;
-      const id = String(el && el.id || '');
-      if(id.indexOf('ag') === 0 || id.indexOf('agenda') >= 0 || (el && el.closest && el.closest('#agendaCompactDetail,#agendaFormPanel,#agendaListPanel,#tblAgenda'))){
-        setTimeout(function(){ try{ window.saveSoft(); }catch(err){} }, 80);
-      }
+      if(!isAgenda(e.target)) return;
+      setTimeout(function(){ persist(true); }, ev === 'input' ? 180 : 40);
+      setTimeout(function(){ persist(true); }, 800);
     }, true);
   });
-
-  try{ loadBestLocalIntoCurrent(); }catch(e){ console.warn('boot v73:', e); }
-  setTimeout(function(){ try{ loadBestLocalIntoCurrent(); if(typeof renderAllHard === 'function') renderAllHard(); window.saveSoft(); }catch(e){} }, 500);
-  window.addEventListener('beforeunload', function(){ try{ writeEverywhere(normalizeState(getState()), true); }catch(e){} });
+  window.addEventListener('beforeunload', function(){ try{ persist(true); }catch(e){} });
+  setTimeout(function(){ try{ persist(true); }catch(e){} }, 1200);
 })();
