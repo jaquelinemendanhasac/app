@@ -10439,3 +10439,193 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(function(){ try{ persist('boot-late', true); if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){} }, 350);
   window.addEventListener('beforeunload', function(){ try{ persist('beforeunload', true); }catch(e){} });
 })();
+
+/* =========================================================
+   v73 — Persistência estável da agenda
+   Objetivo: impedir que Firebase/localStorage antigo apague agendamentos salvos.
+   Não altera layout nem remove funcionalidades.
+   ========================================================= */
+(function(){
+  'use strict';
+  if(window.__SJM_SAVE_FIX_V73) return;
+  window.__SJM_SAVE_FIX_V73 = true;
+
+  function getState(){ try{ return state || window.state || window.__SJM_GET_STATE?.(); }catch(e){ return window.state || window.__SJM_GET_STATE?.(); } }
+  function setState(s){ try{ state = s; }catch(e){} try{ window.state = s; }catch(e){} }
+  function now(){ return Date.now(); }
+  function newId(){ try{ return typeof uid === 'function' ? uid() : ('id_'+now()+'_'+Math.random().toString(36).slice(2)); }catch(e){ return 'id_'+now()+'_'+Math.random().toString(36).slice(2); } }
+  function clone(v){ try{ return JSON.parse(JSON.stringify(v)); }catch(e){ return v; } }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function activeKey(){ try{ return ACTIVE_STORAGE_KEY || KEY || 'sjm_sync_pro_v1'; }catch(e){ return 'sjm_sync_pro_v1'; } }
+  function baseKey(){ try{ return KEY || 'sjm_sync_pro_v1'; }catch(e){ return 'sjm_sync_pro_v1'; } }
+  function clientId(){ try{ return CLIENT_ID || 'local'; }catch(e){ return 'local'; } }
+
+  const ARRAY_KEYS = ['agenda','clientes','procedimentos','materiais','atendimentos','despesas','receitasExtras','wppQueue','crmQueue'];
+
+  function normalizeAgendaItem(a){
+    if(!a || typeof a !== 'object') return null;
+    a.id = a.id || newId();
+    a.data = String(a.data || (typeof todayISO === 'function' ? todayISO() : new Date().toISOString().slice(0,10))).slice(0,10);
+    a.hora = String(a.hora || '08:00').slice(0,5);
+    a.cliente = a.cliente || '';
+    a.procedimento = a.procedimento || '';
+    a.status = a.status || 'Agendado';
+    if(a.recebido === undefined || a.recebido === null || a.recebido === '') a.recebido = 0;
+    a.obs = a.obs || '';
+    a.atendId = a.atendId || '';
+    return a;
+  }
+
+  function normalizeState(s){
+    s = (s && typeof s === 'object') ? s : {};
+    try{ if(typeof sanitizeState === 'function') s = sanitizeState(s); }catch(e){}
+    s.meta = (s.meta && typeof s.meta === 'object') ? s.meta : {};
+    s.meta.clientId = s.meta.clientId || clientId();
+    s.meta.rev = Number(s.meta.rev || 0);
+    s.meta.updatedAt = Number(s.meta.updatedAt || 0) || now();
+    ARRAY_KEYS.forEach(function(k){ s[k] = arr(s[k]); });
+    s.agenda = s.agenda.map(normalizeAgendaItem).filter(Boolean);
+    return s;
+  }
+
+  function itemStamp(x){ return Number(x && (x.updatedAt || x.criadoEm || x.createdAt || x.alteradoEm || x.modifiedAt) || 0); }
+  function mergeById(oldArr, newArr){
+    const map = new Map();
+    arr(oldArr).forEach(function(item){ if(item && typeof item === 'object'){ map.set(String(item.id || newId()), clone(item)); } });
+    arr(newArr).forEach(function(item){
+      if(!item || typeof item !== 'object') return;
+      const id = String(item.id || newId());
+      item.id = id;
+      const prev = map.get(id);
+      if(!prev){ map.set(id, clone(item)); return; }
+      const ps = itemStamp(prev), ns = itemStamp(item);
+      if(ns > ps) map.set(id, clone(item));
+      else map.set(id, Object.assign({}, clone(item), clone(prev)));
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeStates(a, b){
+    a = normalizeState(clone(a || {}));
+    b = normalizeState(clone(b || {}));
+    const newer = Number(b.meta.updatedAt || 0) >= Number(a.meta.updatedAt || 0) ? b : a;
+    const merged = Object.assign({}, a, b);
+    merged.settings = Object.assign({}, a.settings || {}, b.settings || {});
+    merged.wpp = Object.assign({}, a.wpp || {}, b.wpp || {});
+    merged.crm = Object.assign({}, a.crm || {}, b.crm || {});
+    ARRAY_KEYS.forEach(function(k){ merged[k] = mergeById(a[k], b[k]); });
+    merged.agenda = merged.agenda.map(normalizeAgendaItem).filter(Boolean);
+    merged.meta = Object.assign({}, newer.meta || {});
+    merged.meta.clientId = clientId();
+    merged.meta.rev = Math.max(Number(a.meta.rev||0), Number(b.meta.rev||0));
+    merged.meta.updatedAt = Math.max(Number(a.meta.updatedAt||0), Number(b.meta.updatedAt||0), now());
+    return normalizeState(merged);
+  }
+
+  function allLocalKeys(){
+    const keys = new Set([activeKey(), baseKey(), 'sjm_sync_pro_v1']);
+    try{
+      for(let i=0; i<localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(k === activeKey() || k === baseKey() || k.indexOf('sjm_sync_pro_v1') >= 0) keys.add(k);
+      }
+    }catch(e){}
+    return Array.from(keys);
+  }
+
+  let pushTimer = null;
+  function writeEverywhere(s, push){
+    s = normalizeState(s || getState());
+    setState(s);
+    const raw = JSON.stringify(s);
+    allLocalKeys().forEach(function(k){ try{ localStorage.setItem(k, raw); }catch(e){} });
+    try{ sessionStorage.setItem('sjm_sync_pro_v1_last_good', raw); }catch(e){}
+    if(push !== false && typeof window.__SJM_PUSH_TO_CLOUD === 'function'){
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(function(){
+        try{ window.__SJM_PUSH_TO_CLOUD(normalizeState(getState())); }catch(e){ console.warn('Sync cloud v73:', e); }
+      }, 300);
+    }
+  }
+
+  function loadBestLocalIntoCurrent(){
+    let merged = normalizeState(getState());
+    allLocalKeys().forEach(function(k){
+      try{
+        const raw = localStorage.getItem(k);
+        if(raw && raw.trim().startsWith('{')) merged = mergeStates(merged, JSON.parse(raw));
+      }catch(e){}
+    });
+    setState(merged);
+    writeEverywhere(merged, false);
+  }
+
+  const oldSave = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
+  window.saveSoft = function(){
+    const s = normalizeState(getState());
+    s.meta.clientId = clientId();
+    s.meta.rev = Number(s.meta.rev || 0) + 1;
+    s.meta.updatedAt = now();
+    writeEverywhere(s, true);
+    try{ if(oldSave && oldSave !== window.saveSoft && !oldSave.__v73) oldSave(); }catch(e){}
+  };
+  window.saveSoft.__v73 = true;
+  try{ saveSoft = window.saveSoft; }catch(e){}
+
+  const oldSchedule = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
+  window.scheduleSync = function(){
+    try{ if(oldSchedule && oldSchedule !== window.scheduleSync && !oldSchedule.__v73) oldSchedule(); }catch(e){}
+    setTimeout(function(){ try{ if(!window.__SJM_IS_EDITING) window.saveSoft(); }catch(e){} }, 180);
+  };
+  window.scheduleSync.__v73 = true;
+  try{ scheduleSync = window.scheduleSync; }catch(e){}
+
+  const oldApply = window.__SJM_APPLY_REMOTE_STATE;
+  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+    const local = normalizeState(getState());
+    const remote = normalizeState(remoteState);
+    const merged = mergeStates(remote, local);
+    setState(merged);
+    writeEverywhere(merged, true);
+    try{
+      if(typeof enforceAgendaRecebidoRules === 'function') enforceAgendaRecebidoRules();
+      if(typeof syncAgendaToAtendimentos === 'function') syncAgendaToAtendimentos();
+      if(Array.isArray(merged.materiais) && typeof calcularMaterial === 'function') merged.materiais.forEach(calcularMaterial);
+      if(Array.isArray(merged.atendimentos) && typeof calcularAtendimento === 'function') merged.atendimentos.forEach(calcularAtendimento);
+      if(typeof applyTheme === 'function') applyTheme();
+      if(typeof renderAllHard === 'function') renderAllHard();
+      window.__SJM_SET_SYNC_STATUS?.('Sync: dados preservados ✅');
+    }catch(e){
+      if(typeof oldApply === 'function'){
+        try{ oldApply(merged); }catch(_){}
+      }
+    }
+  };
+
+  document.addEventListener('click', function(e){
+    const el = e.target && e.target.closest ? e.target.closest('button,[data-cal-act]') : null;
+    if(!el) return;
+    const txt = String(el.textContent || '');
+    const id = String(el.id || '');
+    const act = String(el.getAttribute('data-cal-act') || '');
+    if(id.indexOf('Agenda') >= 0 || id.indexOf('agenda') >= 0 || act || /agendamento|Realizado|Cancelado|Editar/i.test(txt)){
+      setTimeout(function(){ try{ window.saveSoft(); }catch(e){} }, 120);
+      setTimeout(function(){ try{ window.saveSoft(); }catch(e){} }, 700);
+    }
+  }, true);
+
+  ['change','blur'].forEach(function(ev){
+    document.addEventListener(ev, function(e){
+      const el = e.target;
+      const id = String(el && el.id || '');
+      if(id.indexOf('ag') === 0 || id.indexOf('agenda') >= 0 || (el && el.closest && el.closest('#agendaCompactDetail,#agendaFormPanel,#agendaListPanel,#tblAgenda'))){
+        setTimeout(function(){ try{ window.saveSoft(); }catch(err){} }, 80);
+      }
+    }, true);
+  });
+
+  try{ loadBestLocalIntoCurrent(); }catch(e){ console.warn('boot v73:', e); }
+  setTimeout(function(){ try{ loadBestLocalIntoCurrent(); if(typeof renderAllHard === 'function') renderAllHard(); window.saveSoft(); }catch(e){} }, 500);
+  window.addEventListener('beforeunload', function(){ try{ writeEverywhere(normalizeState(getState()), true); }catch(e){} });
+})();
