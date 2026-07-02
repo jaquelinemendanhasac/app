@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "studio-sync-pro";
-const CACHE_VERSION = "v74-agenda-estavel";
+const CACHE_VERSION = "v62-save-agenda-fix";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./firebase.js", "./manifest.json"];
 
