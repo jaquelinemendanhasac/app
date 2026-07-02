@@ -10441,147 +10441,85 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 /* =========================================================
-   v73 — Agenda com persistência blindada sobre a base estável
-   Objetivo: preservar layout/funções e corrigir sumiço de agendamentos.
-   - Agenda é gravada em cofre local separado.
-   - Remoto antigo não substitui agenda local.
-   - Ao abrir/login/sync, agendas são mescladas por ID.
-   ========================================================= */
+   v74 — Correção limpa da agenda em cima da base estável
+   Objetivo: salvar/editar/cancelar sem restaurar dados antigos.
+   Regra: salvar o estado atual. Nunca mesclar cofre antigo durante edição.
+========================================================= */
 (function(){
   'use strict';
-  if(window.__SJM_AGENDA_V73_INSTALLED) return;
-  window.__SJM_AGENDA_V73_INSTALLED = true;
+  const V74_FULL_KEY = 'sjm_sync_pro_v74_last_state';
+  const V74_AGENDA_KEY = 'sjm_sync_pro_v74_agenda_snapshot';
 
-  const VAULT_KEY = 'sjm_sync_pro_v73_agenda_vault';
-  const VAULT_LAST_KEY = 'sjm_sync_pro_v73_last_state';
-
-  function getState(){ try{ return window.state || state; }catch(e){ return window.state || null; } }
-  function setState(s){ try{ window.state = s; state = s; }catch(e){ window.state = s; } }
   function now(){ return Date.now(); }
+  function clone(v){ try{ return JSON.parse(JSON.stringify(v)); }catch(e){ return v; } }
   function safeParse(raw){ try{ return raw ? JSON.parse(raw) : null; }catch(e){ return null; } }
-  function clone(obj){ try{ return JSON.parse(JSON.stringify(obj)); }catch(e){ return obj; } }
+  function getState(){ try{ return state; }catch(e){ return window.__SJM_GET_STATE?.() || window.state || null; } }
+  function setState(s){ try{ state = s; }catch(e){ window.state = s; } }
   function arr(v){ return Array.isArray(v) ? v : []; }
-  function uidV73(){ try{ return typeof uid === 'function' ? uid() : ('ag_'+now()+'_'+Math.random().toString(36).slice(2)); }catch(e){ return 'ag_'+now()+'_'+Math.random().toString(36).slice(2); } }
-  function getUserPart(){
+  function uid2(){ return 'ag_'+now()+'_'+Math.random().toString(36).slice(2); }
+  function userKey(){
     try{
-      const u = window.__SJM_CURRENT_USER || null;
-      const id = u?.uid || u?.email || 'local';
-      return String(id).trim().toLowerCase().replace(/[^a-z0-9._-]+/g,'_') || 'local';
-    }catch(e){ return 'local'; }
-  }
-  function userVaultKey(){ return VAULT_KEY + '__' + getUserPart(); }
-
-  function normalizeAgendaItem(a){
-    if(!a || typeof a !== 'object') return null;
-    const x = clone(a) || {};
-    x.id = x.id || uidV73();
-    x.data = x.data || (typeof todayISO === 'function' ? todayISO() : new Date().toISOString().slice(0,10));
-    x.hora = x.hora || '08:00';
-    x.cliente = x.cliente || '';
-    x.procedimento = x.procedimento || '';
-    x.status = x.status || 'Agendado';
-    x.obs = x.obs || '';
-    if(x.recebido === undefined || x.recebido === null || x.recebido === '') x.recebido = 0;
-    if(!x.__v73UpdatedAt) x.__v73UpdatedAt = now();
-    return x;
-  }
-
-  function agendaItemKey(a){
-    const id = String(a?.id || '').trim();
-    if(id) return 'id:' + id;
-    return ['k', a?.data||'', a?.hora||'', a?.cliente||'', a?.procedimento||'', a?.status||''].join('|').toLowerCase();
-  }
-
-  function mergeAgendaLists(){
-    const map = new Map();
-    for(const list of arguments){
-      arr(list).forEach(item=>{
-        const a = normalizeAgendaItem(item);
-        if(!a) return;
-        const k = agendaItemKey(a);
-        const prev = map.get(k);
-        if(!prev){ map.set(k, a); return; }
-        const pt = Number(prev.__v73UpdatedAt || prev.updatedAt || prev.criadoEm || prev.meta?.updatedAt || 0);
-        const at = Number(a.__v73UpdatedAt || a.updatedAt || a.criadoEm || a.meta?.updatedAt || 0);
-        map.set(k, at >= pt ? Object.assign({}, prev, a) : Object.assign({}, a, prev));
-      });
-    }
-    return Array.from(map.values()).sort((a,b)=> String(a.data||'').localeCompare(String(b.data||'')) || String(a.hora||'').localeCompare(String(b.hora||'')));
-  }
-
-  function readVaultAgenda(){
-    const out = [];
-    [VAULT_KEY, userVaultKey()].forEach(k=>{
-      const obj = safeParse(localStorage.getItem(k));
-      if(Array.isArray(obj)) out.push(...obj);
-      else if(obj && Array.isArray(obj.agenda)) out.push(...obj.agenda);
-    });
-    const last = safeParse(localStorage.getItem(VAULT_LAST_KEY));
-    if(last && Array.isArray(last.agenda)) out.push(...last.agenda);
-    try{
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(!k) continue;
-        if(k.indexOf('sjm_sync_pro_v1') === 0 || k.indexOf('sjm_sync_pro_v73') === 0){
-          const s = safeParse(localStorage.getItem(k));
-          if(s && Array.isArray(s.agenda)) out.push(...s.agenda);
-        }
+      if(typeof storageKeyForUser === 'function' && window.__SJM_CURRENT_USER){
+        return storageKeyForUser(window.__SJM_CURRENT_USER);
       }
     }catch(e){}
-    return mergeAgendaLists(out);
+    return '';
   }
-
-  function markAgendaTouched(s){
-    arr(s?.agenda).forEach(a=>{
-      if(a && typeof a === 'object'){
-        a.id = a.id || uidV73();
-        if(!a.__v73UpdatedAt) a.__v73UpdatedAt = now();
-      }
-    });
+  function normalizeAgenda(a){
+    if(!a || typeof a !== 'object') return null;
+    if(!a.id) a.id = uid2();
+    if(!a.data) a.data = (typeof todayISO === 'function' ? todayISO() : new Date().toISOString().slice(0,10));
+    if(!a.hora) a.hora = '08:00';
+    if(!a.status) a.status = 'Agendado';
+    if(a.recebido === undefined || a.recebido === null || a.recebido === '') a.recebido = 0;
+    a.__v74UpdatedAt = now();
+    return a;
   }
-
-  function persistAll(reason, pushCloud){
+  function touchAgenda(){
     const s = getState();
+    if(!s) return null;
+    s.agenda = arr(s.agenda).map(normalizeAgenda).filter(Boolean);
+    return s;
+  }
+  function writeSnapshot(reason){
+    const s = touchAgenda();
     if(!s) return;
-    s.agenda = mergeAgendaLists(readVaultAgenda(), s.agenda);
-    markAgendaTouched(s);
-    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch(e){ s.meta = s.meta || {}; }
     try{
       s.meta = s.meta || {};
       s.meta.updatedAt = now();
       s.meta.rev = Number(s.meta.rev || 0) + 1;
-      if(typeof CLIENT_ID !== 'undefined') s.meta.clientId = CLIENT_ID;
     }catch(e){}
-    setState(s);
-    const agendaRaw = JSON.stringify({ agenda: s.agenda, updatedAt: now(), reason });
-    const stateRaw = JSON.stringify(s);
-    try{ localStorage.setItem(VAULT_KEY, agendaRaw); }catch(e){}
-    try{ localStorage.setItem(userVaultKey(), agendaRaw); }catch(e){}
-    try{ localStorage.setItem(VAULT_LAST_KEY, stateRaw); }catch(e){}
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) localStorage.setItem(ACTIVE_STORAGE_KEY, stateRaw); }catch(e){}
-    try{ if(typeof KEY !== 'undefined' && KEY) localStorage.setItem(KEY, stateRaw); }catch(e){}
-    try{
-      if(window.__SJM_CURRENT_USER && typeof storageKeyForUser === 'function'){
-        localStorage.setItem(storageKeyForUser(window.__SJM_CURRENT_USER), stateRaw);
-      }
-    }catch(e){}
-    if(pushCloud !== false){
-      clearTimeout(window.__SJM_AGENDA_V73_CLOUD_TIMER);
-      window.__SJM_AGENDA_V73_CLOUD_TIMER = setTimeout(function(){
-        try{ if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') window.__SJM_PUSH_TO_CLOUD(getState()); }catch(e){}
-        try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-      }, 450);
-    }
+    const raw = JSON.stringify(s);
+    const agendaRaw = JSON.stringify({ agenda: s.agenda || [], updatedAt: now(), reason: reason || 'save' });
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) localStorage.setItem(ACTIVE_STORAGE_KEY, raw); }catch(e){}
+    try{ if(typeof KEY !== 'undefined' && KEY) localStorage.setItem(KEY, raw); }catch(e){}
+    try{ const uk = userKey(); if(uk) localStorage.setItem(uk, raw); }catch(e){}
+    try{ localStorage.setItem(V74_FULL_KEY, raw); }catch(e){}
+    try{ localStorage.setItem(V74_AGENDA_KEY, agendaRaw); }catch(e){}
   }
-
-  function restoreAgenda(reason, render){
+  function readBestLocal(){
+    const out = [];
+    try{ out.push(safeParse(localStorage.getItem(V74_FULL_KEY))); }catch(e){}
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined') out.push(safeParse(localStorage.getItem(ACTIVE_STORAGE_KEY))); }catch(e){}
+    try{ if(typeof KEY !== 'undefined') out.push(safeParse(localStorage.getItem(KEY))); }catch(e){}
+    try{ const uk = userKey(); if(uk) out.push(safeParse(localStorage.getItem(uk))); }catch(e){}
+    return out.filter(x=>x && typeof x === 'object').sort((a,b)=>{
+      const at = Number(a?.meta?.updatedAt || a?.updatedAt || 0);
+      const bt = Number(b?.meta?.updatedAt || b?.updatedAt || 0);
+      const as = arr(a?.agenda).length;
+      const bs = arr(b?.agenda).length;
+      return (bt - at) || (bs - as);
+    })[0] || null;
+  }
+  function restoreOnlyIfCurrentIsEmpty(){
     const s = getState();
     if(!s) return;
-    const before = arr(s.agenda).length;
-    s.agenda = mergeAgendaLists(readVaultAgenda(), s.agenda);
-    setState(s);
-    persistAll(reason || 'restore', false);
-    if(render !== false && arr(s.agenda).length !== before){
+    if(arr(s.agenda).length > 0) return;
+    const best = readBestLocal();
+    if(best && arr(best.agenda).length > 0){
+      s.agenda = clone(best.agenda).map(normalizeAgenda).filter(Boolean);
+      setState(s);
+      writeSnapshot('restore-empty-agenda');
       try{ if(typeof renderAgendaHard === 'function') renderAgendaHard(); }catch(e){}
       try{ if(typeof renderCalendar === 'function') renderCalendar(); }catch(e){}
     }
@@ -10589,71 +10527,68 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
   const oldSave = typeof saveSoft === 'function' ? saveSoft : window.saveSoft;
   window.saveSoft = function(){
-    markAgendaTouched(getState());
-    persistAll('saveSoft-v73', true);
-    try{ if(oldSave && !oldSave.__v73) oldSave.apply(this, arguments); }catch(e){}
+    writeSnapshot('before-saveSoft');
+    let r;
+    try{ if(typeof oldSave === 'function') r = oldSave.apply(this, arguments); }catch(e){ console.warn('saveSoft antigo falhou v74:', e); }
+    writeSnapshot('after-saveSoft');
+    return r;
   };
-  window.saveSoft.__v73 = true;
   try{ saveSoft = window.saveSoft; }catch(e){}
 
   const oldSchedule = typeof scheduleSync === 'function' ? scheduleSync : window.scheduleSync;
   window.scheduleSync = function(){
-    try{ if(oldSchedule && !oldSchedule.__v73) oldSchedule.apply(this, arguments); }catch(e){}
-    setTimeout(function(){ try{ persistAll('scheduleSync-v73', true); }catch(e){} }, 120);
+    let r;
+    try{ if(typeof oldSchedule === 'function') r = oldSchedule.apply(this, arguments); }catch(e){ console.warn('scheduleSync antigo falhou v74:', e); }
+    setTimeout(function(){ writeSnapshot('scheduleSync'); }, 80);
+    return r;
   };
-  window.scheduleSync.__v73 = true;
   try{ scheduleSync = window.scheduleSync; }catch(e){}
-
-  const oldAuth = window.__SJM_ON_AUTH_USER;
-  window.__SJM_ON_AUTH_USER = function(userInfo){
-    try{ if(typeof oldAuth === 'function') oldAuth.apply(this, arguments); }catch(e){ console.warn('auth antigo v73:', e); }
-    setTimeout(function(){ restoreAgenda('auth-v73', true); try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){} }, 180);
-  };
 
   const oldApply = window.__SJM_APPLY_REMOTE_STATE;
   window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+    const local = getState();
+    let incoming = remoteState && typeof remoteState === 'object' ? clone(remoteState) : remoteState;
     try{
-      remoteState = remoteState && typeof remoteState === 'object' ? clone(remoteState) : remoteState;
-      const localAgenda = mergeAgendaLists(readVaultAgenda(), getState()?.agenda);
-      if(remoteState && typeof remoteState === 'object'){
-        remoteState.agenda = mergeAgendaLists(remoteState.agenda, localAgenda);
-        remoteState.meta = remoteState.meta || {};
-        remoteState.meta.updatedAt = Math.max(Number(remoteState.meta.updatedAt||0), Number(getState()?.meta?.updatedAt||0), now());
+      const localAgenda = arr(local?.agenda);
+      const remoteAgenda = arr(incoming?.agenda);
+      const localTime = Number(local?.meta?.updatedAt || 0);
+      const remoteTime = Number(incoming?.meta?.updatedAt || 0);
+      // Remoto vazio/antigo não pode apagar agenda local salva.
+      if(incoming && localAgenda.length > 0 && (remoteAgenda.length === 0 || remoteTime < localTime)){
+        incoming.agenda = clone(localAgenda);
+        incoming.meta = incoming.meta || {};
+        incoming.meta.updatedAt = Math.max(localTime, remoteTime, now());
       }
     }catch(e){}
     let r;
-    try{ r = typeof oldApply === 'function' ? oldApply.call(this, remoteState) : undefined; }catch(e){ console.warn('apply remoto antigo v73:', e); }
-    setTimeout(function(){ restoreAgenda('remote-v73', true); persistAll('remote-after-v73', true); }, 120);
+    try{ if(typeof oldApply === 'function') r = oldApply.call(this, incoming); }catch(e){ console.warn('apply remoto antigo falhou v74:', e); }
+    setTimeout(function(){ writeSnapshot('remote-apply'); restoreOnlyIfCurrentIsEmpty(); }, 120);
     return r;
   };
 
-  window.__SJM_GET_STATE = function(){ restoreAgenda('get-state-v73', false); return getState(); };
-
-  function isAgendaEl(el){
-    if(!el) return false;
-    try{
-      if(el.closest && (el.closest('#agendaCompactDetail') || el.closest('#agendaFormPanel') || el.closest('#agendaListPanel') || el.closest('#tblAgenda') || el.closest('#calendarGrid'))) return true;
-    }catch(e){}
-    const id = String(el.id || '');
-    return id.indexOf('agDet') === 0 || id.indexOf('agenda') === 0 || id === 'btnAddAgenda' || id === 'btnClearAgenda';
-  }
   ['input','change','blur'].forEach(function(ev){
     document.addEventListener(ev, function(e){
-      if(!isAgendaEl(e.target)) return;
-      setTimeout(function(){ try{ persistAll('agenda-'+ev+'-v73', true); }catch(err){} }, ev === 'input' ? 180 : 40);
+      const el = e.target;
+      if(!el) return;
+      const insideAgenda = el.closest && (el.closest('#agendaCompactDetail') || el.closest('#agendaFormPanel') || el.closest('#agendaListPanel') || el.closest('#tblAgenda') || el.closest('#calendarGrid'));
+      if(!insideAgenda && String(el.id || '').indexOf('agDet') !== 0) return;
+      setTimeout(function(){ writeSnapshot('agenda-'+ev); }, ev === 'input' ? 180 : 30);
     }, true);
   });
+
   document.addEventListener('click', function(e){
-    const el = e.target && e.target.closest ? e.target.closest('button,[data-agenda-id],[data-cal-act]') : e.target;
-    if(!isAgendaEl(el)) return;
-    setTimeout(function(){ try{ persistAll('agenda-click-v73', true); }catch(err){} }, 180);
+    const btn = e.target && e.target.closest ? e.target.closest('button,[data-cal-act]') : null;
+    if(!btn) return;
+    const insideAgenda = btn.closest && (btn.closest('#agendaCompactDetail') || btn.closest('#agendaFormPanel') || btn.closest('#agendaListPanel') || btn.closest('#tblAgenda') || btn.closest('#calendarGrid'));
+    const id = String(btn.id || '');
+    if(!insideAgenda && id.indexOf('btnAddAgenda') !== 0 && id.indexOf('btnClearAgenda') !== 0 && id.indexOf('agDet') !== 0) return;
+    setTimeout(function(){ writeSnapshot('agenda-click'); }, 120);
   }, true);
 
+  window.addEventListener('beforeunload', function(){ writeSnapshot('beforeunload'); });
   document.addEventListener('DOMContentLoaded', function(){
-    [80, 350, 900, 1800].forEach(function(t){ setTimeout(function(){ restoreAgenda('boot-v73-'+t, true); }, t); });
+    setTimeout(restoreOnlyIfCurrentIsEmpty, 150);
+    setTimeout(function(){ writeSnapshot('boot'); }, 500);
   });
-  window.addEventListener('load', function(){ setTimeout(function(){ restoreAgenda('load-v73', true); }, 250); });
-  window.addEventListener('beforeunload', function(){ try{ persistAll('beforeunload-v73', false); }catch(e){} });
-
-  try{ restoreAgenda('install-v73', false); }catch(e){}
+  window.addEventListener('load', function(){ setTimeout(restoreOnlyIfCurrentIsEmpty, 350); });
 })();
