@@ -417,10 +417,6 @@ Que tal agendarmos sua manutenção?`,
 Total recebido: {total}`
     },
     procedimentos: [
-      { id: uid(), nome:"Alongamento", preco:130, reajuste:"", duracaoMin: 120 },
-      { id: uid(), nome:"Manutenção", preco:90, reajuste:"", duracaoMin: 120 },
-      { id: uid(), nome:"Remoção + Nova Aplicação", preco:160, reajuste:"", duracaoMin: 150 },
-      { id: uid(), nome:"Remoção de Alongamento", preco:60, reajuste:"", duracaoMin: 60 },
       ...specialProceduresDefault(),
     ],
 
@@ -10559,7 +10555,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     ensureFixedProcedures();
     try{ oldProc && oldProc(); }catch(e){}
     const add = $('btnAddProc');
-    if(add){ add.textContent = '+ Restaurar procedimentos fixos'; add.title='Recria apenas os procedimentos definidos do sistema'; }
+    if(add){ add.textContent = '+ Adicionar novo procedimento'; add.title='Recria apenas os procedimentos definidos do sistema'; }
     const body = document.querySelector('#tblProc tbody');
     if(!body) return;
     body.querySelectorAll('tr').forEach(tr=>{
@@ -10801,4 +10797,208 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(function(){
     try{ garantirProcedimentosFixosV74(); renderProcedimentos(); salvarProcedimentosV74(); }catch(e){}
   }, 700);
+})();
+
+
+/* =======================================================
+   PATCH v76 - Procedimentos do sistema corretos
+   Regra: apenas Médico, Folga, Reunião e Compromisso são fixados.
+   Os demais procedimentos antigos são removidos; usuário cria pelo botão.
+======================================================= */
+(function(){
+  function by(id){ return document.getElementById(id); }
+  function normProcV76(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  function idProcV76(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    try{ if(typeof uidx === 'function') return uidx(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+  function numProcV76(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    try{ if(typeof n === 'function') return n(v); }catch(e){}
+    const x = parseFloat(String(v||'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function escV76(v){
+    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const sistemaV76 = [
+    { nome:'Médico', duracaoMin:60 },
+    { nome:'Folga', duracaoMin:60 },
+    { nome:'Reunião', duracaoMin:60 },
+    { nome:'Compromisso', duracaoMin:60 }
+  ];
+  const nomesSistemaV76 = new Set(sistemaV76.map(p => normProcV76(p.nome)));
+  const nomesAntigosRemoverV76 = new Set([
+    'alongamento',
+    'manutencao',
+    'remocao + nova aplicacao',
+    'remocao de alongamento'
+  ]);
+
+  function garantirProcedimentosSistemaV76(){
+    if(!window.state) return;
+    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
+
+    const personalizados = atuais.filter(p => {
+      if(!p || !p.nome) return false;
+      const nome = normProcV76(p.nome);
+      if(nomesSistemaV76.has(nome)) return false;
+      if(nomesAntigosRemoverV76.has(nome)) return false;
+      return true;
+    }).map(p => ({
+      ...p,
+      id: p.id || idProcV76(),
+      especial: false,
+      fixado: false,
+      categoria: p.categoria === 'Sistema' ? '' : (p.categoria || '')
+    }));
+
+    const sistema = sistemaV76.map(sp => {
+      const achado = atuais.find(p => p && normProcV76(p.nome) === normProcV76(sp.nome)) || {};
+      return {
+        id: achado.id || idProcV76(),
+        nome: sp.nome,
+        preco: 0,
+        precoBase: 0,
+        reajuste: '',
+        duracaoMin: achado.duracaoMin || sp.duracaoMin,
+        historico: [],
+        especial: true,
+        fixado: true,
+        categoria: 'Sistema',
+        ativo: 'S'
+      };
+    });
+
+    state.procedimentos = sistema.concat(personalizados);
+  }
+
+  function salvarV76(){
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
+  }
+
+  window.renderProcedimentos = function(){
+    garantirProcedimentosSistemaV76();
+    const body = document.querySelector('#tblProc tbody');
+    if(!body) return;
+
+    body.innerHTML = (state.procedimentos||[]).map(p => {
+      const sistema = !!p.especial || nomesSistemaV76.has(normProcV76(p.nome));
+      return `
+        <tr data-id="${escV76(p.id)}">
+          <td><input value="${escV76(p.nome)}" ${sistema?'readonly':''}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numProcV76(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
+          <td><input type="date" value="${escV76(p.reajuste||'')}" ${sistema?'readonly':''}></td>
+          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
+          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const p = (state.procedimentos||[]).find(x => x.id === id);
+      if(!p) return;
+      const sistema = !!p.especial || nomesSistemaV76.has(normProcV76(p.nome));
+      const inputs = tr.querySelectorAll('input');
+      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
+
+      inpNome?.addEventListener('input', () => {
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        p.nome = inpNome.value;
+        salvarV76();
+      });
+      inpPreco?.addEventListener('input', () => {
+        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
+        p.preco = numProcV76(inpPreco.value);
+        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
+        salvarV76();
+      });
+      inpReaj?.addEventListener('change', () => {
+        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
+        p.reajuste = inpReaj.value || '';
+        if(!Array.isArray(p.historico)) p.historico = [];
+        if(p.reajuste){
+          const entrada = { dataInicio:p.reajuste, valor:numProcV76(p.preco) };
+          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
+          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
+        }
+        salvarV76();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+      });
+      inpDur?.addEventListener('input', () => {
+        p.duracaoMin = Math.max(1, Math.round(numProcV76(inpDur.value) || 60));
+        salvarV76();
+      });
+      tr.querySelector('[data-del]')?.addEventListener('click', () => {
+        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
+        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
+        garantirProcedimentosSistemaV76();
+        salvarV76();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+    });
+
+    const btnAdd = by('btnAddProc');
+    if(btnAdd){
+      btnAdd.textContent = '+ Adicionar novo procedimento';
+      btnAdd.title = 'Cadastrar um novo procedimento';
+    }
+    const btnReset = by('btnResetProc');
+    if(btnReset){ btnReset.style.display = 'none'; }
+  };
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+
+  document.addEventListener('click', function(e){
+    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
+    if(!add) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    garantirProcedimentosSistemaV76();
+    state.procedimentos.push({
+      id:idProcV76(),
+      nome:'Novo procedimento',
+      preco:0,
+      reajuste:'',
+      duracaoMin:60,
+      historico:[],
+      especial:false,
+      fixado:false,
+      categoria:''
+    });
+    salvarV76();
+    renderProcedimentos();
+    const ultimo = document.querySelector('#tblProc tbody tr:last-child input');
+    try{ ultimo && ultimo.focus(); ultimo && ultimo.select(); }catch(e){}
+  }, true);
+
+  document.addEventListener('click', function(e){
+    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
+    if(!reset) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    garantirProcedimentosSistemaV76();
+    salvarV76();
+    renderProcedimentos();
+  }, true);
+
+  setTimeout(function(){
+    try{
+      garantirProcedimentosSistemaV76();
+      salvarV76();
+      renderProcedimentos();
+    }catch(e){ console.warn('Patch v76 procedimentos:', e); }
+  }, 900);
 })();
