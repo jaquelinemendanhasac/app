@@ -1,7 +1,7 @@
 const CACHE_PREFIX = "studio-sync-pro";
-const CACHE_VERSION = "v62-save-agenda-fix";
+const CACHE_VERSION = "v80-procedimentos-audit-fix";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
-const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./firebase.js", "./manifest.json"];
+const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./firebase.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./maskable-192.png", "./maskable-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
