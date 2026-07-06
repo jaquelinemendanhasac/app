@@ -10529,59 +10529,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(a) setTimeout(()=>confirmAgendaV73(a), 30);
   }, true);
 
-  // Procedimentos fixos definidos.
-  const fixedProcedures = [
-    { nome:'Alongamento', preco:130, duracaoMin:120 },
-    { nome:'Manutenção', preco:90, duracaoMin:120 },
-    { nome:'Remoção + Nova Aplicação', preco:160, duracaoMin:150 },
-    { nome:'Remoção de Alongamento', preco:60, duracaoMin:60 }
-  ];
-  const specialNames = new Set(['Médico','Folga','Compromisso','Reunião']);
-  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
-  function ensureFixedProcedures(){
-    state.procedimentos = Array.isArray(state.procedimentos) ? state.procedimentos : [];
-    const old = state.procedimentos || [];
-    const next = fixedProcedures.map(fp=>{
-      const found = old.find(p=>norm(p.nome)===norm(fp.nome)) || {};
-      return { id: found.id || uidx(), nome: fp.nome, preco: found.preco!==undefined ? n(found.preco) : fp.preco, reajuste: found.reajuste || '', duracaoMin: found.duracaoMin || fp.duracaoMin, fixado:true, historico: Array.isArray(found.historico)?found.historico:[] };
-    });
-    old.forEach(p=>{ if(p && (p.especial || specialNames.has(p.nome))) next.push(p); });
-    // remove especiais duplicados por nome
-    const seen = new Set();
-    state.procedimentos = next.filter(p=>{ const k=norm(p.nome); if(seen.has(k)) return false; seen.add(k); return true; });
-  }
-  const oldProc = window.renderProcedimentos;
-  window.renderProcedimentos = function(){
-    ensureFixedProcedures();
-    try{ oldProc && oldProc(); }catch(e){}
-    const add = $('btnAddProc');
-    if(add){ add.textContent = '+ Adicionar novo procedimento'; add.title='Recria apenas os procedimentos definidos do sistema'; }
-    const body = document.querySelector('#tblProc tbody');
-    if(!body) return;
-    body.querySelectorAll('tr').forEach(tr=>{
-      const id = tr.dataset.id;
-      const p = (state.procedimentos||[]).find(x=>x.id===id);
-      if(!p) return;
-      const first = tr.querySelector('td:first-child input');
-      if(first) first.readOnly = true;
-      const del = tr.querySelector('[data-del]');
-      if(del){ del.disabled = true; del.textContent = 'Fixado'; del.classList.add('btn--ghost'); }
-    });
-    if(!(state.procedimentos||[]).length){
-      body.innerHTML = '<tr><td colspan="5" class="hint">Adicione procedimentos para começar.</td></tr>';
-    }
-  };
-  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
-  document.addEventListener('click', function(e){
-    const b = e.target && e.target.closest ? e.target.closest('#btnAddProc,#btnResetProc') : null;
-    if(!b) return;
-    e.preventDefault();
-    ensureFixedProcedures();
-    saveNow();
-    try{ renderProcedimentos(); }catch(e){}
-    try{ renderAgendaHard(); }catch(e){}
-  }, true);
-
+  // Procedimentos: corrigido em patch v79 no final do arquivo.
   // Clientes: botão Concluir cadastro antes de Fotos.
   function addConcluirCliente(){
     const actions = document.querySelector('.clienteDetail__actions');
@@ -10619,801 +10567,227 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }, 400);
 })();
 
+
 /* =======================================================
-   PATCH v74 - Procedimentos: botão adiciona novo procedimento
-   Base: v73_erros_corrigidos
+   PATCH v79 - Procedimentos salvando de verdade
+   - Sistema: apenas Médico, Folga, Reunião e Compromisso
+   - Usuário pode criar quantos procedimentos quiser
+   - Não substitui um procedimento pelo outro
+   - Salva em state + localStorage + backup próprio
 ======================================================= */
 (function(){
-  function getById(id){ return document.getElementById(id); }
-  function normalizaProc(v){
-    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  }
-  function novoIdProc(){
-    try{ if(typeof uid === 'function') return uid(); }catch(e){}
-    try{ if(typeof uidx === 'function') return uidx(); }catch(e){}
-    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
-  }
-  function numeroProc(v){
-    try{ if(typeof num === 'function') return num(v); }catch(e){}
-    try{ if(typeof n === 'function') return n(v); }catch(e){}
-    const x = parseFloat(String(v||'0').replace(',','.'));
-    return Number.isFinite(x) ? x : 0;
-  }
+  'use strict';
+  if(window.__SJM_PROCEDIMENTOS_V79) return;
+  window.__SJM_PROCEDIMENTOS_V79 = true;
 
-  const procedimentosFixosV74 = [
-    { nome:'Alongamento', preco:130, duracaoMin:120 },
-    { nome:'Manutenção', preco:90, duracaoMin:120 },
-    { nome:'Remoção + Nova Aplicação', preco:160, duracaoMin:150 },
-    { nome:'Remoção de Alongamento', preco:60, duracaoMin:60 }
+  const PROC_BACKUP_KEY = 'sjm_sync_pro_v1__procedimentos_backup_v79';
+
+  const SISTEMA = [
+    { nome:'Médico', duracaoMin:60 },
+    { nome:'Folga', duracaoMin:60 },
+    { nome:'Reunião', duracaoMin:60 },
+    { nome:'Compromisso', duracaoMin:60 }
   ];
 
-  function garantirProcedimentosFixosV74(){
-    if(!window.state) return;
-    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
-    const usados = new Set();
-    const fixos = procedimentosFixosV74.map(fp => {
-      const achado = atuais.find(p => p && normalizaProc(p.nome) === normalizaProc(fp.nome)) || {};
-      usados.add(normalizaProc(fp.nome));
-      return {
-        id: achado.id || novoIdProc(),
-        nome: fp.nome,
-        preco: achado.preco !== undefined ? numeroProc(achado.preco) : fp.preco,
-        reajuste: achado.reajuste || '',
-        duracaoMin: achado.duracaoMin || fp.duracaoMin,
-        historico: Array.isArray(achado.historico) ? achado.historico : [],
-        fixado: true
-      };
-    });
-
-    const extras = atuais.filter(p => {
-      if(!p) return false;
-      const nome = normalizaProc(p.nome);
-      if(usados.has(nome)) return false;
-      return true;
-    }).map(p => ({
-      ...p,
-      id: p.id || novoIdProc(),
-      fixado: !!p.fixado && !p.nome ? true : false
-    }));
-
-    state.procedimentos = fixos.concat(extras);
-  }
-
-  function salvarProcedimentosV74(){
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
-  }
-
-  window.renderProcedimentos = function(){
-    garantirProcedimentosFixosV74();
-    const body = document.querySelector('#tblProc tbody');
-    if(!body) return;
-
-    if(!Array.isArray(state.procedimentos) || !state.procedimentos.length){
-      body.innerHTML = '<tr><td colspan="5" class="hint">Adicione procedimentos para começar.</td></tr>';
-      return;
-    }
-
-    body.innerHTML = state.procedimentos.map(p => {
-      const fixo = !!p.fixado;
-      const acao = fixo
-        ? '<span class="muted">Fixado</span>'
-        : '<button class="iconBtn" data-del>✕</button>';
-      const nomeReadonly = fixo ? 'readonly' : '';
-      return `
-        <tr data-id="${p.id}">
-          <td><input value="${String(p.nome||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" ${nomeReadonly}></td>
-          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numeroProc(p.preco).toFixed(2)}"></td>
-          <td><input type="date" value="${p.reajuste||''}"></td>
-          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
-          <td>${acao}</td>
-        </tr>
-      `;
-    }).join('');
-
-    body.querySelectorAll('tr').forEach(tr => {
-      const id = tr.dataset.id;
-      const p = (state.procedimentos||[]).find(x => x.id === id);
-      if(!p) return;
-      const campos = tr.querySelectorAll('input');
-      const inpNome = campos[0];
-      const inpPreco = campos[1];
-      const inpReajuste = campos[2];
-      const inpDuracao = campos[3];
-
-      inpNome?.addEventListener('input', () => {
-        if(p.fixado){ inpNome.value = p.nome || ''; return; }
-        p.nome = inpNome.value;
-        salvarProcedimentosV74();
-      });
-      inpPreco?.addEventListener('input', () => {
-        p.preco = numeroProc(inpPreco.value);
-        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
-        salvarProcedimentosV74();
-      });
-      inpReajuste?.addEventListener('change', () => {
-        p.reajuste = inpReajuste.value || '';
-        if(!Array.isArray(p.historico)) p.historico = [];
-        if(p.reajuste){
-          const entrada = { dataInicio: p.reajuste, valor: numeroProc(p.preco) };
-          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
-          p.historico.sort((a,b) => String(a.dataInicio).localeCompare(String(b.dataInicio)));
-        }
-        salvarProcedimentosV74();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-        try{ renderDashboard(); }catch(e){}
-      });
-      inpDuracao?.addEventListener('input', () => {
-        p.duracaoMin = Math.max(1, Math.round(numeroProc(inpDuracao.value) || 60));
-        salvarProcedimentosV74();
-      });
-      tr.querySelector('[data-del]')?.addEventListener('click', () => {
-        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
-        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
-        garantirProcedimentosFixosV74();
-        salvarProcedimentosV74();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
-    });
-
-    const btnAdd = getById('btnAddProc');
-    if(btnAdd){
-      btnAdd.textContent = '+ Adicionar novo procedimento';
-      btnAdd.title = 'Cadastrar um novo procedimento personalizado';
-    }
+  const LEGACY_DEFAULTS = {
+    'alongamento': { preco:130, duracaoMin:120 },
+    'manutencao': { preco:90, duracaoMin:120 },
+    'remocao + nova aplicacao': { preco:160, duracaoMin:150 },
+    'remocao de alongamento': { preco:60, duracaoMin:60 }
   };
 
-  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
-
-  document.addEventListener('click', function(e){
-    const btn = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
-    if(!btn) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    garantirProcedimentosFixosV74();
-    state.procedimentos.push({
-      id: novoIdProc(),
-      nome: 'Novo procedimento',
-      preco: 0,
-      reajuste: '',
-      duracaoMin: 60,
-      historico: [],
-      fixado: false
-    });
-    salvarProcedimentosV74();
-    renderProcedimentos();
-    const body = document.querySelector('#tblProc tbody');
-    const ultimaLinha = body ? body.querySelector('tr:last-child') : null;
-    const primeiroCampo = ultimaLinha ? ultimaLinha.querySelector('input') : null;
-    try{ primeiroCampo && primeiroCampo.focus(); primeiroCampo && primeiroCampo.select(); }catch(_){ }
-  }, true);
-
-  setTimeout(function(){
-    try{ garantirProcedimentosFixosV74(); renderProcedimentos(); salvarProcedimentosV74(); }catch(e){}
-  }, 700);
-})();
-
-
-/* =======================================================
-   PATCH v76 - Procedimentos do sistema corretos
-   Regra: apenas Médico, Folga, Reunião e Compromisso são fixados.
-   Os demais procedimentos antigos são removidos; usuário cria pelo botão.
-======================================================= */
-(function(){
   function by(id){ return document.getElementById(id); }
-  function normProcV76(v){
-    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  function norm(v){
+    return String(v||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().trim().replace(/\s+/g,' ');
   }
-  function idProcV76(){
-    try{ if(typeof uid === 'function') return uid(); }catch(e){}
-    try{ if(typeof uidx === 'function') return uidx(); }catch(e){}
-    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  const sistemaNorm = new Set(SISTEMA.map(p=>norm(p.nome)));
+
+  function esc(v){
+    return String(v??'').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
   }
-  function numProcV76(v){
+  function n(v){
     try{ if(typeof num === 'function') return num(v); }catch(e){}
-    try{ if(typeof n === 'function') return n(v); }catch(e){}
-    const x = parseFloat(String(v||'0').replace(',','.'));
+    const x = Number(String(v??'0').replace(',','.'));
     return Number.isFinite(x) ? x : 0;
   }
-  function escV76(v){
-    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  const sistemaV76 = [
-    { nome:'Médico', duracaoMin:60 },
-    { nome:'Folga', duracaoMin:60 },
-    { nome:'Reunião', duracaoMin:60 },
-    { nome:'Compromisso', duracaoMin:60 }
-  ];
-  const nomesSistemaV76 = new Set(sistemaV76.map(p => normProcV76(p.nome)));
-  const nomesAntigosRemoverV76 = new Set([
-    'alongamento',
-    'manutencao',
-    'remocao + nova aplicacao',
-    'remocao de alongamento'
-  ]);
-
-  function garantirProcedimentosSistemaV76(){
-    if(!window.state) return;
-    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
-
-    const personalizados = atuais.filter(p => {
-      if(!p || !p.nome) return false;
-      const nome = normProcV76(p.nome);
-      if(nomesSistemaV76.has(nome)) return false;
-      if(nomesAntigosRemoverV76.has(nome)) return false;
-      return true;
-    }).map(p => ({
-      ...p,
-      id: p.id || idProcV76(),
-      especial: false,
-      fixado: false,
-      categoria: p.categoria === 'Sistema' ? '' : (p.categoria || '')
-    }));
-
-    const sistema = sistemaV76.map(sp => {
-      const achado = atuais.find(p => p && normProcV76(p.nome) === normProcV76(sp.nome)) || {};
-      return {
-        id: achado.id || idProcV76(),
-        nome: sp.nome,
-        preco: 0,
-        precoBase: 0,
-        reajuste: '',
-        duracaoMin: achado.duracaoMin || sp.duracaoMin,
-        historico: [],
-        especial: true,
-        fixado: true,
-        categoria: 'Sistema',
-        ativo: 'S'
-      };
-    });
-
-    state.procedimentos = sistema.concat(personalizados);
-  }
-
-  function salvarV76(){
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
-  }
-
-  window.renderProcedimentos = function(){
-    garantirProcedimentosSistemaV76();
-    const body = document.querySelector('#tblProc tbody');
-    if(!body) return;
-
-    body.innerHTML = (state.procedimentos||[]).map(p => {
-      const sistema = !!p.especial || nomesSistemaV76.has(normProcV76(p.nome));
-      return `
-        <tr data-id="${escV76(p.id)}">
-          <td><input value="${escV76(p.nome)}" ${sistema?'readonly':''}></td>
-          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numProcV76(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
-          <td><input type="date" value="${escV76(p.reajuste||'')}" ${sistema?'readonly':''}></td>
-          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
-          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
-        </tr>
-      `;
-    }).join('');
-
-    body.querySelectorAll('tr').forEach(tr => {
-      const id = tr.dataset.id;
-      const p = (state.procedimentos||[]).find(x => x.id === id);
-      if(!p) return;
-      const sistema = !!p.especial || nomesSistemaV76.has(normProcV76(p.nome));
-      const inputs = tr.querySelectorAll('input');
-      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
-
-      inpNome?.addEventListener('input', () => {
-        if(sistema){ inpNome.value = p.nome || ''; return; }
-        p.nome = inpNome.value;
-        salvarV76();
-      });
-      inpPreco?.addEventListener('input', () => {
-        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
-        p.preco = numProcV76(inpPreco.value);
-        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
-        salvarV76();
-      });
-      inpReaj?.addEventListener('change', () => {
-        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
-        p.reajuste = inpReaj.value || '';
-        if(!Array.isArray(p.historico)) p.historico = [];
-        if(p.reajuste){
-          const entrada = { dataInicio:p.reajuste, valor:numProcV76(p.preco) };
-          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
-          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
-        }
-        salvarV76();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-        try{ renderDashboard(); }catch(e){}
-      });
-      inpDur?.addEventListener('input', () => {
-        p.duracaoMin = Math.max(1, Math.round(numProcV76(inpDur.value) || 60));
-        salvarV76();
-      });
-      tr.querySelector('[data-del]')?.addEventListener('click', () => {
-        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
-        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
-        garantirProcedimentosSistemaV76();
-        salvarV76();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
-    });
-
-    const btnAdd = by('btnAddProc');
-    if(btnAdd){
-      btnAdd.textContent = '+ Adicionar novo procedimento';
-      btnAdd.title = 'Cadastrar um novo procedimento';
-    }
-    const btnReset = by('btnResetProc');
-    if(btnReset){ btnReset.style.display = 'none'; }
-  };
-  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
-
-  document.addEventListener('click', function(e){
-    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
-    if(!add) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    garantirProcedimentosSistemaV76();
-    state.procedimentos.push({
-      id:idProcV76(),
-      nome:'Novo procedimento',
-      preco:0,
-      reajuste:'',
-      duracaoMin:60,
-      historico:[],
-      especial:false,
-      fixado:false,
-      categoria:''
-    });
-    salvarV76();
-    renderProcedimentos();
-    const ultimo = document.querySelector('#tblProc tbody tr:last-child input');
-    try{ ultimo && ultimo.focus(); ultimo && ultimo.select(); }catch(e){}
-  }, true);
-
-  document.addEventListener('click', function(e){
-    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
-    if(!reset) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    garantirProcedimentosSistemaV76();
-    salvarV76();
-    renderProcedimentos();
-  }, true);
-
-  setTimeout(function(){
-    try{
-      garantirProcedimentosSistemaV76();
-      salvarV76();
-      renderProcedimentos();
-    }catch(e){ console.warn('Patch v76 procedimentos:', e); }
-  }, 900);
-})();
-
-/* =======================================================
-   PATCH v77 - Procedimentos salvando e atualizando agenda
-   Regra final: apenas Médico, Folga, Reunião e Compromisso são do sistema.
-   Novos procedimentos ficam salvos e, ao renomear, agenda/atendimentos com o mesmo nome são atualizados.
-======================================================= */
-(function(){
-  function byV77(id){ return document.getElementById(id); }
-  function normV77(v){
-    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  }
-  function idV77(){
+  function id(){
     try{ if(typeof uid === 'function') return uid(); }catch(e){}
     return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
   }
-  function numV77(v){
-    try{ if(typeof num === 'function') return num(v); }catch(e){}
-    const x = parseFloat(String(v||'0').replace(',','.'));
-    return Number.isFinite(x) ? x : 0;
+  function isSystem(p){
+    return !!p && sistemaNorm.has(norm(p.nome));
   }
-  function escV77(v){
-    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  function isLegacyDefault(p){
+    if(!p || !p.nome) return false;
+    const k = norm(p.nome);
+    const d = LEGACY_DEFAULTS[k];
+    if(!d) return false;
+    if(p.userCreated || p.criadoPeloUsuario || p.manual) return false;
+    const marcadoAntigo = !!p.fixado || !!p.especial || norm(p.categoria)==='sistema';
+    const precoIgual = Math.abs(n(p.preco) - d.preco) < 0.001;
+    const durIgual = Math.round(n(p.duracaoMin)||0) === d.duracaoMin;
+    return marcadoAntigo || (precoIgual && durIgual);
   }
-
-  const sistemaV77 = [
-    { nome:'Médico', duracaoMin:60 },
-    { nome:'Folga', duracaoMin:60 },
-    { nome:'Reunião', duracaoMin:60 },
-    { nome:'Compromisso', duracaoMin:60 }
-  ];
-  const nomesSistemaV77 = new Set(sistemaV77.map(p => normV77(p.nome)));
-  const nomesAntigosRemoverV77 = new Set([
-    'alongamento',
-    'manutencao',
-    'remocao + nova aplicacao',
-    'remocao de alongamento'
-  ]);
-
-  function garantirProcedimentosV77(){
-    if(!window.state) return;
-    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
-    const personalizados = [];
-    const vistos = new Set();
-
-    atuais.forEach(p => {
-      if(!p || !p.nome) return;
-      const nomeNorm = normV77(p.nome);
-      if(nomesSistemaV77.has(nomeNorm)) return;
-      if(nomesAntigosRemoverV77.has(nomeNorm)) return;
-      if(vistos.has(nomeNorm)) return;
-      vistos.add(nomeNorm);
-      personalizados.push({
-        ...p,
-        id: p.id || idV77(),
-        nome: String(p.nome || '').trim(),
-        preco: numV77(p.preco),
-        precoBase: p.precoBase !== undefined ? numV77(p.precoBase) : numV77(p.preco),
-        reajuste: p.reajuste || '',
-        duracaoMin: Math.max(1, Math.round(numV77(p.duracaoMin) || 60)),
-        historico: Array.isArray(p.historico) ? p.historico : [],
-        especial: false,
-        fixado: false,
-        categoria: p.categoria === 'Sistema' ? '' : (p.categoria || ''),
-        ativo: p.ativo || 'S'
-      });
-    });
-
-    const sistema = sistemaV77.map(sp => {
-      const achado = atuais.find(p => p && normV77(p.nome) === normV77(sp.nome)) || {};
-      return {
-        id: achado.id || idV77(),
-        nome: sp.nome,
-        preco: 0,
-        precoBase: 0,
-        reajuste: '',
-        duracaoMin: Math.max(1, Math.round(numV77(achado.duracaoMin) || sp.duracaoMin)),
-        historico: [],
-        especial: true,
-        fixado: true,
-        categoria: 'Sistema',
-        ativo: 'S'
-      };
-    });
-
-    state.procedimentos = sistema.concat(personalizados);
-  }
-
-  function atualizarNomeProcedimentoV77(nomeAntigo, nomeNovo){
-    const antigo = String(nomeAntigo||'').trim();
-    const novo = String(nomeNovo||'').trim();
-    if(!antigo || !novo || normV77(antigo) === normV77(novo)) return;
-
-    (state.agenda||[]).forEach(a => {
-      if(normV77(a.procedimento) === normV77(antigo)){
-        a.procedimento = novo;
-        if((a.status||'Agendado') === 'Realizado') a.recebido = numV77(procPrice(novo, a.data));
-        if((a.status||'Agendado') !== 'Bloqueio') a.valor = numV77(procPrice(novo, a.data));
-      }
-    });
-
-    (state.atendimentos||[]).forEach(a => {
-      if(normV77(a.procedimento) === normV77(antigo)){
-        a.procedimento = novo;
-        a.valor = numV77(procPrice(novo, a.data));
-        if(a.recebido !== undefined) a.recebido = numV77(procPrice(novo, a.data));
-      }
-    });
-  }
-
-  function salvarV77(){
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
-  }
-
-  // Procedimentos também contam como dados importantes. Isso evita o Firebase antigo sobrescrever um novo procedimento.
-  try{
-    window.stateDataScore = function(s){
-      try{
-        if(!s || typeof s !== 'object') return 0;
-        return (Array.isArray(s.procedimentos)?s.procedimentos.length:0)
-          + (Array.isArray(s.agenda)?s.agenda.length:0)
-          + (Array.isArray(s.clientes)?s.clientes.length:0)
-          + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
-          + (Array.isArray(s.materiais)?s.materiais.length:0)
-          + (Array.isArray(s.despesas)?s.despesas.length:0)
-          + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
-          + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
-          + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
-      }catch(e){ return 0; }
+  function normalizeProc(p, systemFlag){
+    return {
+      ...(p || {}),
+      id: (p && p.id) || id(),
+      nome: String((p && p.nome) || '').trim(),
+      preco: systemFlag ? 0 : n(p && p.preco),
+      precoBase: systemFlag ? 0 : ((p && p.precoBase !== undefined) ? n(p.precoBase) : n(p && p.preco)),
+      reajuste: systemFlag ? '' : String((p && p.reajuste) || ''),
+      duracaoMin: Math.max(1, Math.round(n(p && p.duracaoMin) || 60)),
+      historico: systemFlag ? [] : (Array.isArray(p && p.historico) ? p.historico : []),
+      especial: !!systemFlag,
+      fixado: !!systemFlag,
+      categoria: systemFlag ? 'Sistema' : '',
+      ativo: (p && p.ativo) || 'S',
+      userCreated: !systemFlag
     };
-    try{ stateDataScore = window.stateDataScore; }catch(e){}
-  }catch(e){}
-
-  window.renderProcedimentos = function(){
-    garantirProcedimentosV77();
-    const body = document.querySelector('#tblProc tbody');
-    if(!body) return;
-
-    body.innerHTML = (state.procedimentos||[]).map(p => {
-      const sistema = !!p.especial || nomesSistemaV77.has(normV77(p.nome));
-      return `
-        <tr data-id="${escV77(p.id)}">
-          <td><input value="${escV77(p.nome)}" ${sistema?'readonly':''}></td>
-          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numV77(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
-          <td><input type="date" value="${escV77(p.reajuste||'')}" ${sistema?'readonly':''}></td>
-          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
-          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
-        </tr>
-      `;
-    }).join('');
-
-    body.querySelectorAll('tr').forEach(tr => {
-      const id = tr.dataset.id;
-      const p = (state.procedimentos||[]).find(x => x.id === id);
-      if(!p) return;
-      const sistema = !!p.especial || nomesSistemaV77.has(normV77(p.nome));
-      const inputs = tr.querySelectorAll('input');
-      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
-      let nomeAntes = p.nome || '';
-
-      inpNome?.addEventListener('focus', () => { nomeAntes = p.nome || inpNome.value || ''; });
-      inpNome?.addEventListener('input', () => {
-        if(sistema){ inpNome.value = p.nome || ''; return; }
-        const novo = inpNome.value.trim();
-        const antigo = nomeAntes || p.nome || '';
-        p.nome = novo;
-        atualizarNomeProcedimentoV77(antigo, novo);
-        nomeAntes = novo;
-        salvarV77();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
-      inpNome?.addEventListener('change', () => {
-        if(sistema) return;
-        p.nome = inpNome.value.trim() || 'Novo procedimento';
-        inpNome.value = p.nome;
-        garantirProcedimentosV77();
-        salvarV77();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-      });
-
-      inpPreco?.addEventListener('input', () => {
-        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
-        p.preco = numV77(inpPreco.value);
-        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
-        salvarV77();
-        try{ updateAgendaAutoCells(); }catch(e){}
-        try{ updateAtendimentosAutoCells(); }catch(e){}
-      });
-      inpPreco?.addEventListener('change', () => {
-        if(sistema) return;
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-        try{ renderDashboard(); }catch(e){}
-      });
-
-      inpReaj?.addEventListener('change', () => {
-        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
-        p.reajuste = inpReaj.value || '';
-        if(!Array.isArray(p.historico)) p.historico = [];
-        if(p.reajuste){
-          const entrada = { dataInicio:p.reajuste, valor:numV77(p.preco) };
-          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
-          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
-        }
-        salvarV77();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-        try{ renderDashboard(); }catch(e){}
-      });
-
-      inpDur?.addEventListener('input', () => {
-        p.duracaoMin = Math.max(1, Math.round(numV77(inpDur.value) || 60));
-        salvarV77();
-      });
-
-      tr.querySelector('[data-del]')?.addEventListener('click', () => {
-        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
-        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
-        garantirProcedimentosV77();
-        salvarV77();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
-    });
-
-    const btnAdd = byV77('btnAddProc');
-    if(btnAdd){
-      btnAdd.textContent = '+ Adicionar novo procedimento';
-      btnAdd.title = 'Cadastrar um novo procedimento';
-    }
-    const btnReset = byV77('btnResetProc');
-    if(btnReset) btnReset.style.display = 'none';
-  };
-  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
-
-  // Usa capture para impedir patches antigos de transformar o botão em restaurar.
-  document.addEventListener('click', function(e){
-    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
-    if(!add) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    garantirProcedimentosV77();
-    state.procedimentos.push({
-      id:idV77(),
-      nome:'Novo procedimento',
-      preco:0,
-      precoBase:0,
-      reajuste:'',
-      duracaoMin:60,
-      historico:[],
-      especial:false,
-      fixado:false,
-      categoria:'',
-      ativo:'S'
-    });
-    salvarV77();
-    renderProcedimentos();
-    const ultimo = document.querySelector('#tblProc tbody tr:last-child input');
-    try{ ultimo && ultimo.focus(); ultimo && ultimo.select(); }catch(e){}
-  }, true);
-
-  document.addEventListener('click', function(e){
-    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
-    if(!reset) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-  }, true);
-
-  setTimeout(function(){
-    try{
-      garantirProcedimentosV77();
-      salvarV77();
-      renderProcedimentos();
-    }catch(e){ console.warn('Patch v77 procedimentos:', e); }
-  }, 1000);
-})();
-
-
-/* =======================================================
-   PATCH v78 - Procedimentos personalizados sem sobrescrever
-   Regra final:
-   - Sistema/fixados: Médico, Folga, Reunião e Compromisso
-   - Todos os demais são criados pelo usuário
-   - Pode criar quantos procedimentos quiser, mesmo antes de renomear
-   - Ao renomear, agenda/atendimentos com o nome antigo são atualizados
-======================================================= */
-(function(){
-  function $v78(id){ return document.getElementById(id); }
-  function normV78(v){
-    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-  }
-  function idV78(){
-    try{ if(typeof uid === 'function') return uid(); }catch(e){}
-    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
-  }
-  function numV78(v){
-    try{ if(typeof num === 'function') return num(v); }catch(e){}
-    const x = parseFloat(String(v||'0').replace(',','.'));
-    return Number.isFinite(x) ? x : 0;
-  }
-  function escV78(v){
-    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  const sistemaV78 = [
-    { nome:'Médico', duracaoMin:60 },
-    { nome:'Folga', duracaoMin:60 },
-    { nome:'Reunião', duracaoMin:60 },
-    { nome:'Compromisso', duracaoMin:60 }
-  ];
-  const sistemaNormV78 = new Set(sistemaV78.map(p => normV78(p.nome)));
-  const antigosPadraoV78 = new Set([
-    'alongamento',
-    'manutencao',
-    'remocao + nova aplicacao',
-    'remocao de alongamento'
-  ]);
-
-  function salvarV78(){
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state)); }catch(e){}
-    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
-    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
-    try{ if(typeof scheduleSyncDebounced === 'function') scheduleSyncDebounced(); }catch(e){}
-  }
-
-  function garantirProcedimentosV78(){
-    if(!window.state) return;
-    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
-
-    const personalizados = [];
-    atuais.forEach(p => {
+  function customFrom(list){
+    const out = [];
+    (Array.isArray(list) ? list : []).forEach(p=>{
       if(!p || !p.nome) return;
-      const n = normV78(p.nome);
-      if(sistemaNormV78.has(n)) return;
-      if(antigosPadraoV78.has(n)) return;
+      if(isSystem(p)) return;
+      if(isLegacyDefault(p)) return;
+      out.push(normalizeProc(p, false));
+    });
+    return out;
+  }
 
-      // NÃO deduplicar por nome. O usuário pode criar quantos procedimentos quiser.
-      personalizados.push({
-        ...p,
-        id: p.id || idV78(),
-        nome: String(p.nome || '').trim(),
-        preco: numV78(p.preco),
-        precoBase: p.precoBase !== undefined ? numV78(p.precoBase) : numV78(p.preco),
-        reajuste: p.reajuste || '',
-        duracaoMin: Math.max(1, Math.round(numV78(p.duracaoMin) || 60)),
-        historico: Array.isArray(p.historico) ? p.historico : [],
-        especial: false,
-        fixado: false,
-        categoria: '',
-        ativo: p.ativo || 'S'
-      });
+  function readJson(k){
+    try{
+      const raw = localStorage.getItem(k);
+      if(!raw) return null;
+      return JSON.parse(raw);
+    }catch(e){ return null; }
+  }
+
+  function readProcedureBackup(){
+    const b = readJson(PROC_BACKUP_KEY);
+    if(Array.isArray(b)) return b;
+    if(b && Array.isArray(b.procedimentos)) return b.procedimentos;
+    return [];
+  }
+
+  function writeProcedureBackup(){
+    try{
+      localStorage.setItem(PROC_BACKUP_KEY, JSON.stringify(customFrom(state && state.procedimentos)));
+    }catch(e){}
+  }
+
+  function allStoredProcedures(){
+    const out = [];
+    try{
+      for(let i=0; i<localStorage.length; i++){
+        const k = localStorage.key(i);
+        if(!k) continue;
+        if(k.indexOf('sjm_sync_pro_v1') !== 0 && k !== PROC_BACKUP_KEY) continue;
+        const parsed = readJson(k);
+        if(Array.isArray(parsed)) out.push(...parsed);
+        else if(parsed && Array.isArray(parsed.procedimentos)) out.push(...parsed.procedimentos);
+      }
+    }catch(e){}
+    out.push(...readProcedureBackup());
+    return out;
+  }
+
+  function mergeCustomProcedures(primary, rescue){
+    const result = [];
+    const seenId = new Set();
+
+    customFrom(primary).forEach(p=>{
+      if(seenId.has(p.id)) p.id = id();
+      seenId.add(p.id);
+      result.push(p);
     });
 
-    const sistema = sistemaV78.map(sp => {
-      const achado = atuais.find(p => p && normV78(p.nome) === normV78(sp.nome)) || {};
-      return {
-        id: achado.id || idV78(),
-        nome: sp.nome,
-        preco: 0,
-        precoBase: 0,
-        reajuste: '',
-        duracaoMin: Math.max(1, Math.round(numV78(achado.duracaoMin) || sp.duracaoMin)),
-        historico: [],
-        especial: true,
-        fixado: true,
-        categoria: 'Sistema',
-        ativo: 'S'
-      };
+    // Recupera procedimentos que estavam salvos em outra chave/back-up.
+    customFrom(rescue).forEach(p=>{
+      const sameId = result.some(x => x.id === p.id);
+      const sameFull = result.some(x =>
+        norm(x.nome) === norm(p.nome) &&
+        Math.abs(n(x.preco)-n(p.preco)) < 0.001 &&
+        Math.round(n(x.duracaoMin)) === Math.round(n(p.duracaoMin))
+      );
+      if(sameId || sameFull) return;
+      if(seenId.has(p.id)) p.id = id();
+      seenId.add(p.id);
+      result.push(p);
     });
 
+    return result;
+  }
+
+  function garantirProcedimentosV79(){
+    // Usa o state real do app mesmo quando window.state ainda não foi exposto.
+    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    const s = (typeof state !== 'undefined' && state) ? state : window.state;
+    if(!s) return;
+    try{ state = s; window.state = s; }catch(e){ window.state = s; }
+    const atuais = Array.isArray(s.procedimentos) ? s.procedimentos : [];
+    const rescue = allStoredProcedures();
+
+    const sistema = SISTEMA.map(sp=>{
+      const found = atuais.find(p => isSystem(p) && norm(p.nome) === norm(sp.nome)) || {};
+      return normalizeProc({ ...found, nome:sp.nome, duracaoMin:found.duracaoMin || sp.duracaoMin }, true);
+    });
+
+    const personalizados = mergeCustomProcedures(atuais, rescue);
     state.procedimentos = sistema.concat(personalizados);
   }
 
-  function proximoNomeV78(){
-    const nomes = new Set((state.procedimentos||[]).map(p => normV78(p.nome)));
+  function salvarProcedimentosV79(){
+    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    try{ garantirProcedimentosV79(); }catch(e){}
+    try{ if(typeof ensureMeta === 'function') ensureMeta(state); }catch(e){}
+    try{ if(typeof bumpRev === 'function') bumpRev(); }catch(e){}
+    writeProcedureBackup();
+
+    try{ localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state)); }catch(e){}
+    try{
+      if(typeof ACTIVE_STORAGE_KEY !== 'undefined'){
+        localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+      }
+    }catch(e){}
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+  }
+
+  function proximoNome(){
+    const nomes = new Set((state.procedimentos||[]).map(p=>norm(p.nome)));
     let i = 1;
-    while(nomes.has(normV78('Novo procedimento ' + i))) i++;
+    while(nomes.has(norm('Novo procedimento ' + i))) i++;
     return 'Novo procedimento ' + i;
   }
 
-  function atualizarAgendaNomeV78(nomeAntigo, nomeNovo){
-    const antigo = String(nomeAntigo||'').trim();
-    const novo = String(nomeNovo||'').trim();
-    if(!antigo || !novo || normV78(antigo) === normV78(novo)) return;
+  function atualizarAgendaPorNome(antigo, novo){
+    antigo = String(antigo||'').trim();
+    novo = String(novo||'').trim();
+    if(!antigo || !novo || norm(antigo) === norm(novo)) return;
 
-    (state.agenda||[]).forEach(a => {
-      if(normV78(a.procedimento) === normV78(antigo)){
+    (state.agenda||[]).forEach(a=>{
+      if(norm(a.procedimento) === norm(antigo)){
         a.procedimento = novo;
         try{
-          const valor = numV78(procPrice(novo, a.data));
+          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
           if((a.status||'Agendado') !== 'Bloqueio') a.valor = valor;
           if((a.status||'Agendado') === 'Realizado') a.recebido = valor;
         }catch(e){}
       }
     });
 
-    (state.atendimentos||[]).forEach(a => {
-      if(normV78(a.procedimento) === normV78(antigo)){
+    (state.atendimentos||[]).forEach(a=>{
+      if(norm(a.procedimento) === norm(antigo)){
         a.procedimento = novo;
         try{
-          const valor = numV78(procPrice(novo, a.data));
+          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
           a.valor = valor;
           if(a.recebido !== undefined) a.recebido = valor;
         }catch(e){}
@@ -11422,84 +10796,105 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }
 
   window.renderProcedimentos = function(){
-    garantirProcedimentosV78();
+    garantirProcedimentosV79();
+
     const body = document.querySelector('#tblProc tbody');
     if(!body) return;
 
-    body.innerHTML = (state.procedimentos||[]).map(p => {
-      const sistema = sistemaNormV78.has(normV78(p.nome)) || !!p.especial || !!p.fixado;
+    body.innerHTML = (state.procedimentos||[]).map(p=>{
+      const sistema = isSystem(p);
       return `
-        <tr data-id="${escV78(p.id)}">
-          <td><input value="${escV78(p.nome)}" ${sistema?'readonly':''}></td>
-          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numV78(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
-          <td><input type="date" value="${escV78(p.reajuste||'')}" ${sistema?'readonly':''}></td>
-          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
-          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
-        </tr>
-      `;
+        <tr data-id="${esc(p.id)}">
+          <td><input value="${esc(p.nome)}" ${sistema ? 'readonly' : ''}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${n(p.preco).toFixed(2)}" ${sistema ? 'readonly' : ''}></td>
+          <td><input type="date" value="${esc(p.reajuste||'')}" ${sistema ? 'readonly' : ''}></td>
+          <td><input type="number" step="1" value="${Math.max(1, Math.round(n(p.duracaoMin)||60))}"></td>
+          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del title="Excluir procedimento">✕</button>'}</td>
+        </tr>`;
     }).join('');
 
-    body.querySelectorAll('tr').forEach(tr => {
-      const id = tr.dataset.id;
-      const p = (state.procedimentos||[]).find(x => x.id === id);
+    body.querySelectorAll('tr').forEach(tr=>{
+      const p = (state.procedimentos||[]).find(x => String(x.id) === String(tr.dataset.id));
       if(!p) return;
 
-      const sistema = sistemaNormV78.has(normV78(p.nome)) || !!p.especial || !!p.fixado;
+      const sistema = isSystem(p);
       const inputs = tr.querySelectorAll('input');
-      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
-      let nomeAntes = p.nome || '';
+      const inpNome = inputs[0];
+      const inpPreco = inputs[1];
+      const inpReaj = inputs[2];
+      const inpDur = inputs[3];
+      let nomeOriginal = p.nome || '';
 
-      inpNome?.addEventListener('focus', () => { nomeAntes = p.nome || inpNome.value || ''; });
-      inpNome?.addEventListener('change', () => {
+      inpNome && inpNome.addEventListener('focus', ()=>{
+        nomeOriginal = p.nome || inpNome.value || '';
+      });
+
+      inpNome && inpNome.addEventListener('input', ()=>{
         if(sistema){ inpNome.value = p.nome || ''; return; }
-        const antigo = nomeAntes || p.nome || '';
-        const novo = inpNome.value.trim() || proximoNomeV78();
+        p.nome = inpNome.value;
+        p.userCreated = true;
+        writeProcedureBackup();
+        try{
+          localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state));
+          if(typeof ACTIVE_STORAGE_KEY !== 'undefined') localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+        }catch(e){}
+      });
+
+      inpNome && inpNome.addEventListener('change', ()=>{
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        const novo = inpNome.value.trim() || proximoNome();
+        const antigo = nomeOriginal || p.nome || '';
         p.nome = novo;
         inpNome.value = novo;
-        atualizarAgendaNomeV78(antigo, novo);
-        garantirProcedimentosV78();
-        salvarV78();
+        p.userCreated = true;
+        atualizarAgendaPorNome(antigo, novo);
+        salvarProcedimentosV79();
         renderProcedimentos();
         try{ renderAgendaHard(); }catch(e){}
         try{ renderAtendimentosHard(); }catch(e){}
         try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
       });
 
-      inpPreco?.addEventListener('input', () => {
+      inpPreco && inpPreco.addEventListener('input', ()=>{
         if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
-        p.preco = numV78(inpPreco.value);
+        p.preco = n(inpPreco.value);
         if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
-        salvarV78();
+        p.userCreated = true;
+        salvarProcedimentosV79();
         try{ updateAgendaAutoCells(); }catch(e){}
         try{ updateAtendimentosAutoCells(); }catch(e){}
       });
 
-      inpReaj?.addEventListener('change', () => {
+      inpReaj && inpReaj.addEventListener('change', ()=>{
         if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
         p.reajuste = inpReaj.value || '';
         if(!Array.isArray(p.historico)) p.historico = [];
         if(p.reajuste){
-          const entrada = { dataInicio:p.reajuste, valor:numV78(p.preco) };
+          const entrada = { dataInicio:p.reajuste, valor:n(p.preco) };
           const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
+          if(idx >= 0) p.historico[idx] = entrada;
+          else p.historico.push(entrada);
           p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
         }
-        salvarV78();
+        p.userCreated = true;
+        salvarProcedimentosV79();
         try{ renderAgendaHard(); }catch(e){}
         try{ renderAtendimentosHard(); }catch(e){}
         try{ renderCalendar(); }catch(e){}
       });
 
-      inpDur?.addEventListener('input', () => {
-        p.duracaoMin = Math.max(1, Math.round(numV78(inpDur.value) || 60));
-        salvarV78();
+      inpDur && inpDur.addEventListener('input', ()=>{
+        p.duracaoMin = Math.max(1, Math.round(n(inpDur.value)||60));
+        if(!sistema) p.userCreated = true;
+        salvarProcedimentosV79();
       });
 
-      tr.querySelector('[data-del]')?.addEventListener('click', () => {
+      const del = tr.querySelector('[data-del]');
+      del && del.addEventListener('click', ()=>{
         if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
-        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
-        garantirProcedimentosV78();
-        salvarV78();
+        state.procedimentos = (state.procedimentos||[]).filter(x => String(x.id) !== String(p.id));
+        salvarProcedimentosV79();
         renderProcedimentos();
         try{ renderAgendaHard(); }catch(e){}
         try{ renderAtendimentosHard(); }catch(e){}
@@ -11507,47 +10902,48 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       });
     });
 
-    const add = $v78('btnAddProc');
+    const add = by('btnAddProc');
     if(add){
       add.textContent = '+ Adicionar novo procedimento';
       add.title = 'Cadastrar um novo procedimento';
     }
-    const reset = $v78('btnResetProc');
+    const reset = by('btnResetProc');
     if(reset) reset.style.display = 'none';
   };
   try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
 
-  // Captura no WINDOW: roda antes dos listeners antigos do document e impede eles de sobrescreverem a lista.
+  // Captura primeiro e impede listeners antigos de criar/restaurar procedimento errado.
   window.addEventListener('click', function(e){
     const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
     if(!add) return;
+
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    garantirProcedimentosV78();
-    const novo = {
-      id:idV78(),
-      nome:proximoNomeV78(),
+    garantirProcedimentosV79();
+    const novo = normalizeProc({
+      id:id(),
+      nome:proximoNome(),
       preco:0,
       precoBase:0,
       reajuste:'',
       duracaoMin:60,
       historico:[],
-      especial:false,
-      fixado:false,
-      categoria:'',
-      ativo:'S'
-    };
+      userCreated:true
+    }, false);
+
     state.procedimentos.push(novo);
-    salvarV78();
+    salvarProcedimentosV79();
     renderProcedimentos();
 
-    setTimeout(function(){
-      const linha = document.querySelector('#tblProc tbody tr[data-id="' + CSS.escape(novo.id) + '"]');
-      const campo = linha ? linha.querySelector('input') : document.querySelector('#tblProc tbody tr:last-child input');
-      try{ campo && campo.focus(); campo && campo.select(); }catch(e){}
-    }, 20);
+    setTimeout(()=>{
+      try{
+        const linha = document.querySelector('#tblProc tbody tr[data-id="' + CSS.escape(novo.id) + '"]');
+        const input = linha ? linha.querySelector('input') : null;
+        if(input){ input.focus(); input.select(); }
+      }catch(e){}
+    }, 30);
   }, true);
 
   window.addEventListener('click', function(e){
@@ -11558,11 +10954,56 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     e.stopImmediatePropagation();
   }, true);
 
-  setTimeout(function(){
+  // Procedimentos contam como dados importantes no anti-sobrescrita do Firebase.
+  try{
+    window.stateDataScore = function(s){
+      try{
+        if(!s || typeof s !== 'object') return 0;
+        return (Array.isArray(s.procedimentos)?s.procedimentos.length*500:0)
+          + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
+          + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
+          + (Array.isArray(s.atendimentos)?s.atendimentos.length*1200:0)
+          + (Array.isArray(s.materiais)?s.materiais.length*300:0)
+          + (Array.isArray(s.despesas)?s.despesas.length*300:0)
+          + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*300:0)
+          + (Array.isArray(s.wppQueue)?s.wppQueue.length*50:0)
+          + (Array.isArray(s.crmQueue)?s.crmQueue.length*50:0);
+      }catch(e){ return 0; }
+    };
+    try{ stateDataScore = window.stateDataScore; }catch(e){}
+  }catch(e){}
+
+  // Se vier estado remoto antigo, preserva os procedimentos criados pelo usuário.
+  try{
+    const oldApply = window.__SJM_APPLY_REMOTE_STATE;
+    if(typeof oldApply === 'function'){
+      window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+        try{
+          const localCustom = customFrom((state && state.procedimentos) || []).concat(readProcedureBackup());
+          if(remoteState && typeof remoteState === 'object'){
+            const remoteCustom = customFrom(remoteState.procedimentos || []);
+            remoteState.procedimentos = SISTEMA.map(sp => normalizeProc(sp, true)).concat(mergeCustomProcedures(remoteCustom, localCustom));
+          }
+        }catch(e){}
+        return oldApply.apply(this, arguments);
+      };
+    }
+  }catch(e){}
+
+  // Inicialização final: roda depois dos patches antigos e salva a lista certa.
+  function boot(){
     try{
-      garantirProcedimentosV78();
-      salvarV78();
+      garantirProcedimentosV79();
+      salvarProcedimentosV79();
       renderProcedimentos();
-    }catch(e){ console.warn('Patch v78 procedimentos:', e); }
-  }, 1300);
+      try{ renderAgendaHard(); }catch(e){}
+      try{ renderCalendar(); }catch(e){}
+    }catch(e){ console.warn('Patch v79 procedimentos:', e); }
+  }
+  setTimeout(boot, 50);
+  setTimeout(boot, 1700);
+  window.addEventListener('beforeunload', function(){
+    try{ salvarProcedimentosV79(); }catch(e){}
+  });
 })();
+
