@@ -2006,7 +2006,7 @@ function renderAgendaCompact(){
   const idx = state.agenda.findIndex(x=>x.id===ag.id);
   const isBlock = (ag.status === 'Bloqueio');
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
-  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
+  const statuses = ["Agendado","Confirmado","Realizado","Cancelado","Remarcado","Bloqueio"];
   const wpp = clientWpp(ag.cliente);
   const val = isBlock ? 0 : procPrice(ag.procedimento, ag.data);
   const rec = num(ag.recebido);
@@ -2109,7 +2109,7 @@ function renderAgendaHard(){
   }
 
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
-  const statuses = ["Agendado","Realizado","Cancelado","Remarcado","Bloqueio"];
+  const statuses = ["Agendado","Confirmado","Realizado","Cancelado","Remarcado","Bloqueio"];
 
   enforceAgendaRecebidoRules();
 
@@ -10438,4 +10438,187 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   try{ persist('boot', false); }catch(e){ console.warn('boot v62:', e); }
   setTimeout(function(){ try{ persist('boot-late', true); if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){} }, 350);
   window.addEventListener('beforeunload', function(){ try{ persist('beforeunload', true); }catch(e){} });
+})();
+
+/* =========================================================
+   v73 — Ajustes solicitados Allan
+   - Plano atual altera e atualiza em Configurações
+   - Botão Concluir cadastro antes das fotos da cliente
+   - Confirmação da agenda marca como Confirmado automaticamente
+   - Procedimentos iniciam e ficam apenas com os fixos definidos
+   ========================================================= */
+(function(){
+  'use strict';
+  if(window.__SJM_ALLAN_FIX_V73) return;
+  window.__SJM_ALLAN_FIX_V73 = true;
+
+  const $ = (id)=>document.getElementById(id);
+  const esc = (v)=>String(v??'').replace(/[&<>'"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':'&quot;'}[m]));
+  const n = (v)=>{ const x=Number(String(v??'').replace(',','.')); return Number.isFinite(x)?x:0; };
+  const uidx = ()=>{ try{return uid();}catch(e){return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2);} };
+  function saveNow(){ try{ saveSoft(); }catch(e){} try{ scheduleSync(); }catch(e){} try{ scheduleSyncDebounced(); }catch(e){} }
+  function rerender(){
+    try{ applyPlanUI(); }catch(e){}
+    try{ renderPlanCards(); }catch(e){}
+    try{ renderProcedimentos(); }catch(e){}
+    try{ renderAgendaHard(); }catch(e){}
+    try{ renderCalendar(); }catch(e){}
+    try{ renderClientes(); }catch(e){}
+  }
+
+  function setPlanV73(plan){
+    plan = String(plan||'premium').toLowerCase();
+    if(!['basic','pro','premium','developer'].includes(plan)) plan='premium';
+    state.settings = state.settings || {};
+    state.settings.plano = plan;
+    try{ localStorage.setItem('sjm_current_plan_v34', plan); }catch(e){}
+    try{ window.__SJM_STORED_PLAN = plan; }catch(e){}
+    if($('cfgPlano')) $('cfgPlano').value = plan;
+    const badge = $('currentPlanBadge');
+    if(badge) badge.textContent = plan==='developer' ? 'Desenvolvedor' : `Plano ${(window.PLAN_LABELS?.[plan]) || ({basic:'Básico',pro:'Pro',premium:'Premium'}[plan]||plan)}`;
+    saveNow();
+    rerender();
+  }
+
+  // Plano: Configurações e cards sempre atualizam o plano atual.
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.id === 'cfgPlano') setPlanV73(e.target.value);
+  }, true);
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('[data-change-plan]') : null;
+    if(!btn) return;
+    e.preventDefault();
+    setPlanV73(btn.getAttribute('data-change-plan'));
+    try{ alert('Plano atualizado ✅'); }catch(_){}
+  }, true);
+  const oldCards = window.renderPlanCards;
+  window.renderPlanCards = function(){
+    try{ oldCards && oldCards(); }catch(e){}
+    const box = $('planCards');
+    if(!box) return;
+    const current = String(state?.settings?.plano || 'premium').toLowerCase();
+    box.querySelectorAll('[data-change-plan]').forEach(b=>{ b.disabled = false; b.classList.remove('btn--ghost'); });
+    box.querySelectorAll('.planCard').forEach(card=>card.classList.remove('active'));
+    box.querySelectorAll('button').forEach(b=>{
+      if((b.textContent||'').includes('Plano atual')){
+        const card = b.closest('.planCard');
+        const title = (card?.querySelector('b')?.textContent || '').toLowerCase();
+        const plan = title.includes('bás') || title.includes('bas') ? 'basic' : title.includes('pro') ? 'pro' : 'premium';
+        b.disabled = false;
+        b.classList.remove('btn--ghost');
+        b.setAttribute('data-change-plan', plan);
+        b.textContent = plan===current ? 'Manter este plano' : 'Mudar para este plano';
+      }
+    });
+  };
+  try{ renderPlanCards = window.renderPlanCards; }catch(e){}
+
+  // Agenda: clicar em confirmação também muda status para Confirmado.
+  function confirmAgendaV73(a){
+    if(!a || String(a.status||'') === 'Bloqueio') return;
+    a.status = 'Confirmado';
+    if(a.recebido === undefined || a.recebido === null || a.recebido === '') a.recebido = 0;
+    saveNow();
+    try{ renderAgendaHard(); }catch(e){}
+    try{ renderCalendar(); }catch(e){}
+  }
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('#agDetConf,[data-conf]') : null;
+    if(!b) return;
+    let id = '';
+    const tr = b.closest('tr[data-id]');
+    if(tr) id = tr.dataset.id || '';
+    if(!id) id = window.__agendaSelectedId || '';
+    const a = (state.agenda||[]).find(x=>x.id===id);
+    if(a) setTimeout(()=>confirmAgendaV73(a), 30);
+  }, true);
+
+  // Procedimentos fixos definidos.
+  const fixedProcedures = [
+    { nome:'Alongamento', preco:130, duracaoMin:120 },
+    { nome:'Manutenção', preco:90, duracaoMin:120 },
+    { nome:'Remoção + Nova Aplicação', preco:160, duracaoMin:150 },
+    { nome:'Remoção de Alongamento', preco:60, duracaoMin:60 }
+  ];
+  const specialNames = new Set(['Médico','Folga','Compromisso','Reunião']);
+  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+  function ensureFixedProcedures(){
+    state.procedimentos = Array.isArray(state.procedimentos) ? state.procedimentos : [];
+    const old = state.procedimentos || [];
+    const next = fixedProcedures.map(fp=>{
+      const found = old.find(p=>norm(p.nome)===norm(fp.nome)) || {};
+      return { id: found.id || uidx(), nome: fp.nome, preco: found.preco!==undefined ? n(found.preco) : fp.preco, reajuste: found.reajuste || '', duracaoMin: found.duracaoMin || fp.duracaoMin, fixado:true, historico: Array.isArray(found.historico)?found.historico:[] };
+    });
+    old.forEach(p=>{ if(p && (p.especial || specialNames.has(p.nome))) next.push(p); });
+    // remove especiais duplicados por nome
+    const seen = new Set();
+    state.procedimentos = next.filter(p=>{ const k=norm(p.nome); if(seen.has(k)) return false; seen.add(k); return true; });
+  }
+  const oldProc = window.renderProcedimentos;
+  window.renderProcedimentos = function(){
+    ensureFixedProcedures();
+    try{ oldProc && oldProc(); }catch(e){}
+    const add = $('btnAddProc');
+    if(add){ add.textContent = '+ Restaurar procedimentos fixos'; add.title='Recria apenas os procedimentos definidos do sistema'; }
+    const body = document.querySelector('#tblProc tbody');
+    if(!body) return;
+    body.querySelectorAll('tr').forEach(tr=>{
+      const id = tr.dataset.id;
+      const p = (state.procedimentos||[]).find(x=>x.id===id);
+      if(!p) return;
+      const first = tr.querySelector('td:first-child input');
+      if(first) first.readOnly = true;
+      const del = tr.querySelector('[data-del]');
+      if(del){ del.disabled = true; del.textContent = 'Fixado'; del.classList.add('btn--ghost'); }
+    });
+    if(!(state.procedimentos||[]).length){
+      body.innerHTML = '<tr><td colspan="5" class="hint">Adicione procedimentos para começar.</td></tr>';
+    }
+  };
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+  document.addEventListener('click', function(e){
+    const b = e.target && e.target.closest ? e.target.closest('#btnAddProc,#btnResetProc') : null;
+    if(!b) return;
+    e.preventDefault();
+    ensureFixedProcedures();
+    saveNow();
+    try{ renderProcedimentos(); }catch(e){}
+    try{ renderAgendaHard(); }catch(e){}
+  }, true);
+
+  // Clientes: botão Concluir cadastro antes de Fotos.
+  function addConcluirCliente(){
+    const actions = document.querySelector('.clienteDetail__actions');
+    if(!actions || $('cliDetConcluir')) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.id = 'cliDetConcluir';
+    btn.type = 'button';
+    btn.textContent = '✅ Concluir cadastro';
+    actions.insertBefore(btn, actions.firstChild);
+    btn.addEventListener('click', function(){
+      saveNow();
+      try{ updateAgendaAutoCells(); updateAtendimentosAutoCells(); }catch(e){}
+      try{ alert('Cadastro da cliente concluído e salvo ✅'); }catch(e){}
+      try{ modeClientes && modeClientes('list'); }catch(e){ window.__clienteViewMode='list'; }
+      try{ renderClientes(); }catch(e){}
+    });
+  }
+  const oldCliCompact = window.renderClientesCompactFinal;
+  if(typeof oldCliCompact === 'function'){
+    window.renderClientesCompactFinal = function(){ const r = oldCliCompact.apply(this, arguments); addConcluirCliente(); return r; };
+  }
+  const oldCli = window.renderClientes;
+  if(typeof oldCli === 'function'){
+    window.renderClientes = function(){ const r = oldCli.apply(this, arguments); addConcluirCliente(); return r; };
+    try{ renderClientes = window.renderClientes; }catch(e){}
+  }
+
+  setTimeout(function(){
+    try{ ensureFixedProcedures(); }catch(e){}
+    if($('cfgPlano')) $('cfgPlano').value = String(state?.settings?.plano || 'premium').toLowerCase();
+    saveNow();
+    rerender();
+    addConcluirCliente();
+  }, 400);
 })();
