@@ -11002,3 +11002,567 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ console.warn('Patch v76 procedimentos:', e); }
   }, 900);
 })();
+
+/* =======================================================
+   PATCH v77 - Procedimentos salvando e atualizando agenda
+   Regra final: apenas Médico, Folga, Reunião e Compromisso são do sistema.
+   Novos procedimentos ficam salvos e, ao renomear, agenda/atendimentos com o mesmo nome são atualizados.
+======================================================= */
+(function(){
+  function byV77(id){ return document.getElementById(id); }
+  function normV77(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  function idV77(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+  function numV77(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    const x = parseFloat(String(v||'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function escV77(v){
+    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const sistemaV77 = [
+    { nome:'Médico', duracaoMin:60 },
+    { nome:'Folga', duracaoMin:60 },
+    { nome:'Reunião', duracaoMin:60 },
+    { nome:'Compromisso', duracaoMin:60 }
+  ];
+  const nomesSistemaV77 = new Set(sistemaV77.map(p => normV77(p.nome)));
+  const nomesAntigosRemoverV77 = new Set([
+    'alongamento',
+    'manutencao',
+    'remocao + nova aplicacao',
+    'remocao de alongamento'
+  ]);
+
+  function garantirProcedimentosV77(){
+    if(!window.state) return;
+    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
+    const personalizados = [];
+    const vistos = new Set();
+
+    atuais.forEach(p => {
+      if(!p || !p.nome) return;
+      const nomeNorm = normV77(p.nome);
+      if(nomesSistemaV77.has(nomeNorm)) return;
+      if(nomesAntigosRemoverV77.has(nomeNorm)) return;
+      if(vistos.has(nomeNorm)) return;
+      vistos.add(nomeNorm);
+      personalizados.push({
+        ...p,
+        id: p.id || idV77(),
+        nome: String(p.nome || '').trim(),
+        preco: numV77(p.preco),
+        precoBase: p.precoBase !== undefined ? numV77(p.precoBase) : numV77(p.preco),
+        reajuste: p.reajuste || '',
+        duracaoMin: Math.max(1, Math.round(numV77(p.duracaoMin) || 60)),
+        historico: Array.isArray(p.historico) ? p.historico : [],
+        especial: false,
+        fixado: false,
+        categoria: p.categoria === 'Sistema' ? '' : (p.categoria || ''),
+        ativo: p.ativo || 'S'
+      });
+    });
+
+    const sistema = sistemaV77.map(sp => {
+      const achado = atuais.find(p => p && normV77(p.nome) === normV77(sp.nome)) || {};
+      return {
+        id: achado.id || idV77(),
+        nome: sp.nome,
+        preco: 0,
+        precoBase: 0,
+        reajuste: '',
+        duracaoMin: Math.max(1, Math.round(numV77(achado.duracaoMin) || sp.duracaoMin)),
+        historico: [],
+        especial: true,
+        fixado: true,
+        categoria: 'Sistema',
+        ativo: 'S'
+      };
+    });
+
+    state.procedimentos = sistema.concat(personalizados);
+  }
+
+  function atualizarNomeProcedimentoV77(nomeAntigo, nomeNovo){
+    const antigo = String(nomeAntigo||'').trim();
+    const novo = String(nomeNovo||'').trim();
+    if(!antigo || !novo || normV77(antigo) === normV77(novo)) return;
+
+    (state.agenda||[]).forEach(a => {
+      if(normV77(a.procedimento) === normV77(antigo)){
+        a.procedimento = novo;
+        if((a.status||'Agendado') === 'Realizado') a.recebido = numV77(procPrice(novo, a.data));
+        if((a.status||'Agendado') !== 'Bloqueio') a.valor = numV77(procPrice(novo, a.data));
+      }
+    });
+
+    (state.atendimentos||[]).forEach(a => {
+      if(normV77(a.procedimento) === normV77(antigo)){
+        a.procedimento = novo;
+        a.valor = numV77(procPrice(novo, a.data));
+        if(a.recebido !== undefined) a.recebido = numV77(procPrice(novo, a.data));
+      }
+    });
+  }
+
+  function salvarV77(){
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
+  }
+
+  // Procedimentos também contam como dados importantes. Isso evita o Firebase antigo sobrescrever um novo procedimento.
+  try{
+    window.stateDataScore = function(s){
+      try{
+        if(!s || typeof s !== 'object') return 0;
+        return (Array.isArray(s.procedimentos)?s.procedimentos.length:0)
+          + (Array.isArray(s.agenda)?s.agenda.length:0)
+          + (Array.isArray(s.clientes)?s.clientes.length:0)
+          + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
+          + (Array.isArray(s.materiais)?s.materiais.length:0)
+          + (Array.isArray(s.despesas)?s.despesas.length:0)
+          + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
+          + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
+          + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
+      }catch(e){ return 0; }
+    };
+    try{ stateDataScore = window.stateDataScore; }catch(e){}
+  }catch(e){}
+
+  window.renderProcedimentos = function(){
+    garantirProcedimentosV77();
+    const body = document.querySelector('#tblProc tbody');
+    if(!body) return;
+
+    body.innerHTML = (state.procedimentos||[]).map(p => {
+      const sistema = !!p.especial || nomesSistemaV77.has(normV77(p.nome));
+      return `
+        <tr data-id="${escV77(p.id)}">
+          <td><input value="${escV77(p.nome)}" ${sistema?'readonly':''}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numV77(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
+          <td><input type="date" value="${escV77(p.reajuste||'')}" ${sistema?'readonly':''}></td>
+          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
+          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const p = (state.procedimentos||[]).find(x => x.id === id);
+      if(!p) return;
+      const sistema = !!p.especial || nomesSistemaV77.has(normV77(p.nome));
+      const inputs = tr.querySelectorAll('input');
+      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
+      let nomeAntes = p.nome || '';
+
+      inpNome?.addEventListener('focus', () => { nomeAntes = p.nome || inpNome.value || ''; });
+      inpNome?.addEventListener('input', () => {
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        const novo = inpNome.value.trim();
+        const antigo = nomeAntes || p.nome || '';
+        p.nome = novo;
+        atualizarNomeProcedimentoV77(antigo, novo);
+        nomeAntes = novo;
+        salvarV77();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+      inpNome?.addEventListener('change', () => {
+        if(sistema) return;
+        p.nome = inpNome.value.trim() || 'Novo procedimento';
+        inpNome.value = p.nome;
+        garantirProcedimentosV77();
+        salvarV77();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+      });
+
+      inpPreco?.addEventListener('input', () => {
+        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
+        p.preco = numV77(inpPreco.value);
+        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
+        salvarV77();
+        try{ updateAgendaAutoCells(); }catch(e){}
+        try{ updateAtendimentosAutoCells(); }catch(e){}
+      });
+      inpPreco?.addEventListener('change', () => {
+        if(sistema) return;
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+      });
+
+      inpReaj?.addEventListener('change', () => {
+        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
+        p.reajuste = inpReaj.value || '';
+        if(!Array.isArray(p.historico)) p.historico = [];
+        if(p.reajuste){
+          const entrada = { dataInicio:p.reajuste, valor:numV77(p.preco) };
+          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
+          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
+        }
+        salvarV77();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+      });
+
+      inpDur?.addEventListener('input', () => {
+        p.duracaoMin = Math.max(1, Math.round(numV77(inpDur.value) || 60));
+        salvarV77();
+      });
+
+      tr.querySelector('[data-del]')?.addEventListener('click', () => {
+        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
+        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
+        garantirProcedimentosV77();
+        salvarV77();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+    });
+
+    const btnAdd = byV77('btnAddProc');
+    if(btnAdd){
+      btnAdd.textContent = '+ Adicionar novo procedimento';
+      btnAdd.title = 'Cadastrar um novo procedimento';
+    }
+    const btnReset = byV77('btnResetProc');
+    if(btnReset) btnReset.style.display = 'none';
+  };
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+
+  // Usa capture para impedir patches antigos de transformar o botão em restaurar.
+  document.addEventListener('click', function(e){
+    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
+    if(!add) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    garantirProcedimentosV77();
+    state.procedimentos.push({
+      id:idV77(),
+      nome:'Novo procedimento',
+      preco:0,
+      precoBase:0,
+      reajuste:'',
+      duracaoMin:60,
+      historico:[],
+      especial:false,
+      fixado:false,
+      categoria:'',
+      ativo:'S'
+    });
+    salvarV77();
+    renderProcedimentos();
+    const ultimo = document.querySelector('#tblProc tbody tr:last-child input');
+    try{ ultimo && ultimo.focus(); ultimo && ultimo.select(); }catch(e){}
+  }, true);
+
+  document.addEventListener('click', function(e){
+    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
+    if(!reset) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }, true);
+
+  setTimeout(function(){
+    try{
+      garantirProcedimentosV77();
+      salvarV77();
+      renderProcedimentos();
+    }catch(e){ console.warn('Patch v77 procedimentos:', e); }
+  }, 1000);
+})();
+
+
+/* =======================================================
+   PATCH v78 - Procedimentos personalizados sem sobrescrever
+   Regra final:
+   - Sistema/fixados: Médico, Folga, Reunião e Compromisso
+   - Todos os demais são criados pelo usuário
+   - Pode criar quantos procedimentos quiser, mesmo antes de renomear
+   - Ao renomear, agenda/atendimentos com o nome antigo são atualizados
+======================================================= */
+(function(){
+  function $v78(id){ return document.getElementById(id); }
+  function normV78(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  function idV78(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+  }
+  function numV78(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    const x = parseFloat(String(v||'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function escV78(v){
+    return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const sistemaV78 = [
+    { nome:'Médico', duracaoMin:60 },
+    { nome:'Folga', duracaoMin:60 },
+    { nome:'Reunião', duracaoMin:60 },
+    { nome:'Compromisso', duracaoMin:60 }
+  ];
+  const sistemaNormV78 = new Set(sistemaV78.map(p => normV78(p.nome)));
+  const antigosPadraoV78 = new Set([
+    'alongamento',
+    'manutencao',
+    'remocao + nova aplicacao',
+    'remocao de alongamento'
+  ]);
+
+  function salvarV78(){
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
+    try{ if(typeof scheduleSyncDebounced === 'function') scheduleSyncDebounced(); }catch(e){}
+  }
+
+  function garantirProcedimentosV78(){
+    if(!window.state) return;
+    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
+
+    const personalizados = [];
+    atuais.forEach(p => {
+      if(!p || !p.nome) return;
+      const n = normV78(p.nome);
+      if(sistemaNormV78.has(n)) return;
+      if(antigosPadraoV78.has(n)) return;
+
+      // NÃO deduplicar por nome. O usuário pode criar quantos procedimentos quiser.
+      personalizados.push({
+        ...p,
+        id: p.id || idV78(),
+        nome: String(p.nome || '').trim(),
+        preco: numV78(p.preco),
+        precoBase: p.precoBase !== undefined ? numV78(p.precoBase) : numV78(p.preco),
+        reajuste: p.reajuste || '',
+        duracaoMin: Math.max(1, Math.round(numV78(p.duracaoMin) || 60)),
+        historico: Array.isArray(p.historico) ? p.historico : [],
+        especial: false,
+        fixado: false,
+        categoria: '',
+        ativo: p.ativo || 'S'
+      });
+    });
+
+    const sistema = sistemaV78.map(sp => {
+      const achado = atuais.find(p => p && normV78(p.nome) === normV78(sp.nome)) || {};
+      return {
+        id: achado.id || idV78(),
+        nome: sp.nome,
+        preco: 0,
+        precoBase: 0,
+        reajuste: '',
+        duracaoMin: Math.max(1, Math.round(numV78(achado.duracaoMin) || sp.duracaoMin)),
+        historico: [],
+        especial: true,
+        fixado: true,
+        categoria: 'Sistema',
+        ativo: 'S'
+      };
+    });
+
+    state.procedimentos = sistema.concat(personalizados);
+  }
+
+  function proximoNomeV78(){
+    const nomes = new Set((state.procedimentos||[]).map(p => normV78(p.nome)));
+    let i = 1;
+    while(nomes.has(normV78('Novo procedimento ' + i))) i++;
+    return 'Novo procedimento ' + i;
+  }
+
+  function atualizarAgendaNomeV78(nomeAntigo, nomeNovo){
+    const antigo = String(nomeAntigo||'').trim();
+    const novo = String(nomeNovo||'').trim();
+    if(!antigo || !novo || normV78(antigo) === normV78(novo)) return;
+
+    (state.agenda||[]).forEach(a => {
+      if(normV78(a.procedimento) === normV78(antigo)){
+        a.procedimento = novo;
+        try{
+          const valor = numV78(procPrice(novo, a.data));
+          if((a.status||'Agendado') !== 'Bloqueio') a.valor = valor;
+          if((a.status||'Agendado') === 'Realizado') a.recebido = valor;
+        }catch(e){}
+      }
+    });
+
+    (state.atendimentos||[]).forEach(a => {
+      if(normV78(a.procedimento) === normV78(antigo)){
+        a.procedimento = novo;
+        try{
+          const valor = numV78(procPrice(novo, a.data));
+          a.valor = valor;
+          if(a.recebido !== undefined) a.recebido = valor;
+        }catch(e){}
+      }
+    });
+  }
+
+  window.renderProcedimentos = function(){
+    garantirProcedimentosV78();
+    const body = document.querySelector('#tblProc tbody');
+    if(!body) return;
+
+    body.innerHTML = (state.procedimentos||[]).map(p => {
+      const sistema = sistemaNormV78.has(normV78(p.nome)) || !!p.especial || !!p.fixado;
+      return `
+        <tr data-id="${escV78(p.id)}">
+          <td><input value="${escV78(p.nome)}" ${sistema?'readonly':''}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numV78(p.preco).toFixed(2)}" ${sistema?'readonly':''}></td>
+          <td><input type="date" value="${escV78(p.reajuste||'')}" ${sistema?'readonly':''}></td>
+          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
+          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const p = (state.procedimentos||[]).find(x => x.id === id);
+      if(!p) return;
+
+      const sistema = sistemaNormV78.has(normV78(p.nome)) || !!p.especial || !!p.fixado;
+      const inputs = tr.querySelectorAll('input');
+      const inpNome = inputs[0], inpPreco = inputs[1], inpReaj = inputs[2], inpDur = inputs[3];
+      let nomeAntes = p.nome || '';
+
+      inpNome?.addEventListener('focus', () => { nomeAntes = p.nome || inpNome.value || ''; });
+      inpNome?.addEventListener('change', () => {
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        const antigo = nomeAntes || p.nome || '';
+        const novo = inpNome.value.trim() || proximoNomeV78();
+        p.nome = novo;
+        inpNome.value = novo;
+        atualizarAgendaNomeV78(antigo, novo);
+        garantirProcedimentosV78();
+        salvarV78();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+
+      inpPreco?.addEventListener('input', () => {
+        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
+        p.preco = numV78(inpPreco.value);
+        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
+        salvarV78();
+        try{ updateAgendaAutoCells(); }catch(e){}
+        try{ updateAtendimentosAutoCells(); }catch(e){}
+      });
+
+      inpReaj?.addEventListener('change', () => {
+        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
+        p.reajuste = inpReaj.value || '';
+        if(!Array.isArray(p.historico)) p.historico = [];
+        if(p.reajuste){
+          const entrada = { dataInicio:p.reajuste, valor:numV78(p.preco) };
+          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
+          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
+        }
+        salvarV78();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+
+      inpDur?.addEventListener('input', () => {
+        p.duracaoMin = Math.max(1, Math.round(numV78(inpDur.value) || 60));
+        salvarV78();
+      });
+
+      tr.querySelector('[data-del]')?.addEventListener('click', () => {
+        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
+        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
+        garantirProcedimentosV78();
+        salvarV78();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+    });
+
+    const add = $v78('btnAddProc');
+    if(add){
+      add.textContent = '+ Adicionar novo procedimento';
+      add.title = 'Cadastrar um novo procedimento';
+    }
+    const reset = $v78('btnResetProc');
+    if(reset) reset.style.display = 'none';
+  };
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+
+  // Captura no WINDOW: roda antes dos listeners antigos do document e impede eles de sobrescreverem a lista.
+  window.addEventListener('click', function(e){
+    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
+    if(!add) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    garantirProcedimentosV78();
+    const novo = {
+      id:idV78(),
+      nome:proximoNomeV78(),
+      preco:0,
+      precoBase:0,
+      reajuste:'',
+      duracaoMin:60,
+      historico:[],
+      especial:false,
+      fixado:false,
+      categoria:'',
+      ativo:'S'
+    };
+    state.procedimentos.push(novo);
+    salvarV78();
+    renderProcedimentos();
+
+    setTimeout(function(){
+      const linha = document.querySelector('#tblProc tbody tr[data-id="' + CSS.escape(novo.id) + '"]');
+      const campo = linha ? linha.querySelector('input') : document.querySelector('#tblProc tbody tr:last-child input');
+      try{ campo && campo.focus(); campo && campo.select(); }catch(e){}
+    }, 20);
+  }, true);
+
+  window.addEventListener('click', function(e){
+    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
+    if(!reset) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  }, true);
+
+  setTimeout(function(){
+    try{
+      garantirProcedimentosV78();
+      salvarV78();
+      renderProcedimentos();
+    }catch(e){ console.warn('Patch v78 procedimentos:', e); }
+  }, 1300);
+})();
