@@ -10622,3 +10622,183 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     addConcluirCliente();
   }, 400);
 })();
+
+/* =======================================================
+   PATCH v74 - Procedimentos: botão adiciona novo procedimento
+   Base: v73_erros_corrigidos
+======================================================= */
+(function(){
+  function getById(id){ return document.getElementById(id); }
+  function normalizaProc(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+  }
+  function novoIdProc(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    try{ if(typeof uidx === 'function') return uidx(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+  function numeroProc(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    try{ if(typeof n === 'function') return n(v); }catch(e){}
+    const x = parseFloat(String(v||'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+
+  const procedimentosFixosV74 = [
+    { nome:'Alongamento', preco:130, duracaoMin:120 },
+    { nome:'Manutenção', preco:90, duracaoMin:120 },
+    { nome:'Remoção + Nova Aplicação', preco:160, duracaoMin:150 },
+    { nome:'Remoção de Alongamento', preco:60, duracaoMin:60 }
+  ];
+
+  function garantirProcedimentosFixosV74(){
+    if(!window.state) return;
+    const atuais = Array.isArray(state.procedimentos) ? state.procedimentos : [];
+    const usados = new Set();
+    const fixos = procedimentosFixosV74.map(fp => {
+      const achado = atuais.find(p => p && normalizaProc(p.nome) === normalizaProc(fp.nome)) || {};
+      usados.add(normalizaProc(fp.nome));
+      return {
+        id: achado.id || novoIdProc(),
+        nome: fp.nome,
+        preco: achado.preco !== undefined ? numeroProc(achado.preco) : fp.preco,
+        reajuste: achado.reajuste || '',
+        duracaoMin: achado.duracaoMin || fp.duracaoMin,
+        historico: Array.isArray(achado.historico) ? achado.historico : [],
+        fixado: true
+      };
+    });
+
+    const extras = atuais.filter(p => {
+      if(!p) return false;
+      const nome = normalizaProc(p.nome);
+      if(usados.has(nome)) return false;
+      return true;
+    }).map(p => ({
+      ...p,
+      id: p.id || novoIdProc(),
+      fixado: !!p.fixado && !p.nome ? true : false
+    }));
+
+    state.procedimentos = fixos.concat(extras);
+  }
+
+  function salvarProcedimentosV74(){
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleSync === 'function') scheduleSync(); }catch(e){}
+  }
+
+  window.renderProcedimentos = function(){
+    garantirProcedimentosFixosV74();
+    const body = document.querySelector('#tblProc tbody');
+    if(!body) return;
+
+    if(!Array.isArray(state.procedimentos) || !state.procedimentos.length){
+      body.innerHTML = '<tr><td colspan="5" class="hint">Adicione procedimentos para começar.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = state.procedimentos.map(p => {
+      const fixo = !!p.fixado;
+      const acao = fixo
+        ? '<span class="muted">Fixado</span>'
+        : '<button class="iconBtn" data-del>✕</button>';
+      const nomeReadonly = fixo ? 'readonly' : '';
+      return `
+        <tr data-id="${p.id}">
+          <td><input value="${String(p.nome||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" ${nomeReadonly}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${numeroProc(p.preco).toFixed(2)}"></td>
+          <td><input type="date" value="${p.reajuste||''}"></td>
+          <td><input type="number" step="1" value="${p.duracaoMin??60}"></td>
+          <td>${acao}</td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const id = tr.dataset.id;
+      const p = (state.procedimentos||[]).find(x => x.id === id);
+      if(!p) return;
+      const campos = tr.querySelectorAll('input');
+      const inpNome = campos[0];
+      const inpPreco = campos[1];
+      const inpReajuste = campos[2];
+      const inpDuracao = campos[3];
+
+      inpNome?.addEventListener('input', () => {
+        if(p.fixado){ inpNome.value = p.nome || ''; return; }
+        p.nome = inpNome.value;
+        salvarProcedimentosV74();
+      });
+      inpPreco?.addEventListener('input', () => {
+        p.preco = numeroProc(inpPreco.value);
+        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
+        salvarProcedimentosV74();
+      });
+      inpReajuste?.addEventListener('change', () => {
+        p.reajuste = inpReajuste.value || '';
+        if(!Array.isArray(p.historico)) p.historico = [];
+        if(p.reajuste){
+          const entrada = { dataInicio: p.reajuste, valor: numeroProc(p.preco) };
+          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+          if(idx >= 0) p.historico[idx] = entrada; else p.historico.push(entrada);
+          p.historico.sort((a,b) => String(a.dataInicio).localeCompare(String(b.dataInicio)));
+        }
+        salvarProcedimentosV74();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+      });
+      inpDuracao?.addEventListener('input', () => {
+        p.duracaoMin = Math.max(1, Math.round(numeroProc(inpDuracao.value) || 60));
+        salvarProcedimentosV74();
+      });
+      tr.querySelector('[data-del]')?.addEventListener('click', () => {
+        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
+        state.procedimentos = (state.procedimentos||[]).filter(x => x.id !== id);
+        garantirProcedimentosFixosV74();
+        salvarProcedimentosV74();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+    });
+
+    const btnAdd = getById('btnAddProc');
+    if(btnAdd){
+      btnAdd.textContent = '+ Adicionar novo procedimento';
+      btnAdd.title = 'Cadastrar um novo procedimento personalizado';
+    }
+  };
+
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
+    if(!btn) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    garantirProcedimentosFixosV74();
+    state.procedimentos.push({
+      id: novoIdProc(),
+      nome: 'Novo procedimento',
+      preco: 0,
+      reajuste: '',
+      duracaoMin: 60,
+      historico: [],
+      fixado: false
+    });
+    salvarProcedimentosV74();
+    renderProcedimentos();
+    const body = document.querySelector('#tblProc tbody');
+    const ultimaLinha = body ? body.querySelector('tr:last-child') : null;
+    const primeiroCampo = ultimaLinha ? ultimaLinha.querySelector('input') : null;
+    try{ primeiroCampo && primeiroCampo.focus(); primeiroCampo && primeiroCampo.select(); }catch(_){ }
+  }, true);
+
+  setTimeout(function(){
+    try{ garantirProcedimentosFixosV74(); renderProcedimentos(); salvarProcedimentosV74(); }catch(e){}
+  }, 700);
+})();
