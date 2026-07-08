@@ -8,7 +8,7 @@
   - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
 */
 
-const APP_BUILD = "Studio Sync Pro — v90 base final limpa";
+const APP_BUILD = "Studio Sync Pro — v95 duração procedimentos persistente";
 window.__SJM_APP_LOADED = true;
 
 // ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
@@ -228,6 +228,7 @@ function bindPlanModal(){
 }
 
 const KEY = "sjm_sync_pro_v1";
+const PROCEDURE_BACKUP_KEY = "sjm_procedimentos_backup_v95";
 let ACTIVE_STORAGE_KEY = KEY;
 function safeStorageId(v){ return String(v||"default").trim().toLowerCase().replace(/[^a-z0-9._-]+/g,"_").slice(0,90) || "default"; }
 function storageKeyForUser(user){
@@ -467,7 +468,7 @@ function sanitizeState(parsed){
       if(p.nome === undefined) p.nome = "";
       if(p.preco === undefined) p.preco = 0;
       if(p.reajuste === undefined) p.reajuste = "";
-      if(p.duracaoMin === undefined) p.duracaoMin = 60;
+      p.duracaoMin = normalizeProcedureDuration(p.duracaoMin, 60);
       if(p.categoria === undefined) p.categoria = "Geral";
       if(p.ativo === undefined) p.ativo = "S";
       if(p.garantiaDias === undefined) p.garantiaDias = 0;
@@ -618,6 +619,49 @@ function sanitizeState(parsed){
   return s;
 }
 
+function normalizeProcedureDuration(v, fallback=60){
+  const n = Number(String(v ?? '').replace(',', '.'));
+  if(!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.max(1, Math.round(n));
+}
+
+function mergeProcedureBackup(targetState){
+  try{
+    const raw = localStorage.getItem(PROCEDURE_BACKUP_KEY);
+    if(!raw) return targetState;
+    const backup = JSON.parse(raw);
+    const bList = Array.isArray(backup?.procedimentos) ? backup.procedimentos : [];
+    if(!bList.length || !Array.isArray(targetState?.procedimentos)) return targetState;
+    const byId = new Map(bList.filter(x=>x?.id).map(x=>[String(x.id), x]));
+    const byName = new Map(bList.filter(x=>x?.nome).map(x=>[normalizeProcName(x.nome), x]));
+    targetState.procedimentos.forEach(proc=>{
+      if(!proc || typeof proc !== 'object') return;
+      const b = byId.get(String(proc.id||'')) || byName.get(normalizeProcName(proc.nome||''));
+      if(!b) return;
+      proc.duracaoMin = normalizeProcedureDuration(b.duracaoMin, normalizeProcedureDuration(proc.duracaoMin, 60));
+      if(!proc.especial){
+        if(b.preco !== undefined) proc.preco = num(b.preco);
+        if(b.reajuste !== undefined) proc.reajuste = String(b.reajuste || '');
+        if(Array.isArray(b.historico)) proc.historico = b.historico;
+      }
+    });
+  }catch(e){ console.warn('Backup de procedimentos ignorado:', e); }
+  return targetState;
+}
+
+function saveProcedureBackup(){
+  try{
+    localStorage.setItem(PROCEDURE_BACKUP_KEY, JSON.stringify({
+      updatedAt: Date.now(),
+      procedimentos: (state.procedimentos||[]).map(p=>({
+        id:p.id, nome:p.nome, preco:p.preco, reajuste:p.reajuste,
+        duracaoMin: normalizeProcedureDuration(p.duracaoMin, 60),
+        especial: !!p.especial, historico: Array.isArray(p.historico)?p.historico:[]
+      }))
+    }));
+  }catch(e){ console.warn('Não salvou backup de procedimentos:', e); }
+}
+
 function load(){
   // ✅ v66: carregamento compatível com versões antigas.
   // Procura a base com mais dados em todas as chaves locais do Studio Sync Pro.
@@ -679,6 +723,7 @@ function load(){
   }
 
   if(best){
+    best = mergeProcedureBackup(best);
     try{ localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(best)); }catch{}
     try{ localStorage.setItem(KEY, JSON.stringify(best)); }catch{}
     return sanitizeState(best);
@@ -2414,11 +2459,54 @@ function renderProcedimentos(){
         <td>${inputHTML({value:p.nome||"", readonly: !!p.especial})}</td>
         <td>${inputHTML({value:num(p.preco).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly: !!p.especial})}</td>
         <td>${inputHTML({value:p.reajuste||"", type:"date", readonly: !!p.especial})}</td>
-        <td>${inputHTML({value:(p.duracaoMin??60), type:"number", step:"1"})}</td>
+        <td>${inputHTML({value:normalizeProcedureDuration(p.duracaoMin,60), type:"number", step:"1", inputmode:"numeric"})}</td>
         <td>${p.especial ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
       </tr>
     `;
   }).join('');
+
+  const commitRow = (tr, opts={})=>{
+    const id = tr?.dataset?.id;
+    const p = state.procedimentos.find(x=>String(x.id)===String(id));
+    if(!p) return;
+    const inpNome = getInp(getCell(tr,0));
+    const inpPreco= getInp(getCell(tr,1));
+    const inpReaj = getInp(getCell(tr,2));
+    const inpDur  = getInp(getCell(tr,3));
+
+    if(inpNome && !p.especial) p.nome = inpNome.value;
+    if(inpPreco && !p.especial){
+      const novoPreco = num(inpPreco.value);
+      const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
+      p.preco = novoPreco;
+      if(!tinhaHistorico && !p.reajuste) p.precoBase = novoPreco;
+    }
+    if(inpReaj && !p.especial){
+      p.reajuste = inpReaj.value || "";
+      if(!Array.isArray(p.historico)) p.historico = [];
+      if(p.reajuste){
+        const entry = { dataInicio: p.reajuste, valor: num(p.preco) };
+        const idxHist = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+        if(idxHist >= 0) p.historico[idxHist] = entry;
+        else p.historico.push(entry);
+        p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
+      }
+    }
+    if(inpDur){
+      p.duracaoMin = normalizeProcedureDuration(inpDur.value, normalizeProcedureDuration(p.duracaoMin, 60));
+      if(String(inpDur.value) !== String(p.duracaoMin) && opts.finalize) inpDur.value = String(p.duracaoMin);
+    }
+
+    saveProcedureBackup();
+    saveSoft();
+    scheduleCloudPush();
+    if(opts.refresh){
+      renderAgendaHard();
+      renderAtendimentosHard();
+      renderCalendar();
+      renderDashboard();
+    }
+  };
 
   body.querySelectorAll('tr').forEach((tr)=>{
     const id = tr.dataset.id;
@@ -2430,40 +2518,21 @@ function renderProcedimentos(){
     const inpReaj = getInp(getCell(tr,2));
     const inpDur  = getInp(getCell(tr,3));
 
-    inpNome?.addEventListener('input', ()=>{ if(p.especial){ inpNome.value = p.nome || ""; return; } p.nome = inpNome.value; saveSoft(); scheduleSync(); });
+    const quickCommit = ()=> commitRow(tr, {finalize:false, refresh:false});
+    const finalCommit = ()=> commitRow(tr, {finalize:true, refresh:true});
 
-    inpPreco?.addEventListener('input', ()=>{
-      if(p.especial){ p.preco = 0; inpPreco.value = "0.00"; return; }
-      const novoPreco = num(inpPreco.value);
-      const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
-      p.preco = novoPreco;
-      if(!tinhaHistorico && !p.reajuste){
-        p.precoBase = novoPreco;
-      }
-      saveSoft();
-      scheduleSync();
+    [inpNome, inpPreco, inpDur].filter(Boolean).forEach(inp=>{
+      inp.addEventListener('input', quickCommit);
+      inp.addEventListener('change', finalCommit);
+      inp.addEventListener('blur', finalCommit);
+      inp.addEventListener('keyup', quickCommit);
     });
 
-    inpReaj?.addEventListener('change',()=>{
-      if(p.especial){ p.reajuste = ""; inpReaj.value = ""; return; }
-      p.reajuste = inpReaj.value || "";
-      if(!Array.isArray(p.historico)) p.historico = [];
-      if(p.reajuste){
-        const idxHist = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-        const entry = { dataInicio: p.reajuste, valor: num(p.preco) };
-        if(idxHist >= 0) p.historico[idxHist] = entry;
-        else p.historico.push(entry);
-        p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
-      }
-      saveSoft();
-      scheduleSync();
-      renderAgendaHard();
-      renderAtendimentosHard();
-      renderCalendar();
-      renderDashboard();
-    });
+    inpReaj?.addEventListener('change', finalCommit);
+    inpReaj?.addEventListener('blur', finalCommit);
 
-    inpDur?.addEventListener('input', ()=>{ p.duracaoMin = Math.max(1, Math.round(num(inpDur.value)||60)); saveSoft(); scheduleSync(); });
+    inpNome?.addEventListener('input', ()=>{ if(p.especial){ inpNome.value = p.nome || ""; return; } });
+    inpPreco?.addEventListener('input', ()=>{ if(p.especial){ p.preco = 0; inpPreco.value = "0.00"; return; } });
 
     tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
       if(!confirmDel('este procedimento')) return;
@@ -2471,26 +2540,43 @@ function renderProcedimentos(){
       if(!state.procedimentos.length){
         state.procedimentos.push({ id: uid(), nome:'Alongamento', preco:130, reajuste:'', duracaoMin:120 });
       }
+      saveProcedureBackup();
       saveSoft();
       renderProcedimentos();
       renderAgendaHard();
       renderAtendimentosHard();
       renderCalendar();
-      scheduleSync();
+      scheduleCloudPush();
     });
   });
 }
 
 onClick('btnAddProc', ()=>{
   state.procedimentos.unshift({ id: uid(), nome:'', preco:0, reajuste:'', duracaoMin:60 });
+  saveProcedureBackup();
   saveSoft();
   renderProcedimentos();
   scheduleSync();
 });
 
+onClick('btnSaveProc', ()=>{
+  document.querySelectorAll('#tblProc tbody tr').forEach(tr=>{
+    const id = tr.dataset.id; const p = state.procedimentos.find(x=>String(x.id)===String(id));
+    if(!p) return;
+    const n=getInp(getCell(tr,0)), pr=getInp(getCell(tr,1)), r=getInp(getCell(tr,2)), d=getInp(getCell(tr,3));
+    if(n && !p.especial) p.nome=n.value;
+    if(pr && !p.especial) p.preco=num(pr.value);
+    if(r && !p.especial) p.reajuste=r.value||'';
+    if(d) { p.duracaoMin=normalizeProcedureDuration(d.value, normalizeProcedureDuration(p.duracaoMin,60)); d.value=String(p.duracaoMin); }
+  });
+  saveProcedureBackup(); saveSoft(); scheduleCloudPush(); renderAgendaHard(); renderCalendar(); renderDashboard();
+  alert('Procedimentos salvos ✅');
+});
+
 onClick('btnResetProc', ()=>{
   if(!confirm('Restaurar procedimentos padrão?')) return;
   state.procedimentos = defaultState().procedimentos;
+  saveProcedureBackup();
   saveSoft();
   renderProcedimentos();
   renderAgendaHard();
