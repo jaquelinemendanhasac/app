@@ -8,7 +8,7 @@
   - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
 */
 
-const APP_BUILD = "Studio Sync Pro — Limpa Estável 1.0";
+const APP_BUILD = "Studio Sync Pro v84 — Persistência Central Limpa";
 window.__SJM_APP_LOADED = true;
 
 // ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
@@ -509,7 +509,7 @@ function sanitizeState(parsed){
       if(a.hora === undefined) a.hora = "08:00";
       if(a.data === undefined) a.data = todayISO();
       if(a.cliente === undefined) a.cliente = "";
-      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Alongamento");
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.find?.(p=>p && p.nome && !p.especial)?.nome || "");
     }
   });
 
@@ -555,7 +555,7 @@ function sanitizeState(parsed){
       if(a.id === undefined) a.id = uid();
       if(a.data === undefined) a.data = todayISO();
       if(a.cliente === undefined) a.cliente = "";
-      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Alongamento");
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.find?.(p=>p && p.nome && !p.especial)?.nome || "");
       if(a.recebido === undefined) a.recebido = 0;
       if(a.maoObra === undefined) a.maoObra = 0;
       if(a.foto === undefined) a.foto = "";
@@ -625,18 +625,14 @@ function load(){
   function scoreLocalState(s){
     try{
       if(!s || typeof s !== "object") return -1;
-      const procScore = Array.isArray(s.procedimentos)
-        ? s.procedimentos.filter(p => p && p.nome && !isSpecialProcedure(p.nome)).length * 1200
-        : 0;
-      return procScore
-        + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
-        + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
-        + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
-        + (Array.isArray(s.materiais)?s.materiais.length*400:0)
-        + (Array.isArray(s.despesas)?s.despesas.length*400:0)
-        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
-        + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
-        + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
+      return (Array.isArray(s.agenda)?s.agenda.length:0)
+        + (Array.isArray(s.clientes)?s.clientes.length:0)
+        + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
+        + (Array.isArray(s.materiais)?s.materiais.length:0)
+        + (Array.isArray(s.despesas)?s.despesas.length:0)
+        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
+        + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
+        + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
     }catch{ return -1; }
   }
   function timeLocalState(s){
@@ -696,18 +692,14 @@ ensureMeta(state);
 function stateDataScore(s){
   try{
     if(!s || typeof s !== "object") return 0;
-    const procScore = Array.isArray(s.procedimentos)
-      ? s.procedimentos.filter(p => p && p.nome && !isSpecialProcedure(p.nome)).length * 1200
-      : 0;
-    return procScore
-      + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
-      + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
-      + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
-      + (Array.isArray(s.materiais)?s.materiais.length*400:0)
-      + (Array.isArray(s.despesas)?s.despesas.length*400:0)
-      + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
-      + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
-      + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
+    return (Array.isArray(s.agenda)?s.agenda.length:0)
+      + (Array.isArray(s.clientes)?s.clientes.length:0)
+      + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
+      + (Array.isArray(s.materiais)?s.materiais.length:0)
+      + (Array.isArray(s.despesas)?s.despesas.length:0)
+      + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
+      + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
+      + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
   }catch{ return 0; }
 }
 function stateFreshness(s){
@@ -1453,7 +1445,7 @@ function dayBadges(iso){
 // ✅ helper para criar "Novo agendamento" no dia selecionado
 function calNewAtSelectedDay(){
   const iso = __CAL_SELECTED_ISO || todayISO();
-  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
+  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || "";
   state.agenda.unshift({
     id:uid(),
     data: iso,
@@ -1801,7 +1793,7 @@ function setAgendaViewMode(mode){
 }
 
 onClick("btnAddAgenda", ()=>{
-  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || "Alongamento";
+  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || "";
   const novo = {
     id:uid(),
     data: todayISO(),
@@ -2030,7 +2022,7 @@ function renderAgendaCompact(){
       <label class="field"><span>Hora</span><input id="agDetHora" type="time" step="60" value="${escAttr(ag.hora||'')}"></label>
       <label class="field"><span>Cliente</span><input id="agDetCliente" list="agendaClientesDatalist" value="${escAttr(ag.cliente||'')}"></label>
       <label class="field"><span>Contato</span><input id="agDetWpp" value="${escAttr(wpp)}" readonly></label>
-      <label class="field"><span>Procedimento</span><select id="agDetProc" ${isBlock?'disabled':''}>${(isBlock?["—"]:(procNames.length?procNames:["Alongamento"])).map(n=>`<option value="${escAttr(n)}" ${n===(ag.procedimento||'')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
+      <label class="field"><span>Procedimento</span><select id="agDetProc" ${isBlock?'disabled':''}>${(isBlock?["—"]:(procNames.length?procNames:[])).map(n=>`<option value="${escAttr(n)}" ${n===(ag.procedimento||'')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
       <label class="field"><span>Valor</span><input id="agDetValor" type="text" value="${escAttr(val.toFixed(2))}" readonly></label>
       <label class="field"><span>Status</span><select id="agDetStatus">${statuses.map(n=>`<option value="${escAttr(n)}" ${n===(ag.status||'Agendado')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
       <label class="field"><span>Recebido</span><input id="agDetRecebido" type="number" step="0.01" inputmode="decimal" value="${escAttr(rec.toFixed(2))}" ${isBlock?'readonly':''}></label>
@@ -2133,7 +2125,7 @@ function renderAgendaHard(){
         <td>${inputHTML({value:a.hora, type:"time", step:"60"})}</td>
         <td>${agendaClienteInputHTML(a.cliente)}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:["Alongamento"]), readonly:isBlock})}</td>
+        <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:[]), readonly:isBlock})}</td>
         <td>${inputHTML({value:val.toFixed(2), type:"text", cls:"money", readonly:true})}</td>
         <td>${inputHTML({value:a.status, options: statuses})}</td>
         <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly:isBlock})}</td>
@@ -2358,100 +2350,14 @@ function updateAgendaAutoCells(){
 ======================================================= */
 
 /* =================== PROCEDIMENTOS =================== */
+/* v85: fluxo antigo duplicado removido. Mantemos apenas uma função ponte para o boot inicial. */
 function renderProcedimentos(){
-  const body = document.querySelector('#tblProc tbody');
-  if(!body) return;
-
-  body.innerHTML = state.procedimentos.map((p)=>{
-    return `
-      <tr data-id="${p.id}">
-        <td>${inputHTML({value:p.nome||"", readonly: !!p.especial})}</td>
-        <td>${inputHTML({value:num(p.preco).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly: !!p.especial})}</td>
-        <td>${inputHTML({value:p.reajuste||"", type:"date", readonly: !!p.especial})}</td>
-        <td>${inputHTML({value:(p.duracaoMin??60), type:"number", step:"1"})}</td>
-        <td>${p.especial ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
-      </tr>
-    `;
-  }).join('');
-
-  body.querySelectorAll('tr').forEach((tr)=>{
-    const id = tr.dataset.id;
-    const p = state.procedimentos.find(x=>x.id===id);
-    if(!p) return;
-
-    const inpNome = getInp(getCell(tr,0));
-    const inpPreco= getInp(getCell(tr,1));
-    const inpReaj = getInp(getCell(tr,2));
-    const inpDur  = getInp(getCell(tr,3));
-
-    inpNome?.addEventListener('input', ()=>{ if(p.especial){ inpNome.value = p.nome || ""; return; } p.nome = inpNome.value; saveSoft(); scheduleSync(); });
-
-    inpPreco?.addEventListener('input', ()=>{
-      if(p.especial){ p.preco = 0; inpPreco.value = "0.00"; return; }
-      const novoPreco = num(inpPreco.value);
-      const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
-      p.preco = novoPreco;
-      if(!tinhaHistorico && !p.reajuste){
-        p.precoBase = novoPreco;
-      }
-      saveSoft();
-      scheduleSync();
-    });
-
-    inpReaj?.addEventListener('change',()=>{
-      if(p.especial){ p.reajuste = ""; inpReaj.value = ""; return; }
-      p.reajuste = inpReaj.value || "";
-      if(!Array.isArray(p.historico)) p.historico = [];
-      if(p.reajuste){
-        const idxHist = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-        const entry = { dataInicio: p.reajuste, valor: num(p.preco) };
-        if(idxHist >= 0) p.historico[idxHist] = entry;
-        else p.historico.push(entry);
-        p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
-      }
-      saveSoft();
-      scheduleSync();
-      renderAgendaHard();
-      renderAtendimentosHard();
-      renderCalendar();
-      renderDashboard();
-    });
-
-    inpDur?.addEventListener('input', ()=>{ p.duracaoMin = Math.max(1, Math.round(num(inpDur.value)||60)); saveSoft(); scheduleSync(); });
-
-    tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
-      if(!confirmDel('este procedimento')) return;
-      state.procedimentos = state.procedimentos.filter(x=>x.id!==id);
-      if(!state.procedimentos.length){
-        state.procedimentos.push({ id: uid(), nome:'Alongamento', preco:130, reajuste:'', duracaoMin:120 });
-      }
-      saveSoft();
-      renderProcedimentos();
-      renderAgendaHard();
-      renderAtendimentosHard();
-      renderCalendar();
-      scheduleSync();
-    });
-  });
+  try{
+    if(window.renderProcedimentos && window.renderProcedimentos !== renderProcedimentos){
+      return window.renderProcedimentos();
+    }
+  }catch(e){}
 }
-
-onClick('btnAddProc', ()=>{
-  state.procedimentos.unshift({ id: uid(), nome:'', preco:0, reajuste:'', duracaoMin:60 });
-  saveSoft();
-  renderProcedimentos();
-  scheduleSync();
-});
-
-onClick('btnResetProc', ()=>{
-  if(!confirm('Restaurar procedimentos padrão?')) return;
-  state.procedimentos = defaultState().procedimentos;
-  saveSoft();
-  renderProcedimentos();
-  renderAgendaHard();
-  renderAtendimentosHard();
-  renderCalendar();
-  scheduleSync();
-});
 
 /* =================== CLIENTES =================== */
 function renderClientes(){
@@ -2734,7 +2640,7 @@ function renderAtendimentosHard(){
         <td>${inputHTML({value:a.data||todayISO(), type:'date'})}</td>
         <td>${inputHTML({value:a.cliente||''})}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:a.procedimento||'', options: procNames.length?procNames:['Alongamento']})}</td>
+        <td>${inputHTML({value:a.procedimento||'', options: procNames.length?procNames:[]})}</td>
         <td>${inputHTML({value:valor.toFixed(2), type:'text', cls:'money', readonly:true})}</td>
         <td>${inputHTML({value:num(a.recebido).toFixed(2), type:'number', cls:'money', step:'0.01', inputmode:'decimal'})}</td>
         <td>${inputHTML({value:num(a.custoMaterial).toFixed(4), type:'text', cls:'money', readonly:true})}</td>
@@ -2878,7 +2784,7 @@ function updateAtendimentosAutoCells(){
 }
 
 function addAtendimentoManual(){
-  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || 'Alongamento';
+  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || '';
   state.atendimentos.unshift({
     id: uid(), data: todayISO(), cliente:'', procedimento:firstProc,
     recebido: 0, maoObra: 0, custoMaterial: 0, custoTotal: 0, lucro: 0,
@@ -7686,260 +7592,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 
-/* =========================================================
-   ✅ v58 — BANCO ÚNICO + BACKUP AUTOMÁTICO + MIGRAÇÃO SEGURA
-   Objetivo: trocar pasta/versão sem perder clientes, agenda, financeiro,
-   materiais, templates, plano e configurações do login.
-   ========================================================= */
-(function(){
-  const BUILD = 'v58-banco-unico-persistencia';
-  const STABLE_KEY = 'studio_sync_pro_banco_unico_v1';
-  const BACKUP_PREFIX = 'studio_sync_pro_auto_backup_';
-  const BACKUP_INDEX = 'studio_sync_pro_auto_backup_index';
-  const LEGACY_PREFIXES = ['sjm_sync_pro', 'studio_sync', 'Studio_Sync', 'SJM_'];
-  const MAX_BACKUPS = 12;
-  window.STUDIO_SYNC_BUILD = BUILD;
 
-  function parseJSON(raw){ try{return raw ? JSON.parse(raw) : null;}catch{return null;} }
-  function clone(obj){ try{return JSON.parse(JSON.stringify(obj));}catch{return obj;} }
-  function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function score(s){
-    try{
-      if(!isObj(s)) return -1;
-      return arr(s.clientes).length * 10 + arr(s.agenda).length * 8 + arr(s.atendimentos).length * 8 +
-        arr(s.materiais).length * 6 + arr(s.despesas).length * 5 + arr(s.receitasExtras).length * 5 +
-        arr(s.wppQueue).length + arr(s.crmQueue).length + (isObj(s.settings) ? 2 : 0) + (isObj(s.wpp) ? 2 : 0);
-    }catch{return -1;}
-  }
-  function stamp(s){
-    const t = Number(s?.meta?.updatedAt || s?.updatedAt || 0);
-    return Number.isFinite(t) ? t : 0;
-  }
-  function chooseBest(list){
-    let best=null, bestScore=-999, bestTime=-1;
-    for(const it of list){
-      if(!isObj(it)) continue;
-      let st = it;
-      try{ if(typeof sanitizeState === 'function') st = sanitizeState(clone(it)); }catch{}
-      const sc = score(st), tm = stamp(st);
-      if(sc > bestScore || (sc === bestScore && tm > bestTime)){
-        best=st; bestScore=sc; bestTime=tm;
-      }
-    }
-    return best;
-  }
-  function currentUserKeys(){
-    const keys=[];
-    try{
-      const u = window.__SJM_CURRENT_USER || {};
-      if(typeof storageKeyForUser === 'function'){
-        if(u.uid) keys.push(storageKeyForUser(u.uid));
-        if(u.email) keys.push(storageKeyForUser(u.email));
-        if(u.uid || u.email) keys.push(storageKeyForUser(u));
-      }
-    }catch{}
-    return keys.filter(Boolean);
-  }
-  function allKnownKeys(){
-    const keys = new Set([STABLE_KEY]);
-    try{ if(typeof KEY !== 'undefined') keys.add(KEY); }catch{}
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined') keys.add(ACTIVE_STORAGE_KEY); }catch{}
-    currentUserKeys().forEach(k=>keys.add(k));
-    try{
-      const idx = parseJSON(localStorage.getItem(BACKUP_INDEX));
-      arr(idx).forEach(k=>keys.add(k));
-    }catch{}
-    try{
-      for(let i=0;i<localStorage.length;i++){
-        const k = localStorage.key(i);
-        if(!k) continue;
-        if(LEGACY_PREFIXES.some(p=>k.startsWith(p)) || k.startsWith(BACKUP_PREFIX)) keys.add(k);
-      }
-    }catch{}
-    return [...keys].filter(Boolean);
-  }
-  function readAllStates(){
-    const out=[];
-    for(const k of allKnownKeys()){
-      try{
-        const st = parseJSON(localStorage.getItem(k));
-        if(isObj(st)) out.push(st);
-      }catch{}
-    }
-    try{
-      if(isObj(window.__SJM_GET_STATE?.())) out.push(window.__SJM_GET_STATE());
-    }catch{}
-    return out;
-  }
-  function ensureMetaLocal(s){
-    try{ if(typeof ensureMeta === 'function') return ensureMeta(s); }catch{}
-    s.meta = isObj(s.meta) ? s.meta : {};
-    s.meta.updatedAt = Date.now();
-    return s;
-  }
-  function writeKey(k, st){
-    try{ if(k) localStorage.setItem(k, JSON.stringify(st)); }catch(e){ console.warn('Falha ao salvar em', k, e); }
-  }
-  function rotateBackup(st, reason='auto'){
-    try{
-      const clean = clone(st);
-      clean.__backupReason = reason;
-      clean.__backupAt = new Date().toISOString();
-      const k = BACKUP_PREFIX + Date.now();
-      localStorage.setItem(k, JSON.stringify(clean));
-      let idx = arr(parseJSON(localStorage.getItem(BACKUP_INDEX)));
-      idx.unshift(k);
-      idx = [...new Set(idx)].slice(0, MAX_BACKUPS);
-      for(let i=MAX_BACKUPS;i<100;i++){
-        const old = arr(parseJSON(localStorage.getItem(BACKUP_INDEX)))[i];
-        if(old) try{ localStorage.removeItem(old); }catch{}
-      }
-      localStorage.setItem(BACKUP_INDEX, JSON.stringify(idx));
-    }catch(e){ console.warn('Backup automático falhou:', e); }
-  }
-  function writeEverywhere(st, reason='save'){
-    if(!isObj(st)) return;
-    try{ if(typeof sanitizeState === 'function') st = sanitizeState(st); }catch{}
-    ensureMetaLocal(st);
-    try{
-      st.meta.updatedAt = Date.now();
-      st.meta.schema = 'studio-sync-pro-unico-v1';
-      st.meta.build = BUILD;
-    }catch{}
-    writeKey(STABLE_KEY, st);
-    try{ if(typeof KEY !== 'undefined') writeKey(KEY, st); }catch{}
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined') writeKey(ACTIVE_STORAGE_KEY, st); }catch{}
-    currentUserKeys().forEach(k=>writeKey(k, st));
-    try{ sessionStorage.setItem(STABLE_KEY, JSON.stringify(st)); }catch{}
-    try{ saveToIndexedDB(st); }catch{}
-    if(reason !== 'tick') rotateBackup(st, reason);
-  }
-  function saveToIndexedDB(st){
-    if(!('indexedDB' in window)) return;
-    const req = indexedDB.open('studio_sync_pro_db', 1);
-    req.onupgradeneeded = ()=>{
-      const db = req.result;
-      if(!db.objectStoreNames.contains('states')) db.createObjectStore('states');
-    };
-    req.onsuccess = ()=>{
-      try{
-        const db = req.result;
-        const tx = db.transaction('states','readwrite');
-        tx.objectStore('states').put(clone(st), 'latest');
-        tx.objectStore('states').put(clone(st), 'backup_'+Date.now());
-        tx.oncomplete = ()=> db.close();
-      }catch{}
-    };
-  }
-  function readIndexedDBLatest(cb){
-    if(!('indexedDB' in window)) return cb(null);
-    try{
-      const req = indexedDB.open('studio_sync_pro_db', 1);
-      req.onupgradeneeded = ()=>{
-        const db = req.result;
-        if(!db.objectStoreNames.contains('states')) db.createObjectStore('states');
-      };
-      req.onerror = ()=>cb(null);
-      req.onsuccess = ()=>{
-        const db=req.result;
-        try{
-          const tx=db.transaction('states','readonly');
-          const get=tx.objectStore('states').get('latest');
-          get.onsuccess=()=>{ cb(get.result||null); try{db.close();}catch{} };
-          get.onerror=()=>{ cb(null); try{db.close();}catch{} };
-        }catch{ cb(null); try{db.close();}catch{} }
-      };
-    }catch{ cb(null); }
-  }
-  function recoverNow(reason='boot'){
-    try{
-      const candidates = readAllStates();
-      const best = chooseBest(candidates);
-      if(best && score(best) >= score(window.__SJM_GET_STATE?.())){
-        window.state = state = best;
-        ensureMetaLocal(state);
-        writeEverywhere(state, 'recover-'+reason);
-        try{ renderAllHard(); }catch{}
-        try{ applyTheme(); }catch{}
-        try{ window.__SJM_SET_SYNC_STATUS?.('Banco único carregado ✅'); }catch{}
-      }else if(window.__SJM_GET_STATE?.()){
-        writeEverywhere(window.__SJM_GET_STATE(), 'mirror-'+reason);
-      }
-    }catch(e){ console.warn('Recuperação automática falhou:', e); }
-  }
-
-  // Recupera imediatamente e depois consulta IndexedDB também.
-  recoverNow('inicio');
-  readIndexedDBLatest((dbState)=>{
-    try{
-      const best = chooseBest([dbState, ...readAllStates(), window.__SJM_GET_STATE?.()]);
-      if(best && score(best) >= score(window.__SJM_GET_STATE?.())){
-        window.state = state = best;
-        writeEverywhere(state, 'recover-indexeddb');
-        try{ renderAllHard(); }catch{}
-      }
-    }catch(e){ console.warn('IndexedDB recover:', e); }
-  });
-
-  // Protege saveSoft original: toda gravação vai para banco único + usuário + backups.
-  const oldSaveSoft = window.saveSoft || (typeof saveSoft === 'function' ? saveSoft : null);
-  window.saveSoft = function(){
-    try{ if(oldSaveSoft) oldSaveSoft(); }catch(e){ console.warn('saveSoft antigo falhou:', e); }
-    try{ writeEverywhere(state, 'save'); }catch(e){ console.warn('saveSoft v58 falhou:', e); }
-  };
-  try{ saveSoft = window.saveSoft; }catch{}
-
-  // Login: não deixa remoto/conta vazia substituir banco mais completo.
-  const oldOnAuth = window.__SJM_ON_AUTH_USER;
-  window.__SJM_ON_AUTH_USER = function(userInfo){
-    try{ oldOnAuth?.(userInfo); }catch(e){ console.warn('auth antigo:', e); }
-    setTimeout(()=>recoverNow('login'), 80);
-    setTimeout(()=>recoverNow('login-late'), 700);
-  };
-
-  // Cloud remoto vazio/mais fraco é ignorado.
-  const oldApplyRemote = window.__SJM_APPLY_REMOTE_STATE;
-  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-    const local = window.__SJM_GET_STATE?.() || state;
-    const best = chooseBest([local, remoteState, ...readAllStates()]);
-    if(best && score(remoteState) < score(local)){
-      writeEverywhere(local, 'remote-ignored');
-      try{ window.__SJM_SET_SYNC_STATUS?.('Sync: remoto vazio ignorado ✅'); }catch{}
-      return;
-    }
-    try{ oldApplyRemote?.(best || remoteState); }catch(e){ console.warn('remote antigo:', e); }
-    setTimeout(()=>writeEverywhere(window.__SJM_GET_STATE?.() || state, 'remote-applied'), 120);
-  };
-
-  // Botão de backup manual automático na configuração, sem depender do usuário lembrar.
-  window.__SJM_EXPORT_BACKUP_UNICO = function(){
-    const st = window.__SJM_GET_STATE?.() || state;
-    writeEverywhere(st, 'manual-export');
-    const blob = new Blob([JSON.stringify(st,null,2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'backup-studio-sync-pro-banco-unico.json';
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  };
-
-  // Reforço periódico + ao sair da página.
-  setInterval(()=>{ try{ writeEverywhere(window.__SJM_GET_STATE?.() || state, 'tick'); }catch{} }, 15000);
-  window.addEventListener('beforeunload', ()=>{ try{ writeEverywhere(window.__SJM_GET_STATE?.() || state, 'beforeunload'); }catch{} });
-
-  // Remove service worker antigo que podia abrir versão/cache anterior no Live Server.
-  window.addEventListener('load', async ()=>{
-    try{
-      if('caches' in window){ const keys=await caches.keys(); await Promise.all(keys.map(k=>caches.delete(k))); }
-      if('serviceWorker' in navigator){ const regs=await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r=>r.update().catch(()=>{}))); }
-    }catch{}
-    recoverNow('load');
-  });
-
-  console.info('Studio Sync Pro', BUILD, 'ativo: banco único, migração e backup automático.');
-})();
-
+/* BLOCO ANTIGO REMOVIDO NA v84: persistência/procedimentos duplicados substituídos pela regra central v83. */
 
 /* =========================================================
    v60 - Ajuste pedido: remover Equipe por enquanto, mover Indicação para Fidelidade,
@@ -7986,84 +7640,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
 
 
-/* =========================================================
-   LIMPEZA FINAL — CONFIG, IMPORTAÇÃO E BOOT ESTÁVEL
-   Mantém apenas um fluxo para logo/cor/importar e evita binds duplicados.
-   ========================================================= */
-(function(){
-  'use strict';
-  function el(id){ return document.getElementById(id); }
-  function currentState(){ return window.state || (typeof state !== 'undefined' ? state : null); }
-  function setCurrentState(s){ try{ window.state = s; state = s; }catch{ window.state = s; } }
-  function normalizeImportedState(parsed){
-    if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Backup inválido');
-    const clean = (typeof sanitizeState === 'function') ? sanitizeState(parsed) : parsed;
-    clean.settings = clean.settings && typeof clean.settings === 'object' ? clean.settings : {};
-    clean.settings.studioNome = clean.settings.studioNome || 'Studio Jaqueline Mendanha';
-    clean.settings.logoUrl = clean.settings.logoUrl || '';
-    clean.settings.corPrimaria = clean.settings.corPrimaria || '#7B2CBF';
-    clean.settings.corAcento = clean.settings.corAcento || '#F72585';
-    clean.settings.plano = clean.settings.plano || 'premium';
-    ['clientes','agenda','atendimentos','materiais','despesas','procedimentos'].forEach(k=>{ if(!Array.isArray(clean[k])) clean[k] = []; });
-    return clean;
-  }
-  async function importBackupFile(file){
-    if(!file) return;
-    try{
-      const parsed = JSON.parse(await file.text());
-      const clean = normalizeImportedState(parsed);
-      setCurrentState(clean);
-      try{ enforceAgendaRecebidoRules(); }catch{}
-      try{ syncAgendaToAtendimentos(); }catch{}
-      try{ state.materiais.forEach(calcularMaterial); }catch{}
-      try{ state.atendimentos.forEach(calcularAtendimento); }catch{}
-      try{ saveSoft(); }catch{}
-      try{ applyTheme(); }catch{}
-      try{ renderAllHard(); }catch{}
-      try{ scheduleSync(); }catch{}
-      alert('Backup importado ✅');
-    }catch(err){
-      console.error(err);
-      alert('Arquivo de backup inválido. Importe um JSON exportado pelo próprio app.');
-    }
-  }
-  function bindImportButton(){
-    const file = el('fileImport');
-    const btn = el('btnImportBackupFinal');
-    if(btn && file && !btn.__sjmImportBound){
-      btn.__sjmImportBound = true;
-      btn.addEventListener('click', ()=> file.click());
-    }
-    if(file && !file.__sjmImportBound){
-      file.__sjmImportBound = true;
-      file.addEventListener('change', async (e)=>{
-        await importBackupFile(e.target.files && e.target.files[0]);
-        e.target.value = '';
-      });
-    }
-  }
-  function refreshConfigFields(){
-    const s = currentState();
-    if(!s || !s.settings) return;
-    if(el('cfgStudioNome')) el('cfgStudioNome').value = s.settings.studioNome || '';
-    if(el('cfgLogoUrl')) el('cfgLogoUrl').value = s.settings.logoUrl || '';
-    if(el('cfgCorPrimaria')) el('cfgCorPrimaria').value = s.settings.corPrimaria || '#7B2CBF';
-    if(el('cfgCorAcento')) el('cfgCorAcento').value = s.settings.corAcento || '#F72585';
-    if(el('cfgStudioWpp')) el('cfgStudioWpp').value = s.settings.studioWpp || '';
-    if(el('cfgPlano')) el('cfgPlano').value = s.settings.plano || 'premium';
-  }
-  function bootCleanFinal(){
-    try{ bindImportButton(); }catch(e){ console.warn('bind import', e); }
-    try{ refreshConfigFields(); }catch(e){ console.warn('refresh config', e); }
-    try{ applyTheme(); }catch(e){ console.warn('theme', e); }
-    try{ applyPlanUI(); }catch(e){ console.warn('plan ui', e); }
-  }
-  document.addEventListener('DOMContentLoaded', bootCleanFinal);
-  window.addEventListener('load', bootCleanFinal);
-  setTimeout(bootCleanFinal, 100);
-  setTimeout(bootCleanFinal, 600);
-  window.__SJM_IMPORT_BACKUP_FILE = importBackupFile;
-})();
+/* LIMPEZA FINAL antiga removida na v85 para evitar importação duplicada. */
 
 /* =========================================================
    v70 DEV PRO — Central profissional de desenvolvimento e controle
@@ -10576,635 +10153,487 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 
+
+/* BLOCO ANTIGO REMOVIDO NA v84: persistência/procedimentos duplicados substituídos pela regra central v83. */
+
 /* =======================================================
-   PATCH v79 - Procedimentos salvando de verdade
-   - Sistema: apenas Médico, Folga, Reunião e Compromisso
-   - Usuário pode criar quantos procedimentos quiser
-   - Não substitui um procedimento pelo outro
-   - Salva em state + localStorage + backup próprio
+   v83 — PERSISTÊNCIA CENTRAL LIMPA
+   Corrige salvamento real, importação e procedimentos.
+   Mantém compatibilidade com os patches antigos, mas a última regra agora vence.
 ======================================================= */
 (function(){
   'use strict';
-  if(window.__SJM_PROCEDIMENTOS_V79) return;
-  window.__SJM_PROCEDIMENTOS_V79 = true;
+  if(window.__SJM_V83_PERSISTENCIA_CENTRAL) return;
+  window.__SJM_V83_PERSISTENCIA_CENTRAL = true;
 
-  const PROC_BACKUP_KEY = 'sjm_sync_pro_v1__procedimentos_backup_v79';
+  const BUILD = 'v83-persistencia-central';
+  const STABLE_KEY = 'studio_sync_pro_estado_principal_v83';
+  const LAST_GOOD_KEY = 'studio_sync_pro_ultimo_estado_bom_v83';
+  const PROC_KEY = 'studio_sync_pro_procedimentos_usuario_v83';
+  const IMPORT_KEY = 'studio_sync_pro_ultimo_import_v83';
+  const SYSTEM_NAMES = ['Médico','Folga','Reunião','Compromisso'];
+  const LEGACY_NAMES = ['Alongamento','Manutenção','Remoção + Nova Aplicação','Remoção de Alongamento'];
 
-  const SISTEMA = [
-    { nome:'Médico', duracaoMin:60 },
-    { nome:'Folga', duracaoMin:60 },
-    { nome:'Reunião', duracaoMin:60 },
-    { nome:'Compromisso', duracaoMin:60 }
-  ];
+  function getState(){ try{ return (typeof state !== 'undefined' && state) ? state : window.state; }catch{ return window.state; } }
+  function setState(s){ try{ state = s; window.state = s; }catch{ window.state = s; } }
+  function clone(v){ try{ return JSON.parse(JSON.stringify(v)); }catch{ return v; } }
+  function uidSafe(){ try{ if(typeof uid === 'function') return uid(); }catch{} return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+  function n(v){ try{ if(typeof num === 'function') return num(v); }catch{} const x = Number(String(v ?? '0').replace(',','.')); return Number.isFinite(x) ? x : 0; }
+  function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
+  const SYSTEM_SET = new Set(SYSTEM_NAMES.map(norm));
+  const LEGACY_SET = new Set(LEGACY_NAMES.map(norm));
 
-  const LEGACY_DEFAULTS = {
-    'alongamento': { preco:130, duracaoMin:120 },
-    'manutencao': { preco:90, duracaoMin:120 },
-    'remocao + nova aplicacao': { preco:160, duracaoMin:150 },
-    'remocao de alongamento': { preco:60, duracaoMin:60 }
-  };
+  function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function read(k){ try{ const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }catch{ return null; } }
+  function write(k,v){ try{ if(k) localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('v83 save falhou em', k, e); } }
 
-  function by(id){ return document.getElementById(id); }
-  function norm(v){
-    return String(v||'')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-      .toLowerCase().trim().replace(/\s+/g,' ');
+  function userKeys(){
+    const keys = new Set();
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch{}
+    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch{}
+    const u = window.__SJM_CURRENT_USER || null;
+    try{
+      if(typeof storageKeyForUser === 'function'){
+        if(u?.uid) keys.add(storageKeyForUser(u.uid));
+        if(u?.email) keys.add(storageKeyForUser(u.email));
+        if(u) keys.add(storageKeyForUser(u));
+      }
+    }catch{}
+    keys.add(STABLE_KEY); keys.add(LAST_GOOD_KEY); keys.add(IMPORT_KEY);
+    return [...keys].filter(Boolean);
   }
-  const sistemaNorm = new Set(SISTEMA.map(p=>norm(p.nome)));
 
-  function esc(v){
-    return String(v??'').replace(/[&<>"']/g, m => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[m]));
+  function importantScore(s){
+    if(!isObj(s)) return -1;
+    const customProc = arr(s.procedimentos).filter(p=>p && p.nome && !SYSTEM_SET.has(norm(p.nome)) && (!LEGACY_SET.has(norm(p.nome)) || p.userCreated || p.manual || p.criadoPeloUsuario)).length;
+    let score = 0;
+    score += arr(s.agenda).length * 1000;
+    score += arr(s.clientes).length * 900;
+    score += arr(s.atendimentos).length * 900;
+    score += customProc * 850;
+    score += arr(s.materiais).length * 350;
+    score += arr(s.despesas).length * 300;
+    score += arr(s.receitasExtras).length * 250;
+    if(isObj(s.settings)) score += 100;
+    return score;
   }
-  function n(v){
-    try{ if(typeof num === 'function') return num(v); }catch(e){}
-    const x = Number(String(v??'0').replace(',','.'));
-    return Number.isFinite(x) ? x : 0;
-  }
-  function id(){
-    try{ if(typeof uid === 'function') return uid(); }catch(e){}
-    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
-  }
-  function isSystem(p){
-    return !!p && sistemaNorm.has(norm(p.nome));
-  }
-  function isLegacyDefault(p){
-    if(!p || !p.nome) return false;
-    const k = norm(p.nome);
-    const d = LEGACY_DEFAULTS[k];
-    if(!d) return false;
-    if(p.userCreated || p.criadoPeloUsuario || p.manual) return false;
-    const marcadoAntigo = !!p.fixado || !!p.especial || norm(p.categoria)==='sistema';
-    const precoIgual = Math.abs(n(p.preco) - d.preco) < 0.001;
-    const durIgual = Math.round(n(p.duracaoMin)||0) === d.duracaoMin;
-    return marcadoAntigo || (precoIgual && durIgual);
-  }
-  function normalizeProc(p, systemFlag){
+  function fresh(s){ const t = Number(s?.meta?.updatedAt || s?.updatedAt || 0); return Number.isFinite(t) ? t : 0; }
+
+  function normalizeProc(p, system){
     return {
-      ...(p || {}),
-      id: (p && p.id) || id(),
-      nome: String((p && p.nome) || '').trim(),
-      preco: systemFlag ? 0 : n(p && p.preco),
-      precoBase: systemFlag ? 0 : ((p && p.precoBase !== undefined) ? n(p.precoBase) : n(p && p.preco)),
-      reajuste: systemFlag ? '' : String((p && p.reajuste) || ''),
-      duracaoMin: Math.max(1, Math.round(n(p && p.duracaoMin) || 60)),
-      historico: systemFlag ? [] : (Array.isArray(p && p.historico) ? p.historico : []),
-      especial: !!systemFlag,
-      fixado: !!systemFlag,
-      categoria: systemFlag ? 'Sistema' : '',
-      ativo: (p && p.ativo) || 'S',
-      userCreated: !systemFlag
+      ...(isObj(p) ? p : {}),
+      id: p?.id || uidSafe(),
+      nome: String(p?.nome || '').trim(),
+      preco: system ? 0 : n(p?.preco),
+      precoBase: system ? 0 : n(p?.precoBase ?? p?.preco),
+      reajuste: system ? '' : String(p?.reajuste || ''),
+      duracaoMin: Math.max(1, Math.round(n(p?.duracaoMin) || 60)),
+      historico: system ? [] : arr(p?.historico),
+      especial: !!system,
+      fixado: !!system,
+      categoria: system ? 'Sistema' : 'Geral',
+      ativo: p?.ativo || 'S',
+      userCreated: !system
     };
   }
-
-  function customFrom(list){
+  function customProcedures(list){
     const out = [];
-    (Array.isArray(list) ? list : []).forEach(p=>{
-      if(!p || !p.nome) return;
-      if(isSystem(p)) return;
-      if(isLegacyDefault(p)) return;
+    arr(list).forEach(p=>{
+      if(!p || !String(p.nome||'').trim()) return;
+      const k = norm(p.nome);
+      if(SYSTEM_SET.has(k)) return;
+      if(LEGACY_SET.has(k) && !(p.userCreated || p.manual || p.criadoPeloUsuario)) return;
       out.push(normalizeProc(p, false));
     });
     return out;
   }
-
-  function readJson(k){
-    try{
-      const raw = localStorage.getItem(k);
-      if(!raw) return null;
-      return JSON.parse(raw);
-    }catch(e){ return null; }
+  function mergeProcedures(){
+    const result = [];
+    const seen = new Set();
+    const add = (p)=>{
+      if(!p || !p.nome) return;
+      const sig = norm(p.nome) + '|' + n(p.preco).toFixed(2) + '|' + Math.round(n(p.duracaoMin)||60);
+      if(seen.has(sig)) return;
+      if(result.some(x => p.id && x.id === p.id)) p.id = uidSafe();
+      seen.add(sig); result.push(p);
+    };
+    for(const list of arguments) customProcedures(list).forEach(add);
+    return SYSTEM_NAMES.map(nome=>normalizeProc({nome, duracaoMin:60}, true)).concat(result);
+  }
+  function fixProcedures(s){
+    if(!isObj(s)) return s;
+    const backup = read(PROC_KEY);
+    s.procedimentos = mergeProcedures(s.procedimentos, backup);
+    return s;
+  }
+  function sanitizeV83(raw){
+    let s = raw;
+    try{ if(typeof sanitizeState === 'function') s = sanitizeState(clone(raw)); else s = clone(raw); }catch{ s = clone(raw); }
+    if(!isObj(s)){ try{ s = defaultState(); }catch{ s = {}; } }
+    s.settings = isObj(s.settings) ? s.settings : {};
+    ['clientes','agenda','atendimentos','materiais','despesas','receitasExtras','wppQueue','crmQueue'].forEach(k=>{ if(!Array.isArray(s[k])) s[k] = []; });
+    s.meta = isObj(s.meta) ? s.meta : {};
+    if(!s.meta.clientId){ try{ s.meta.clientId = CLIENT_ID; }catch{ s.meta.clientId = 'local'; } }
+    if(typeof s.meta.rev !== 'number') s.meta.rev = 0;
+    if(typeof s.meta.updatedAt !== 'number') s.meta.updatedAt = Date.now();
+    fixProcedures(s);
+    return s;
   }
 
-  function readProcedureBackup(){
-    const b = readJson(PROC_BACKUP_KEY);
-    if(Array.isArray(b)) return b;
-    if(b && Array.isArray(b.procedimentos)) return b.procedimentos;
-    return [];
-  }
-
-  function writeProcedureBackup(){
-    try{
-      localStorage.setItem(PROC_BACKUP_KEY, JSON.stringify(customFrom(state && state.procedimentos)));
-    }catch(e){}
-  }
-
-  function allStoredProcedures(){
+  function allCandidates(extra){
     const out = [];
+    if(extra) out.push(extra);
+    const keys = new Set(userKeys());
     try{
-      for(let i=0; i<localStorage.length; i++){
+      for(let i=0;i<localStorage.length;i++){
         const k = localStorage.key(i);
         if(!k) continue;
-        if(k.indexOf('sjm_sync_pro_v1') !== 0 && k !== PROC_BACKUP_KEY) continue;
-        const parsed = readJson(k);
-        if(Array.isArray(parsed)) out.push(...parsed);
-        else if(parsed && Array.isArray(parsed.procedimentos)) out.push(...parsed.procedimentos);
+        if(k.includes('studio_sync') || k.includes('sjm_sync_pro') || k.includes('Studio_Sync')) keys.add(k);
       }
-    }catch(e){}
-    out.push(...readProcedureBackup());
-    return out;
+    }catch{}
+    keys.forEach(k=>{ const v = read(k); if(isObj(v)) out.push(v); });
+    const cur = getState(); if(cur) out.push(cur);
+    return out.map(sanitizeV83).filter(isObj);
+  }
+  function chooseBest(cands){
+    let best = null, bs = -1, bt = -1;
+    cands.forEach(s=>{
+      const sc = importantScore(s), tm = fresh(s);
+      if(sc > bs || (sc === bs && tm > bt)){ best = s; bs = sc; bt = tm; }
+    });
+    return best || sanitizeV83({});
+  }
+  function mergeState(base, candidates){
+    const chosen = sanitizeV83(base || chooseBest(candidates));
+    const procLists = [chosen.procedimentos];
+    candidates.forEach(c=>procLists.push(c.procedimentos));
+    procLists.push(read(PROC_KEY));
+    chosen.procedimentos = mergeProcedures.apply(null, procLists);
+    return chosen;
+  }
+  function persist(reason){
+    let s = sanitizeV83(getState());
+    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch{}
+    s.meta = isObj(s.meta) ? s.meta : {};
+    s.meta.updatedAt = Date.now();
+    s.meta.build = BUILD;
+    if(reason !== 'no-rev') s.meta.rev = Number(s.meta.rev||0) + 1;
+    setState(s);
+    const custom = customProcedures(s.procedimentos);
+    write(PROC_KEY, custom);
+    userKeys().forEach(k=>write(k, s));
+    write(STABLE_KEY, s);
+    write(LAST_GOOD_KEY, s);
+    try{ sessionStorage.setItem(STABLE_KEY, JSON.stringify(s)); }catch{}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch{}
+    return s;
   }
 
-  function mergeCustomProcedures(primary, rescue){
-    const result = [];
-    const seenId = new Set();
+  const oldSaveSoft = (typeof saveSoft === 'function') ? saveSoft : null;
+  window.__SJM_SAVE_NOW_V83 = function(reason){ return persist(reason || 'manual'); };
+  try{ saveSoft = function(){ return persist('saveSoft'); }; }catch{}
 
-    customFrom(primary).forEach(p=>{
-      if(seenId.has(p.id)) p.id = id();
-      seenId.add(p.id);
-      result.push(p);
-    });
-
-    // Recupera procedimentos que estavam salvos em outra chave/back-up.
-    customFrom(rescue).forEach(p=>{
-      const sameId = result.some(x => x.id === p.id);
-      const sameFull = result.some(x =>
-        norm(x.nome) === norm(p.nome) &&
-        Math.abs(n(x.preco)-n(p.preco)) < 0.001 &&
-        Math.round(n(x.duracaoMin)) === Math.round(n(p.duracaoMin))
-      );
-      if(sameId || sameFull) return;
-      if(seenId.has(p.id)) p.id = id();
-      seenId.add(p.id);
-      result.push(p);
-    });
-
-    return result;
-  }
-
-  function garantirProcedimentosV79(){
-    // Usa o state real do app mesmo quando window.state ainda não foi exposto.
-    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
-    const s = (typeof state !== 'undefined' && state) ? state : window.state;
-    if(!s) return;
-    try{ state = s; window.state = s; }catch(e){ window.state = s; }
-    const atuais = Array.isArray(s.procedimentos) ? s.procedimentos : [];
-    const rescue = allStoredProcedures();
-
-    const sistema = SISTEMA.map(sp=>{
-      const found = atuais.find(p => isSystem(p) && norm(p.nome) === norm(sp.nome)) || {};
-      return normalizeProc({ ...found, nome:sp.nome, duracaoMin:found.duracaoMin || sp.duracaoMin }, true);
-    });
-
-    const personalizados = mergeCustomProcedures(atuais, rescue);
-    state.procedimentos = sistema.concat(personalizados);
-  }
-
-  function salvarProcedimentosV79(){
-    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
-    try{ garantirProcedimentosV79(); }catch(e){}
-    try{ if(typeof ensureMeta === 'function') ensureMeta(state); }catch(e){}
-    try{ if(typeof bumpRev === 'function') bumpRev(); }catch(e){}
-    writeProcedureBackup();
-
-    try{ localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state)); }catch(e){}
+  // Carregamento por usuário: escolhe a melhor base, mas sempre mescla procedimentos criados.
+  const oldAuth = window.__SJM_ON_AUTH_USER;
+  window.__SJM_ON_AUTH_USER = function(userInfo){
     try{
-      if(typeof ACTIVE_STORAGE_KEY !== 'undefined'){
-        localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-      }
-    }catch(e){}
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-  }
+      window.__SJM_CURRENT_USER = userInfo || window.__SJM_CURRENT_USER || null;
+      try{ if(userInfo?.uid && typeof storageKeyForUser === 'function') ACTIVE_STORAGE_KEY = storageKeyForUser(userInfo.uid); }catch{}
+      const candidates = allCandidates();
+      const chosen = mergeState(chooseBest(candidates), candidates);
+      setState(chosen);
+      persist('auth-load');
+      try{ applyTheme(); }catch{}
+      try{ renderAllHard(); }catch{}
+      try{ if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch{}
+      try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch{}
+    }catch(e){ console.error('v83 auth load:', e); try{ oldAuth && oldAuth(userInfo); }catch{} }
+  };
 
-  function proximoNome(){
-    const nomes = new Set((state.procedimentos||[]).map(p=>norm(p.nome)));
-    let i = 1;
-    while(nomes.has(norm('Novo procedimento ' + i))) i++;
+  // Firebase remoto: nunca deixa um remoto velho apagar procedimento local; mescla antes de aplicar.
+  const oldApplyRemote = window.__SJM_APPLY_REMOTE_STATE;
+  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+    try{
+      const candidates = allCandidates(remoteState);
+      const remote = sanitizeV83(remoteState);
+      const local = sanitizeV83(getState());
+      const localScore = importantScore(local), remoteScore = importantScore(remote);
+      const localFresh = fresh(local), remoteFresh = fresh(remote);
+      let base = remote;
+      if(localScore > remoteScore || (localScore === remoteScore && localFresh > remoteFresh)) base = local;
+      const merged = mergeState(base, candidates);
+      setState(merged);
+      persist('remote-merge');
+      try{ enforceAgendaRecebidoRules(); }catch{}
+      try{ syncAgendaToAtendimentos(); }catch{}
+      try{ applyTheme(); }catch{}
+      try{ renderAllHard(); }catch{}
+      return;
+    }catch(e){ console.warn('v83 apply remote fallback:', e); }
+    try{ return oldApplyRemote && oldApplyRemote(remoteState); }catch{}
+  };
+
+  function nextProcName(){
+    const names = new Set(arr(getState()?.procedimentos).map(p=>norm(p.nome)));
+    let i = 1; while(names.has(norm('Novo procedimento ' + i))) i++;
     return 'Novo procedimento ' + i;
   }
-
-  function atualizarAgendaPorNome(antigo, novo){
-    antigo = String(antigo||'').trim();
-    novo = String(novo||'').trim();
-    if(!antigo || !novo || norm(antigo) === norm(novo)) return;
-
-    (state.agenda||[]).forEach(a=>{
-      if(norm(a.procedimento) === norm(antigo)){
-        a.procedimento = novo;
-        try{
-          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
-          if((a.status||'Agendado') !== 'Bloqueio') a.valor = valor;
-          if((a.status||'Agendado') === 'Realizado') a.recebido = valor;
-        }catch(e){}
-      }
-    });
-
-    (state.atendimentos||[]).forEach(a=>{
-      if(norm(a.procedimento) === norm(antigo)){
-        a.procedimento = novo;
-        try{
-          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
-          a.valor = valor;
-          if(a.recebido !== undefined) a.recebido = valor;
-        }catch(e){}
-      }
-    });
+  function updateAgendaNames(oldName, newName){
+    if(!oldName || !newName || norm(oldName) === norm(newName)) return;
+    const s = getState();
+    arr(s.agenda).forEach(a=>{ if(norm(a.procedimento) === norm(oldName)) a.procedimento = newName; });
+    arr(s.atendimentos).forEach(a=>{ if(norm(a.procedimento) === norm(oldName)) a.procedimento = newName; });
   }
 
   window.renderProcedimentos = function(){
-    garantirProcedimentosV79();
-
+    const s = sanitizeV83(getState()); setState(s);
     const body = document.querySelector('#tblProc tbody');
     if(!body) return;
-
-    body.innerHTML = (state.procedimentos||[]).map(p=>{
-      const sistema = isSystem(p);
-      return `
-        <tr data-id="${esc(p.id)}">
-          <td><input value="${esc(p.nome)}" ${sistema ? 'readonly' : ''}></td>
-          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${n(p.preco).toFixed(2)}" ${sistema ? 'readonly' : ''}></td>
-          <td><input type="date" value="${esc(p.reajuste||'')}" ${sistema ? 'readonly' : ''}></td>
-          <td><input type="number" step="1" value="${Math.max(1, Math.round(n(p.duracaoMin)||60))}"></td>
-          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del title="Excluir procedimento">✕</button>'}</td>
-        </tr>`;
+    body.innerHTML = arr(s.procedimentos).map(p=>{
+      const sys = SYSTEM_SET.has(norm(p.nome));
+      return `<tr data-id="${esc(p.id)}"><td><input value="${esc(p.nome)}" ${sys?'readonly':''}></td><td><input class="money" type="number" step="0.01" inputmode="decimal" value="${n(p.preco).toFixed(2)}" ${sys?'readonly':''}></td><td><input type="date" value="${esc(p.reajuste||'')}" ${sys?'readonly':''}></td><td><input type="number" step="1" value="${Math.max(1,Math.round(n(p.duracaoMin)||60))}"></td><td>${sys?'<span class="muted">Sistema</span>':'<button class="iconBtn" data-del>✕</button>'}</td></tr>`;
     }).join('');
-
     body.querySelectorAll('tr').forEach(tr=>{
-      const p = (state.procedimentos||[]).find(x => String(x.id) === String(tr.dataset.id));
-      if(!p) return;
-
-      const sistema = isSystem(p);
+      const p = arr(getState().procedimentos).find(x=>String(x.id)===String(tr.dataset.id)); if(!p) return;
+      const sys = SYSTEM_SET.has(norm(p.nome));
       const inputs = tr.querySelectorAll('input');
-      const inpNome = inputs[0];
-      const inpPreco = inputs[1];
-      const inpReaj = inputs[2];
-      const inpDur = inputs[3];
-      let nomeOriginal = p.nome || '';
-
-      inpNome && inpNome.addEventListener('focus', ()=>{
-        nomeOriginal = p.nome || inpNome.value || '';
-      });
-
-      inpNome && inpNome.addEventListener('input', ()=>{
-        if(sistema){ inpNome.value = p.nome || ''; return; }
-        p.nome = inpNome.value;
-        p.userCreated = true;
-        writeProcedureBackup();
-        try{
-          localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state));
-          if(typeof ACTIVE_STORAGE_KEY !== 'undefined') localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-        }catch(e){}
-      });
-
-      inpNome && inpNome.addEventListener('change', ()=>{
-        if(sistema){ inpNome.value = p.nome || ''; return; }
-        const novo = inpNome.value.trim() || proximoNome();
-        const antigo = nomeOriginal || p.nome || '';
-        p.nome = novo;
-        inpNome.value = novo;
-        p.userCreated = true;
-        atualizarAgendaPorNome(antigo, novo);
-        salvarProcedimentosV79();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-        try{ renderDashboard(); }catch(e){}
-      });
-
-      inpPreco && inpPreco.addEventListener('input', ()=>{
-        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
-        p.preco = n(inpPreco.value);
-        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
-        p.userCreated = true;
-        salvarProcedimentosV79();
-        try{ updateAgendaAutoCells(); }catch(e){}
-        try{ updateAtendimentosAutoCells(); }catch(e){}
-      });
-
-      inpReaj && inpReaj.addEventListener('change', ()=>{
-        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
-        p.reajuste = inpReaj.value || '';
-        if(!Array.isArray(p.historico)) p.historico = [];
-        if(p.reajuste){
-          const entrada = { dataInicio:p.reajuste, valor:n(p.preco) };
-          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
-          if(idx >= 0) p.historico[idx] = entrada;
-          else p.historico.push(entrada);
-          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
-        }
-        p.userCreated = true;
-        salvarProcedimentosV79();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
-
-      inpDur && inpDur.addEventListener('input', ()=>{
-        p.duracaoMin = Math.max(1, Math.round(n(inpDur.value)||60));
-        if(!sistema) p.userCreated = true;
-        salvarProcedimentosV79();
-      });
-
-      const del = tr.querySelector('[data-del]');
-      del && del.addEventListener('click', ()=>{
-        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
-        state.procedimentos = (state.procedimentos||[]).filter(x => String(x.id) !== String(p.id));
-        salvarProcedimentosV79();
-        renderProcedimentos();
-        try{ renderAgendaHard(); }catch(e){}
-        try{ renderAtendimentosHard(); }catch(e){}
-        try{ renderCalendar(); }catch(e){}
-      });
+      const nome = inputs[0], preco = inputs[1], data = inputs[2], dur = inputs[3];
+      let oldName = p.nome;
+      nome?.addEventListener('focus', ()=>{ oldName = p.nome || nome.value; });
+      nome?.addEventListener('change', ()=>{ if(sys){ nome.value=p.nome; return; } const novo = nome.value.trim() || nextProcName(); p.nome = novo; p.userCreated=true; updateAgendaNames(oldName, novo); persist('proc-name'); renderProcedimentos(); try{ renderAgendaHard(); renderCalendar(); renderAtendimentosHard(); }catch{} });
+      nome?.addEventListener('input', ()=>{ if(sys){ nome.value=p.nome; return; } p.nome = nome.value; p.userCreated=true; persist('proc-input'); });
+      preco?.addEventListener('input', ()=>{ if(sys){ p.preco=0; preco.value='0.00'; return; } p.preco=n(preco.value); p.precoBase=p.preco; p.userCreated=true; persist('proc-price'); });
+      data?.addEventListener('change', ()=>{ if(sys){ p.reajuste=''; data.value=''; return; } p.reajuste=data.value||''; if(p.reajuste){ p.historico=arr(p.historico); const ent={dataInicio:p.reajuste,valor:n(p.preco)}; const ix=p.historico.findIndex(h=>h.dataInicio===ent.dataInicio); if(ix>=0)p.historico[ix]=ent; else p.historico.push(ent); } p.userCreated=true; persist('proc-date'); });
+      dur?.addEventListener('input', ()=>{ p.duracaoMin=Math.max(1,Math.round(n(dur.value)||60)); if(!sys)p.userCreated=true; persist('proc-duration'); });
+      tr.querySelector('[data-del]')?.addEventListener('click', ()=>{ if(typeof confirmDel==='function' && !confirmDel('este procedimento')) return; getState().procedimentos=arr(getState().procedimentos).filter(x=>String(x.id)!==String(p.id)); persist('proc-delete'); renderProcedimentos(); });
     });
-
-    const add = by('btnAddProc');
-    if(add){
-      add.textContent = '+ Adicionar novo procedimento';
-      add.title = 'Cadastrar um novo procedimento';
-    }
-    const reset = by('btnResetProc');
-    if(reset) reset.style.display = 'none';
+    const add = document.getElementById('btnAddProc'); if(add) add.textContent = '+ Adicionar novo procedimento';
+    const reset = document.getElementById('btnResetProc'); if(reset) reset.style.display = 'none';
   };
-  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+  try{ renderProcedimentos = window.renderProcedimentos; }catch{}
 
-  // Captura primeiro e impede listeners antigos de criar/restaurar procedimento errado.
-  window.addEventListener('click', function(e){
-    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
-    if(!add) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-
-    garantirProcedimentosV79();
-    const novo = normalizeProc({
-      id:id(),
-      nome:proximoNome(),
-      preco:0,
-      precoBase:0,
-      reajuste:'',
-      duracaoMin:60,
-      historico:[],
-      userCreated:true
-    }, false);
-
-    state.procedimentos.push(novo);
-    salvarProcedimentosV79();
-    renderProcedimentos();
-
-    setTimeout(()=>{
-      try{
-        const linha = document.querySelector('#tblProc tbody tr[data-id="' + CSS.escape(novo.id) + '"]');
-        const input = linha ? linha.querySelector('input') : null;
-        if(input){ input.focus(); input.select(); }
-      }catch(e){}
-    }, 30);
-  }, true);
-
-  window.addEventListener('click', function(e){
-    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
-    if(!reset) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-  }, true);
-
-  // Procedimentos contam como dados importantes no anti-sobrescrita do Firebase.
-  try{
-    window.stateDataScore = function(s){
-      try{
-        if(!s || typeof s !== 'object') return 0;
-        return (Array.isArray(s.procedimentos)?s.procedimentos.length*500:0)
-          + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
-          + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
-          + (Array.isArray(s.atendimentos)?s.atendimentos.length*1200:0)
-          + (Array.isArray(s.materiais)?s.materiais.length*300:0)
-          + (Array.isArray(s.despesas)?s.despesas.length*300:0)
-          + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*300:0)
-          + (Array.isArray(s.wppQueue)?s.wppQueue.length*50:0)
-          + (Array.isArray(s.crmQueue)?s.crmQueue.length*50:0);
-      }catch(e){ return 0; }
-    };
-    try{ stateDataScore = window.stateDataScore; }catch(e){}
-  }catch(e){}
-
-  // Se vier estado remoto antigo, preserva os procedimentos criados pelo usuário.
-  try{
-    const oldApply = window.__SJM_APPLY_REMOTE_STATE;
-    if(typeof oldApply === 'function'){
-      window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-        try{
-          const localCustom = customFrom((state && state.procedimentos) || []).concat(readProcedureBackup());
-          if(remoteState && typeof remoteState === 'object'){
-            const remoteCustom = customFrom(remoteState.procedimentos || []);
-            remoteState.procedimentos = SISTEMA.map(sp => normalizeProc(sp, true)).concat(mergeCustomProcedures(remoteCustom, localCustom));
-          }
-        }catch(e){}
-        return oldApply.apply(this, arguments);
-      };
+  document.addEventListener('click', function(e){
+    const add = e.target?.closest?.('#btnAddProc');
+    if(add){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const s = sanitizeV83(getState()); setState(s);
+      const p = normalizeProc({id:uidSafe(), nome:nextProcName(), preco:0, precoBase:0, duracaoMin:60, userCreated:true}, false);
+      s.procedimentos.push(p); setState(s); persist('proc-add'); renderProcedimentos();
+      setTimeout(()=>{ try{ const row=document.querySelector('#tblProc tbody tr[data-id="'+CSS.escape(p.id)+'"]'); const inp=row?.querySelector('input'); inp?.focus(); inp?.select(); }catch{} }, 30);
     }
-  }catch(e){}
-
-  // Inicialização final: roda depois dos patches antigos e salva a lista certa.
-  function boot(){
-    try{
-      garantirProcedimentosV79();
-      salvarProcedimentosV79();
-      renderProcedimentos();
-      try{ renderAgendaHard(); }catch(e){}
-      try{ renderCalendar(); }catch(e){}
-    }catch(e){ console.warn('Patch v79 procedimentos:', e); }
-  }
-  setTimeout(boot, 50);
-  setTimeout(boot, 1700);
-  window.addEventListener('beforeunload', function(){
-    try{ salvarProcedimentosV79(); }catch(e){}
-  });
-})();
-
-
-
-/* =======================================================
-   PATCH v81 - Persistência real de Procedimentos
-   Motivo: a versão anterior podia mostrar na tela, mas no F5 o carregamento
-   escolhia uma base antiga porque a pontuação local quase não considerava
-   procedimentos. Este patch salva cada procedimento em backup próprio,
-   mescla no carregamento e impede remoto/cache antigo de apagar a lista.
-======================================================= */
-(function(){
-  'use strict';
-  if(window.__SJM_PROCEDIMENTOS_V81) return;
-  window.__SJM_PROCEDIMENTOS_V81 = true;
-
-  const PROC_KEY = 'sjm_sync_pro_v1__procedimentos_backup_v81';
-  const SYSTEM_NAMES = ['medico','folga','reuniao','compromisso'];
-
-  function norm(v){
-    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
-  }
-  function isSystemName(nome){ return SYSTEM_NAMES.includes(norm(nome)); }
-  function n(v){
-    try{ if(typeof num === 'function') return num(v); }catch(e){}
-    const x = Number(String(v??'0').replace(',','.'));
-    return Number.isFinite(x) ? x : 0;
-  }
-  function newid(){
-    try{ if(typeof uid === 'function') return uid(); }catch(e){}
-    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
-  }
-  function normalize(p, system){
-    return {
-      ...(p||{}),
-      id: String((p&&p.id) || newid()),
-      nome: String((p&&p.nome) || '').trim(),
-      preco: system ? 0 : n(p&&p.preco),
-      precoBase: system ? 0 : ((p&&p.precoBase!==undefined) ? n(p.precoBase) : n(p&&p.preco)),
-      reajuste: system ? '' : String((p&&p.reajuste) || ''),
-      duracaoMin: Math.max(1, Math.round(n(p&&p.duracaoMin) || 60)),
-      historico: system ? [] : (Array.isArray(p&&p.historico) ? p.historico : []),
-      especial: !!system,
-      fixado: !!system,
-      categoria: system ? 'Sistema' : '',
-      ativo: (p&&p.ativo) || 'S',
-      userCreated: !system
-    };
-  }
-  function custom(list){
-    const out=[];
-    (Array.isArray(list)?list:[]).forEach(p=>{
-      if(!p || !String(p.nome||'').trim()) return;
-      if(isSystemName(p.nome)) return;
-      out.push(normalize(p,false));
-    });
-    return out;
-  }
-  function read(k){
-    try{ const raw=localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
-  }
-  function readBackup(){
-    const a = read(PROC_KEY);
-    if(Array.isArray(a)) return a;
-    if(a && Array.isArray(a.procedimentos)) return a.procedimentos;
-    return [];
-  }
-  function scanBackups(){
-    const list=[];
-    try{
-      for(let i=0;i<localStorage.length;i++){
-        const k=localStorage.key(i);
-        if(!k) continue;
-        if(k.indexOf('procedimentos_backup')<0 && k.indexOf('sjm_sync_pro_v1')!==0) continue;
-        const obj=read(k);
-        if(Array.isArray(obj)) list.push(...obj);
-        else if(obj && Array.isArray(obj.procedimentos)) list.push(...obj.procedimentos);
-      }
-    }catch(e){}
-    list.push(...readBackup());
-    return custom(list);
-  }
-  function systemList(current){
-    const labels = ['Médico','Folga','Reunião','Compromisso'];
-    return labels.map(nome=>{
-      const found = (Array.isArray(current)?current:[]).find(p=>isSystemName(p.nome) && norm(p.nome)===norm(nome));
-      return normalize({...(found||{}), nome, preco:0}, true);
-    });
-  }
-  function mergeCustom(a,b){
-    const result=[];
-    const seen = new Set();
-    custom(a).concat(custom(b)).forEach(p=>{
-      const key = p.id || (norm(p.nome)+'|'+n(p.preco)+'|'+n(p.duracaoMin));
-      if(seen.has(key)) return;
-      seen.add(key);
-      result.push(p);
-    });
-    return result;
-  }
-  function persistProceduresOnly(){
-    try{ localStorage.setItem(PROC_KEY, JSON.stringify(custom(window.state?.procedimentos || state?.procedimentos || []))); }catch(e){}
-  }
-  function saveAll(){
-    try{ if(typeof state !== 'undefined' && state) window.state = state; }catch(e){}
-    try{ if(!window.state && typeof state !== 'undefined') window.state = state; }catch(e){}
-    const s = window.state || (typeof state !== 'undefined' ? state : null);
-    if(!s) return;
-    persistProceduresOnly();
-    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch(e){}
-    try{ if(typeof bumpRev === 'function') bumpRev(); }catch(e){}
-    try{ localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(s)); }catch(e){}
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(s)); }catch(e){}
-    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
-    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
-  }
-  function restore(){
-    try{ if(typeof state !== 'undefined' && state) window.state = state; }catch(e){}
-    const s = window.state || (typeof state !== 'undefined' ? state : null);
-    if(!s) return;
-    const atual = Array.isArray(s.procedimentos) ? s.procedimentos : [];
-    const rescued = scanBackups();
-    const merged = systemList(atual).concat(mergeCustom(atual, rescued));
-    const before = JSON.stringify(custom(atual));
-    s.procedimentos = merged;
-    try{ state = s; window.state = s; }catch(e){ window.state = s; }
-    persistProceduresOnly();
-    if(JSON.stringify(custom(merged)) !== before){ saveAll(); }
-  }
-
-  // garante que estado remoto antigo não remova procedimentos criados localmente
-  const oldApply = window.__SJM_APPLY_REMOTE_STATE;
-  if(typeof oldApply === 'function'){
-    window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-      try{
-        const local = (window.state || (typeof state !== 'undefined' ? state : null));
-        const rescued = mergeCustom(local?.procedimentos || [], scanBackups());
-        if(remoteState && typeof remoteState === 'object'){
-          remoteState.procedimentos = systemList(remoteState.procedimentos).concat(mergeCustom(remoteState.procedimentos || [], rescued));
-        }
-      }catch(e){}
-      return oldApply.apply(this, arguments);
-    };
-  }
-
-  // intercepta alterações na tabela e grava imediatamente, sem esperar debounce
-  document.addEventListener('input', function(e){
-    if(e.target && e.target.closest && e.target.closest('#tblProc')){
-      setTimeout(function(){ try{ restore(); saveAll(); }catch(err){} }, 0);
-    }
+    const reset = e.target?.closest?.('#btnResetProc');
+    if(reset){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
   }, true);
+
+  async function importBackupFileV83(file){
+    if(!file) return;
+    try{
+      const parsed = JSON.parse(await file.text());
+      const incoming = sanitizeV83(parsed.state && isObj(parsed.state) ? parsed.state : parsed);
+      const merged = mergeState(incoming, allCandidates(incoming));
+      setState(merged);
+      persist('import');
+      write(IMPORT_KEY, merged);
+      try{ enforceAgendaRecebidoRules(); syncAgendaToAtendimentos(); }catch{}
+      try{ applyTheme(); renderAllHard(); renderProcedimentos(); }catch{}
+      try{ scheduleCloudPush(); }catch{}
+      alert('Backup importado e salvo ✅');
+    }catch(err){ console.error('Importação v83:', err); alert('Arquivo inválido. Escolha o JSON exportado pelo Studio Sync Pro.'); }
+  }
+  window.__SJM_IMPORT_BACKUP_FILE = importBackupFileV83;
+
   document.addEventListener('change', function(e){
-    if(e.target && e.target.closest && e.target.closest('#tblProc')){
-      setTimeout(function(){ try{ restore(); saveAll(); }catch(err){} }, 0);
+    const f = e.target;
+    if(f && f.id === 'fileImport'){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      importBackupFileV83(f.files && f.files[0]).finally(()=>{ try{ f.value=''; }catch{} });
     }
   }, true);
   document.addEventListener('click', function(e){
-    if(!(e.target && e.target.closest)) return;
-
-    // Ao adicionar, NÃO rodar restore imediatamente, porque o novo procedimento
-    // nasce em branco e o restore remove itens sem nome. Primeiro deixa o usuário
-    // preencher; o salvamento real acontece no input/change.
-    if(e.target.closest('#btnAddProc')){
-      setTimeout(function(){ try{ saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(err){} }, 80);
-      return;
-    }
-
-    // Ao excluir, pode restaurar/mesclar normalmente.
-    if(e.target.closest('#tblProc [data-del]')){
-      setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(err){} }, 80);
+    const btn = e.target?.closest?.('#btnImportBackupFinal,#btnUserImportBackupV72,#btnImportUser54,[data-import-backup]');
+    if(btn){ e.preventDefault(); e.stopPropagation(); const file=document.getElementById('fileImport'); if(file) file.click(); }
+    const exp = e.target?.closest?.('#btnExport');
+    if(exp){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const s = persist('export');
+      const blob = new Blob([JSON.stringify(s,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href=url; a.download='studio-sync-pro-backup-'+(new Date().toISOString().slice(0,10))+'.json'; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ try{ a.remove(); URL.revokeObjectURL(url); }catch{} }, 800);
     }
   }, true);
 
-  // atualiza pontuação usada contra sobrescrita: procedimento criado vale como dado importante
-  window.stateDataScore = function(s){
+  function boot(){
     try{
-      if(!s || typeof s !== 'object') return 0;
-      return (Array.isArray(s.procedimentos)?custom(s.procedimentos).length*1500:0)
-        + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
-        + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
-        + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
-        + (Array.isArray(s.materiais)?s.materiais.length*400:0)
-        + (Array.isArray(s.despesas)?s.despesas.length*400:0)
-        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
-        + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
-        + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
-    }catch(e){ return 0; }
-  };
-  try{ stateDataScore = window.stateDataScore; }catch(e){}
+      const candidates = allCandidates();
+      const merged = mergeState(chooseBest(candidates), candidates);
+      setState(merged); persist('boot');
+      try{ applyTheme(); }catch{}
+      try{ renderProcedimentos(); }catch{}
+    }catch(e){ console.warn('boot v83:', e); }
+  }
+  setTimeout(boot, 50);
+  setTimeout(boot, 900);
+  window.addEventListener('beforeunload', ()=>{ try{ persist('beforeunload'); }catch{} });
+})();
 
-  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 20);
-  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 900);
-  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 2500);
-  window.addEventListener('beforeunload', function(){ try{ restore(); saveAll(); }catch(e){} });
+
+/* =======================================================
+   v86 — AUDITORIA GERAL: IMPORTAR/EXPORTAR E RESTAURAÇÃO FORÇADA
+   Correção segura: backup importado vira a base atual e não perde para cache/Firebase antigo.
+======================================================= */
+(function(){
+  'use strict';
+  if(window.__SJM_V86_IMPORT_EXPORT_AUDIT) return;
+  window.__SJM_V86_IMPORT_EXPORT_AUDIT = true;
+
+  const FORCE_KEY = 'studio_sync_pro_importacao_forcada_v86';
+  const MAIN_KEY = 'studio_sync_pro_estado_principal_v83';
+  const LAST_KEY = 'studio_sync_pro_ultimo_estado_bom_v83';
+  const PROC_KEY = 'studio_sync_pro_procedimentos_usuario_v83';
+  const SYSTEM_NAMES = ['Médico','Folga','Reunião','Compromisso'];
+  const LEGACY_NAMES = ['Alongamento','Manutenção','Remoção + Nova Aplicação','Remoção de Alongamento'];
+  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
+  const SYSTEM_SET = new Set(SYSTEM_NAMES.map(norm));
+  const LEGACY_SET = new Set(LEGACY_NAMES.map(norm));
+  function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function clone(v){ try{return JSON.parse(JSON.stringify(v));}catch{return v;} }
+  function uidSafe(){ try{ if(typeof uid === 'function') return uid(); }catch{} return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+  function num(v){ try{ if(typeof window.num === 'function') return window.num(v); }catch{} try{ if(typeof num === 'function') return num(v); }catch{} const n=Number(String(v??'0').replace(',','.')); return Number.isFinite(n)?n:0; }
+  function getState(){ try{ return (typeof state !== 'undefined' && state) ? state : window.state; }catch{ return window.state; } }
+  function setState(s){ try{ state=s; window.state=s; }catch{ window.state=s; } }
+  function read(k){ try{ const raw=localStorage.getItem(k); return raw?JSON.parse(raw):null; }catch{return null;} }
+  function write(k,v){ try{ if(k) localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('v86 write falhou', k, e); } }
+  function collectStorageKeys(){
+    const keys=new Set([MAIN_KEY,LAST_KEY,FORCE_KEY]);
+    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch{}
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch{}
+    try{
+      const u=window.__SJM_CURRENT_USER;
+      if(typeof storageKeyForUser==='function'){
+        if(u?.uid) keys.add(storageKeyForUser(u.uid));
+        if(u?.email) keys.add(storageKeyForUser(u.email));
+        if(u) keys.add(storageKeyForUser(u));
+      }
+    }catch{}
+    try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; if(k.includes('studio_sync')||k.includes('sjm_sync_pro')||k.includes('Studio_Sync')) keys.add(k); } }catch{}
+    return [...keys].filter(Boolean);
+  }
+  function normalizeProc(p, system){
+    return Object.assign({}, isObj(p)?p:{}, {
+      id: p?.id || uidSafe(),
+      nome: String(p?.nome||'').trim(),
+      preco: system ? 0 : num(p?.preco),
+      precoBase: system ? 0 : num(p?.precoBase ?? p?.preco),
+      reajuste: system ? '' : String(p?.reajuste||''),
+      duracaoMin: Math.max(1, Math.round(num(p?.duracaoMin)||60)),
+      historico: system ? [] : arr(p?.historico),
+      especial: !!system,
+      fixado: !!system,
+      categoria: system ? 'Sistema' : (p?.categoria || 'Geral'),
+      ativo: p?.ativo || 'S',
+      userCreated: !system
+    });
+  }
+  function cleanProcedures(list){
+    const out=[], seen=new Set();
+    arr(list).forEach(p=>{
+      if(!p || !String(p.nome||'').trim()) return;
+      const k=norm(p.nome);
+      if(SYSTEM_SET.has(k)) return;
+      if(LEGACY_SET.has(k) && !(p.userCreated||p.manual||p.criadoPeloUsuario)) return;
+      const np=normalizeProc(p,false);
+      const sig=norm(np.nome)+'|'+num(np.preco).toFixed(2)+'|'+Math.round(num(np.duracaoMin)||60);
+      if(seen.has(sig)) return;
+      seen.add(sig); out.push(np);
+    });
+    return SYSTEM_NAMES.map(nome=>normalizeProc({nome,duracaoMin:60},true)).concat(out);
+  }
+  function sanitize(s){
+    try{ if(typeof sanitizeState==='function') s=sanitizeState(clone(s)); else s=clone(s); }catch{ s=clone(s); }
+    if(!isObj(s)){ try{s=defaultState();}catch{s={};} }
+    s.settings=isObj(s.settings)?s.settings:{};
+    ['clientes','agenda','atendimentos','materiais','despesas','receitasExtras','wppQueue','crmQueue'].forEach(k=>{ if(!Array.isArray(s[k])) s[k]=[]; });
+    s.procedimentos=cleanProcedures(s.procedimentos);
+    s.meta=isObj(s.meta)?s.meta:{};
+    try{ if(!s.meta.clientId) s.meta.clientId=CLIENT_ID; }catch{ if(!s.meta.clientId) s.meta.clientId='local'; }
+    s.meta.updatedAt=Date.now();
+    s.meta.rev=Math.max(Number(s.meta.rev||0), Date.now());
+    s.meta.build='v86-auditoria-import-export';
+    return s;
+  }
+  function saveEverywhere(s, reason){
+    s=sanitize(s);
+    setState(s);
+    const custom=arr(s.procedimentos).filter(p=>p && p.nome && !SYSTEM_SET.has(norm(p.nome)));
+    write(PROC_KEY, custom);
+    collectStorageKeys().forEach(k=>write(k,s));
+    write(FORCE_KEY, s); write(MAIN_KEY, s); write(LAST_KEY, s);
+    try{ sessionStorage.setItem(FORCE_KEY, JSON.stringify(s)); }catch{}
+    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') window.__SJM_PUSH_TO_CLOUD(s); }catch(e){ console.warn('v86 push cloud', e); }
+    try{ if(typeof scheduleCloudPush==='function') scheduleCloudPush(); }catch{}
+    try{ window.__SJM_SET_SYNC_STATUS?.('Sync: salvo '+(reason||'')+' ✅'); }catch{}
+    return s;
+  }
+  function exportCurrent(){
+    const s=saveEverywhere(getState(),'export');
+    const blob=new Blob([JSON.stringify(s,null,2)], {type:'application/json'});
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url; a.download='studio-sync-pro-backup-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ try{ a.remove(); URL.revokeObjectURL(url); }catch{} }, 800);
+  }
+  async function importFile(file){
+    if(!file) return;
+    try{
+      const parsed=JSON.parse(await file.text());
+      const incoming=sanitize(parsed && parsed.state && isObj(parsed.state) ? parsed.state : parsed);
+      saveEverywhere(incoming,'import');
+      try{ enforceAgendaRecebidoRules(); syncAgendaToAtendimentos(); }catch{}
+      try{ applyTheme(); renderAllHard(); renderProcedimentos(); }catch{}
+      alert('Backup importado e salvo de verdade ✅');
+    }catch(err){ console.error('Importação v86:', err); alert('Arquivo inválido. Use um backup JSON exportado pelo Studio Sync Pro.'); }
+  }
+  window.__SJM_IMPORT_BACKUP_FILE = importFile;
+  window.__SJM_EXPORT_BACKUP_V86 = exportCurrent;
+  window.__SJM_SAVE_EVERYWHERE_V86 = saveEverywhere;
+
+  const oldRemote=window.__SJM_APPLY_REMOTE_STATE;
+  window.__SJM_APPLY_REMOTE_STATE=function(remote){
+    try{
+      const forced=read(FORCE_KEY) || (()=>{try{return JSON.parse(sessionStorage.getItem(FORCE_KEY)||'null')}catch{return null}})();
+      const local=sanitize(getState());
+      const r=isObj(remote)?remote:null;
+      const rt=Number(r?.meta?.updatedAt||0), rr=Number(r?.meta?.rev||0);
+      const lt=Number(local?.meta?.updatedAt||0), lr=Number(local?.meta?.rev||0);
+      if(forced && (rt < Number(forced?.meta?.updatedAt||0) || rr < Number(forced?.meta?.rev||0))){
+        saveEverywhere(forced,'remote-antigo-ignorado');
+        try{ renderAllHard(); }catch{}
+        return;
+      }
+      if(r && (rt < lt || rr < lr)){
+        saveEverywhere(local,'remote-antigo-ignorado');
+        return;
+      }
+    }catch(e){ console.warn('v86 remote guard', e); }
+    try{ return oldRemote ? oldRemote(remote) : undefined; }catch(e){ console.warn('v86 remote fallback', e); }
+  };
+
+  document.addEventListener('click', function(e){
+    const importBtn=e.target?.closest?.('#btnImportBackupFinal,#btnUserImportBackupV72,#btnImportUser54,[data-import-backup]');
+    if(importBtn){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); const f=document.getElementById('fileImport'); if(f) f.click(); return; }
+    const exportBtn=e.target?.closest?.('#btnExport');
+    if(exportBtn){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); exportCurrent(); return; }
+  }, true);
+  document.addEventListener('change', function(e){
+    const f=e.target;
+    if(f && f.id==='fileImport'){
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      importFile(f.files && f.files[0]).finally(()=>{ try{ f.value=''; }catch{} });
+    }
+  }, true);
+  setTimeout(()=>{ try{ const forced=read(FORCE_KEY); if(forced){ saveEverywhere(forced,'boot-import-forcado'); try{renderAllHard();}catch{} } }catch{} }, 120);
 })();
