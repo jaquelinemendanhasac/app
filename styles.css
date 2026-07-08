@@ -1410,3 +1410,29 @@ button[id*="Cancel"],button[id*="Cancelar"]{background:#fff;color:#374151;border
 .wppTplItem[open] summary::after{ transform:rotate(180deg); }
 .wppTplItem .field{ padding:0 14px 14px; }
 .wppTplItem textarea{ min-height:130px; resize:vertical; }
+
+/* v82 base v80 — Autoagendamento público funcional */
+body.sjm-public-booking .tabs,
+body.sjm-public-booking .wrap,
+body.sjm-public-booking .footer,
+body.sjm-public-booking .authBox,
+body.sjm-public-booking .authGate,
+body.sjm-public-booking #btnUserArea{display:none!important;}
+body.sjm-public-booking.auth-locked::after{display:none!important;content:""!important;}
+.sjmPublicBooking{display:none;min-height:100vh;padding:22px;background:linear-gradient(135deg,#fff7fb,#f7f0ff);}
+body.sjm-public-booking .sjmPublicBooking{display:block!important;}
+.sjmPublicBookingCard{max-width:760px;margin:18px auto;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:24px;box-shadow:0 18px 45px rgba(16,24,40,.10);padding:20px;}
+.sjmPublicBookingCard h1{margin:0 0 6px;font-size:26px;line-height:1.15;}
+.sjmPublicBookingCard p{margin:0 0 16px;color:#667085;font-weight:700;}
+.sjmPublicGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.sjmPublicField{display:flex;flex-direction:column;gap:6px;font-weight:900;color:#344054;}
+.sjmPublicField input,.sjmPublicField select,.sjmPublicField textarea{width:100%;border:1px solid rgba(15,23,42,.16);border-radius:14px;padding:11px 12px;font:inherit;background:#fff;}
+.sjmPublicActions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;}
+.sjmPublicBtn{border:0;border-radius:999px;padding:12px 16px;font-weight:1000;cursor:pointer;background:linear-gradient(90deg,var(--a,#f72585),var(--p,#7b2cbf));color:#fff;}
+.sjmPublicBtn.secondary{background:#fff;color:#344054;border:1px solid rgba(15,23,42,.16);}
+.sjmPublicHint{margin-top:12px;padding:12px;border-radius:14px;background:#f9fafb;color:#667085;font-weight:800;}
+@media(max-width:720px){.sjmPublicGrid{grid-template-columns:1fr}.sjmPublicBooking{padding:12px}.sjmPublicBookingCard{margin:8px auto;padding:16px}}
+
+.googleBtn{width:100%;margin:10px 0 6px;background:#fff!important;color:#1f2937!important;border:1px solid rgba(17,24,39,.18)!important;box-shadow:0 8px 20px rgba(17,24,39,.08)}
+.googleBtn::before{content:"G";display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;margin-right:8px;font-weight:900;color:#4285f4;background:#fff}
+.authDivider{display:flex;align-items:center;gap:10px;margin:8px 0 10px;color:#6b7280;font-size:12px}.authDivider:before,.authDivider:after{content:"";height:1px;background:rgba(17,24,39,.14);flex:1}
