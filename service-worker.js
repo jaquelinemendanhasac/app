@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "studio-sync-pro";
-const CACHE_VERSION = "v92-autoagenda-confirmacao-horarios-sync";
+const CACHE_VERSION = "v93-autoagenda-confirmacao-horarios-sync";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./firebase.js", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 

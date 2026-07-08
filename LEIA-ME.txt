@@ -1,10 +1,8 @@
-Studio Sync Pro v92
+Studio Sync Pro v93
 
-Correções aplicadas:
-- Autoagendamento com horários liberados manualmente pela profissional.
-- Link público exibe formulário de agendamento.
-- Cliente confirma o pedido pelo link.
-- Pedido entra na agenda como Agendado e bloqueia o horário.
-- Profissional confirma depois pelo fluxo de confirmação da agenda.
-- Calendário e autoagendamento usam os mesmos horários ocupados.
-- Sem duplicar arquivos do projeto.
+Correção aplicada sobre a v92.
+- Autoagendamento público abre calendário real.
+- Mostra apenas horários livres conforme a agenda publicada.
+- Horário escolhido fica bloqueado no link.
+- Pedido entra na agenda como Agendado e fica aguardando Confirmação da profissional.
+- Sem duplicar arquivos nem criar versões remendadas.

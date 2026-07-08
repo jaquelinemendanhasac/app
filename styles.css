@@ -1436,3 +1436,20 @@ body.sjm-public-booking .sjmPublicBooking{display:block!important;}
 .googleBtn{width:100%;margin:10px 0 6px;background:#fff!important;color:#1f2937!important;border:1px solid rgba(17,24,39,.18)!important;box-shadow:0 8px 20px rgba(17,24,39,.08)}
 .googleBtn::before{content:"G";display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;margin-right:8px;font-weight:900;color:#4285f4;background:#fff}
 .authDivider{display:flex;align-items:center;gap:10px;margin:8px 0 10px;color:#6b7280;font-size:12px}.authDivider:before,.authDivider:after{content:"";height:1px;background:rgba(17,24,39,.14);flex:1}
+
+
+/* v93 autoagendamento público com calendário real */
+.sjmPubWide{max-width:860px}
+.sjmPubTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 14px}
+.sjmPubTop strong{font-size:22px;color:#242436;text-align:center}
+.sjmPubCalWeek{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0}
+.sjmPubCalWeek b{text-align:center;background:#fde8fb;border-radius:12px;padding:8px 4px;color:#3d2757}
+.sjmPubCalGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.sjmPubDay{min-height:72px;border:1px solid rgba(15,23,42,.12);border-radius:14px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:8px;font-weight:900;cursor:pointer;color:#242436}
+.sjmPubDay small{font-size:11px;color:#667085;font-weight:800}
+.sjmPubDay.free small{color:#079455}
+.sjmPubDay.sel{outline:3px solid #d779df;background:#fff0fb}
+.sjmPubDay.other{opacity:.35}
+.sjmPubDay.past,.sjmPubDay.full{opacity:.45;cursor:not-allowed;background:#f8fafc}
+.sjmPubSelected{margin:14px 0;padding:12px;border-radius:14px;background:#f9fafb;color:#344054;font-weight:900}
+@media(max-width:720px){.sjmPubDay{min-height:58px;padding:6px}.sjmPubDay small{font-size:9px}.sjmPubTop strong{font-size:18px}.sjmPubCalWeek{gap:4px}.sjmPubCalGrid{gap:4px}}

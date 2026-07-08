@@ -10778,3 +10778,285 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   document.addEventListener('DOMContentLoaded',()=>[20,120,500,1200,2500].forEach(t=>setTimeout(apply,t)));
   setTimeout(apply,20); setTimeout(apply,600); setTimeout(apply,1800);
 })();
+
+
+/* =========================================================
+   v93 — Autoagendamento com calendário real e horários livres
+   - link público abre calendário do studio, não formulário solto
+   - mostra somente horários disponíveis da Agenda publicada
+   - cliente confirma; pedido bloqueia horário imediatamente no link
+   - profissional recebe na Agenda como Agendado e confirma pelo botão Confirmação
+   - sem reescrever dados antigos: usa a mesma base/campos já existentes
+   ========================================================= */
+(function autoAgendamentoCalendarioRealV93(){
+  'use strict';
+  if(window.__SJM_AUTOAGENDAMENTO_V93) return;
+  window.__SJM_AUTOAGENDAMENTO_V93 = true;
+
+  const BUILD = 'v93-autoagendamento-calendario-real';
+  const $ = (id)=>document.getElementById(id);
+  const clean = (v)=>String(v ?? '').trim();
+  const digits = (v)=>String(v ?? '').replace(/\D/g,'');
+  const esc = (v)=>String(v ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const money = (v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const today = ()=>new Date().toISOString().slice(0,10);
+  const uid = ()=>'req_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+  const slug = (v)=>String(v || 'studio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'studio';
+  const isPublic = ()=>/^#agendar(\/|$)/i.test(String(location.hash||''));
+  const pubHash = ()=>String(location.hash||'').replace(/^#/,'');
+  const params = ()=>{ const h=pubHash(); const q=h.includes('?')?h.slice(h.indexOf('?')+1):''; return new URLSearchParams(q); };
+  const ownerKey = ()=> clean(params().get('sid') || params().get('studioId') || (pubHash().split('?')[0].split('/')[1] || ''));
+  const baseUrl = ()=>location.origin + location.pathname;
+  let publicDataCache = null;
+  let currentMonth = new Date(today()+'T12:00:00');
+  let selectedDate = today();
+  let lastRenderKey = '';
+
+  function parseMin(h){ const m=String(h||'').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1])*60+Number(m[2]) : 0; }
+  function toHHMM(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+  function brDate(iso){ const [y,m,d]=String(iso||'').split('-'); return d&&m&&y ? `${d}/${m}/${y}` : String(iso||''); }
+  function monthTitle(dt){ return dt.toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).replace(/^./,c=>c.toUpperCase()); }
+  function normTime(t){
+    const m=String(t||'').trim().match(/^(\d{1,2}):(\d{2})$/);
+    return m ? String(Number(m[1])).padStart(2,'0')+':'+m[2] : '';
+  }
+  function autoLocal(){
+    try{
+      window.state = window.state || state;
+      state.autoagendamento = state.autoagendamento && typeof state.autoagendamento === 'object' ? state.autoagendamento : {};
+      const a = state.autoagendamento;
+      if(typeof a.ativo !== 'boolean') a.ativo = true;
+      a.slug = slug(a.slug || state.settings?.studioNome || 'studio');
+      a.horaIni = normTime(a.horaIni) || '08:00';
+      a.horaFim = normTime(a.horaFim) || '18:00';
+      a.intervalo = Number(a.intervalo || 30) || 30;
+      a.pixPct = Number(a.pixPct || 0) || 0;
+      a.pixChave = a.pixChave || '';
+      a.horariosPermitidos = Array.isArray(a.horariosPermitidos) ? a.horariosPermitidos : String(a.horariosPermitidos||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+      return a;
+    }catch(e){ return {ativo:true,slug:'studio',horaIni:'08:00',horaFim:'18:00',intervalo:30,horariosPermitidos:[],pixPct:0,pixChave:''}; }
+  }
+  function statePayload(){
+    const a=autoLocal();
+    const sys=/^(m[eé]dico|folga|reuni[aã]o|compromisso)$/i;
+    const procedimentos=(Array.isArray(state?.procedimentos)?state.procedimentos:[])
+      .filter(p=>p && clean(p.nome) && !sys.test(clean(p.nome)))
+      .map(p=>({nome:clean(p.nome),preco:Number(p.preco||0)||0,duracaoMin:Number(p.duracaoMin||p.duracao||60)||60}));
+    const busySlots=(Array.isArray(state?.agenda)?state.agenda:[])
+      .filter(a=>a && a.data && a.hora && String(a.status||'').toLowerCase() !== 'cancelado')
+      .map(a=>({data:String(a.data),hora:normTime(a.hora),status:a.status||'Agendado',cliente:a.cliente||'',procedimento:a.procedimento||'',profissional:a.profissional||''}));
+    return {
+      studioNome: clean(state?.settings?.studioNome) || 'Studio',
+      studioWpp: digits(state?.settings?.studioWpp || state?.settings?.whatsapp || state?.wpp?.studioWpp || ''),
+      autoagendamento:{ativo:a.ativo!==false,slug:slug(a.slug),horaIni:a.horaIni,horaFim:a.horaFim,intervalo:Number(a.intervalo||30)||30,horariosPermitidos:(a.horariosPermitidos||[]).map(normTime).filter(Boolean),pixPct:Number(a.pixPct||0)||0,pixChave:a.pixChave||''},
+      procedimentos,
+      profissionais:(Array.isArray(state?.profissionais)?state.profissionais:[]).filter(p=>p && p.ativo!==false).map(p=>({id:p.id||'',nome:p.nome||'Profissional'})),
+      busySlots: busySlots.slice(0,2500),
+      updatedAt: Date.now()
+    };
+  }
+  function data(){ return publicDataCache || statePayload(); }
+  function setData(pd){ if(pd) publicDataCache = pd; }
+  function publicLink(){
+    const a=autoLocal();
+    const sid=clean(window.__SJM_CURRENT_USER?.uid || '');
+    const tel=digits(state?.settings?.studioWpp || state?.settings?.whatsapp || '');
+    const q=[]; if(sid) q.push('sid='+encodeURIComponent(sid)); if(tel) q.push('tel='+encodeURIComponent(tel));
+    return `${baseUrl()}#agendar/${encodeURIComponent(slug(a.slug || state?.settings?.studioNome || 'studio'))}${q.length?'?'+q.join('&'):''}`;
+  }
+  async function publish(){
+    try{
+      if(!window.__SJM_CURRENT_USER?.uid || window.__SJM_CURRENT_USER?.role === 'public') return;
+      if(typeof window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO === 'function') await window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO(statePayload());
+    }catch(e){ console.warn(BUILD,'publish:',e); }
+  }
+  async function loadPublic(){
+    if(!isPublic()) return;
+    const key=ownerKey();
+    if(!key) return;
+    try{
+      if(typeof window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO === 'function'){
+        const pd = await window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO(key);
+        if(pd) setData(pd);
+      }
+    }catch(e){ console.warn(BUILD,'load public:',e); }
+  }
+  function occupied(pd,date,hora){
+    return (pd.busySlots||[]).some(s=>String(s.data)===String(date) && normTime(s.hora)===normTime(hora) && String(s.status||'').toLowerCase()!=='cancelado');
+  }
+  function baseTimes(pd){
+    const a=pd.autoagendamento||{};
+    const explicit=(Array.isArray(a.horariosPermitidos)?a.horariosPermitidos:String(a.horariosPermitidos||'').split(/[,;\n]+/)).map(normTime).filter(Boolean);
+    if(explicit.length) return [...new Set(explicit)].sort();
+    const ini=parseMin(a.horaIni||'08:00'), fim=parseMin(a.horaFim||'18:00'), step=Math.max(5,Number(a.intervalo||30)||30);
+    const out=[];
+    for(let m=ini;m<=fim;m+=step) out.push(toHHMM(m));
+    return out;
+  }
+  function freeTimes(date){
+    const pd=data();
+    return baseTimes(pd).filter(h=>!occupied(pd,date,h));
+  }
+  function daysInCalendar(dt){
+    const y=dt.getFullYear(), m=dt.getMonth();
+    const first=new Date(y,m,1); const last=new Date(y,m+1,0);
+    const start=new Date(first); start.setDate(first.getDate()-first.getDay());
+    const out=[];
+    for(let i=0;i<42;i++){ const d=new Date(start); d.setDate(start.getDate()+i); out.push(d); }
+    return {days:out, month:m, last};
+  }
+  function isoDate(d){ return d.toISOString().slice(0,10); }
+  function dayHasFree(iso){ return iso >= today() && freeTimes(iso).length > 0; }
+  function renderCalendarGrid(){
+    const {days,month}=daysInCalendar(currentMonth);
+    const wd=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    return `<div class="sjmPubCalWeek">${wd.map(w=>`<b>${w}</b>`).join('')}</div><div class="sjmPubCalGrid">${days.map(d=>{
+      const iso=isoDate(d), other=d.getMonth()!==month, past=iso<today(), free=dayHasFree(iso), sel=iso===selectedDate;
+      const count=freeTimes(iso).length;
+      return `<button type="button" class="sjmPubDay ${other?'other':''} ${past?'past':''} ${free?'free':'full'} ${sel?'sel':''}" data-pub-day="${iso}" ${(!free||past)?'disabled':''}><span>${d.getDate()}</span>${free?`<small>${count} livre${count>1?'s':''}</small>`:'<small>—</small>'}</button>`;
+    }).join('')}</div>`;
+  }
+  function renderPublic(){
+    if(!isPublic()){
+      const r=$('sjmPublicBookingRoot'); if(r) r.style.display='none';
+      try{ document.body.classList.remove('sjm-public-booking'); }catch(e){}
+      return;
+    }
+    try{ document.body.classList.add('sjm-public-booking'); document.body.classList.remove('auth-locked'); }catch(e){}
+    let root=$('sjmPublicBookingRoot');
+    if(!root){ root=document.createElement('div'); root.id='sjmPublicBookingRoot'; root.className='sjmPublicBooking'; document.body.appendChild(root); }
+    root.style.display='block';
+    const pd=data(); const a=pd.autoagendamento||{};
+    if(a.ativo===false){ root.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>${esc(pd.studioNome||'Studio')} desativou o link no momento.</p></div>`; return; }
+    const procs=(pd.procedimentos||[]).filter(p=>clean(p.nome));
+    const profs=(pd.profissionais||[]).filter(p=>clean(p.nome));
+    if(!dayHasFree(selectedDate)){
+      const first=daysInCalendar(currentMonth).days.map(isoDate).find(dayHasFree);
+      if(first) selectedDate=first;
+    }
+    const times=freeTimes(selectedDate);
+    const renderKey=JSON.stringify({selectedDate,month:currentMonth.getMonth(),year:currentMonth.getFullYear(),busy:(pd.busySlots||[]).length,upd:pd.updatedAt||0});
+    // não reescreve enquanto a cliente digita, exceto quando muda calendário/dados
+    if(document.activeElement && root.contains(document.activeElement) && lastRenderKey===renderKey) return;
+    lastRenderKey=renderKey;
+    root.innerHTML=`<div class="sjmPublicBookingCard sjmPubWide">
+      <h1>Agendar horário</h1>
+      <p>${esc(pd.studioNome||'Studio')} • escolha somente entre horários disponíveis.</p>
+      <div class="sjmPubTop"><button type="button" class="sjmPublicBtn secondary" id="pubPrevMonthV93">◀</button><strong>${esc(monthTitle(currentMonth))}</strong><button type="button" class="sjmPublicBtn secondary" id="pubNextMonthV93">▶</button></div>
+      ${renderCalendarGrid()}
+      <div class="sjmPubSelected"><b>Dia escolhido:</b> ${esc(brDate(selectedDate))}</div>
+      <form id="pubAgFormV93">
+        <div class="sjmPublicGrid">
+          <label class="sjmPublicField"><span>Nome completo</span><input id="pubNomeV93" required autocomplete="name" placeholder="Seu nome"></label>
+          <label class="sjmPublicField"><span>WhatsApp</span><input id="pubWppV93" required inputmode="tel" autocomplete="tel" placeholder="(17) 99999-9999"></label>
+          <label class="sjmPublicField"><span>Procedimento</span><select id="pubProcV93" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
+          <label class="sjmPublicField"><span>Profissional</span><select id="pubProfV93">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}</option>`).join('')}</select></label>
+          <label class="sjmPublicField"><span>Horário disponível</span><select id="pubHoraV93" required>${times.length?times.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sem horário livre neste dia</option>'}</select></label>
+          <label class="sjmPublicField"><span>Observação</span><input id="pubObsV93" placeholder="Opcional"></label>
+        </div>
+        <div class="sjmPublicHint">Cliente confirma o pedido pelo link. O horário fica bloqueado e a profissional confirma depois no botão <b>Confirmação</b>.</div>
+        ${a.pixPct?`<div class="sjmPublicHint">Sinal Pix: <b>${esc(a.pixPct)}%</b>${a.pixChave?' • Chave: <b>'+esc(a.pixChave)+'</b>':''}</div>`:''}
+        <div class="sjmPublicActions"><button class="sjmPublicBtn" type="submit" ${times.length?'':'disabled'}>Confirmar agendamento</button></div>
+      </form>
+    </div>`;
+  }
+  async function submitPublic(e){
+    const form=e.target && e.target.closest ? e.target.closest('#pubAgFormV93') : null;
+    if(!form) return;
+    e.preventDefault(); e.stopPropagation();
+    const pd=data();
+    const nome=clean($('pubNomeV93')?.value), wpp=digits($('pubWppV93')?.value), procedimento=clean($('pubProcV93')?.value), profissional=clean($('pubProfV93')?.value)||'Profissional principal', hora=normTime($('pubHoraV93')?.value), obs=clean($('pubObsV93')?.value);
+    if(!nome || wpp.length<10 || !procedimento || !selectedDate || !hora){ alert('Preencha nome, WhatsApp, procedimento e horário disponível.'); return; }
+    await loadPublic();
+    if(occupied(data(),selectedDate,hora)){ alert('Esse horário acabou de ser ocupado. Escolha outro horário.'); renderPublic(); return; }
+    const proc=(data().procedimentos||[]).find(p=>clean(p.nome)===procedimento)||{};
+    const req={id:uid(),cliente:nome,wpp,procedimento,profissional,data:selectedDate,hora,valor:Number(proc.preco||0)||0,obs,status:'Agendado',statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
+    let sent=false;
+    try{
+      const key=ownerKey();
+      if(key && typeof window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST==='function'){
+        await window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST(key, req);
+        sent=true;
+      }
+    }catch(err){ console.warn(BUILD,'create request:',err); }
+    try{
+      publicDataCache = data();
+      publicDataCache.busySlots = Array.isArray(publicDataCache.busySlots) ? publicDataCache.busySlots : [];
+      publicDataCache.busySlots.push({data:selectedDate,hora,status:'Agendado',cliente:nome,procedimento,profissional});
+      publicDataCache.updatedAt=Date.now();
+      localStorage.setItem('sjm_ultimo_autoagendamento_cliente', JSON.stringify(req));
+    }catch(_){ }
+    const studioTel=digits(data().studioWpp || params().get('tel') || '');
+    const msg=`Novo agendamento pelo link.%0A%0ACliente: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AProfissional: ${encodeURIComponent(profissional)}%0AData: ${encodeURIComponent(brDate(selectedDate))}%0AHorário: ${encodeURIComponent(hora)}${obs?'%0AObs: '+encodeURIComponent(obs):''}`;
+    if(sent){
+      alert('Agendamento enviado ✅\nO horário foi bloqueado e aguarda confirmação do studio.');
+      if(studioTel) window.open(`https://wa.me/55${studioTel}?text=${msg}`,'_blank','noopener,noreferrer');
+      renderPublic();
+    }else if(studioTel){
+      alert('Não consegui gravar direto no banco. Vou abrir o WhatsApp para enviar o pedido ao studio.');
+      window.open(`https://wa.me/55${studioTel}?text=${msg}`,'_blank','noopener,noreferrer');
+    }else alert('Link sem identificação do studio. Gere/copiar o link novamente estando logado.');
+  }
+  function findClient(nome,wpp){
+    const nd=clean(nome).toLowerCase(), wd=digits(wpp);
+    return (state.clientes||[]).find(c=>digits(c.wpp||c.tel)===wd || clean(c.nome).toLowerCase()===nd);
+  }
+  function slotBusyLocal(date,hora,ignore){
+    return (state.agenda||[]).some(a=>a && String(a.data)===String(date) && normTime(a.hora)===normTime(hora) && String(a.status||'').toLowerCase()!=='cancelado' && String(a.publicRequestId||'')!==String(ignore||''));
+  }
+  async function saveStrong(reason){
+    try{ state.meta=state.meta&&typeof state.meta==='object'?state.meta:{}; state.meta.rev=Number(state.meta.rev||0)+1; state.meta.updatedAt=Date.now(); state.meta.reason=reason||BUILD; }catch(e){}
+    try{ if(typeof saveSoft==='function') saveSoft(reason||BUILD); else if(typeof save==='function') save(); }catch(e){}
+    try{
+      const raw=JSON.stringify(state);
+      ['sjm_sync_pro_v1','studio_sync_pro_db','studio_sync_pro_unico_v1','studioSyncState','studio_sync_pro_db__last_good'].forEach(k=>{try{localStorage.setItem(k,raw)}catch(_){}});
+    }catch(_){ }
+    try{ if(typeof scheduleCloudPush==='function') scheduleCloudPush(); }catch(e){}
+    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') await window.__SJM_PUSH_TO_CLOUD(state); }catch(e){ console.warn(BUILD,'push:',e); }
+    setTimeout(()=>{try{window.__SJM_PUSH_TO_CLOUD?.(state)}catch(_){ }},700);
+    setTimeout(publish,500);
+  }
+  window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST = async function(req){
+    try{
+      state.agenda=Array.isArray(state.agenda)?state.agenda:[];
+      state.clientes=Array.isArray(state.clientes)?state.clientes:[];
+      state.autoagendamentoPedidosProcessados=Array.isArray(state.autoagendamentoPedidosProcessados)?state.autoagendamentoPedidosProcessados:[];
+      if(state.autoagendamentoPedidosProcessados.includes(req.id)) return;
+      if(state.agenda.some(a=>String(a.publicRequestId||'')===String(req.id))){ state.autoagendamentoPedidosProcessados.push(req.id); await saveStrong('autoagendamento-ja-existente'); return; }
+      if(slotBusyLocal(req.data, req.hora, req.id)){
+        try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado',sourceStudioKey:req.__sourceStudioKey||'',ownerKey:req.ownerKey||''}); }catch(_){ }
+        return;
+      }
+      if(!findClient(req.cliente, req.wpp)){
+        state.clientes.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),nome:req.cliente||'Cliente',wpp:req.wpp||'',tel:req.wpp||'',obs:'Criada pelo autoagendamento',fotos:[]});
+      }
+      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',profissional:req.profissional||'Profissional principal',data:req.data,hora:normTime(req.hora),status:'Agendado',valor:Number(req.valor||0)||0,recebido:0,obs:(req.obs?req.obs+'\n':'')+'Autoagendamento: cliente confirmou pelo link. Aguardando confirmação da profissional.',origem:'autoagendamento',publicRequestId:req.id,statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:req.criadoEm||new Date().toISOString()});
+      state.autoagendamentoPedidosProcessados.push(req.id);
+      await saveStrong('autoagendamento-recebido-v93');
+      try{ renderAgendaHard?.(); renderCalendar?.(); renderClientes?.(); renderDashboard?.(); }catch(_){ }
+      try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'processado',sourceStudioKey:req.__sourceStudioKey||'',ownerKey:req.ownerKey||''}); }catch(_){ }
+    }catch(e){ console.warn(BUILD,'handle:',e); }
+  };
+  function enhanceAdmin(){
+    try{
+      const link=publicLink();
+      const agLink=$('agLink'); if(agLink) agLink.value=link;
+      const save=$('btnSalvarAutoAg');
+      if(save && !save.__v93){ save.__v93=true; save.addEventListener('click',()=>setTimeout(()=>{ publish(); enhanceAdmin(); },250),true); }
+      const copy=$('btnCopiarLinkAg');
+      if(copy && !copy.__v93){ copy.__v93=true; copy.addEventListener('click',async(ev)=>{ ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation(); if($('agLink')) $('agLink').value=publicLink(); try{ await navigator.clipboard.writeText(publicLink()); }catch(_){ } await publish(); alert('Link do autoagendamento copiado ✅'); },true); }
+    }catch(e){}
+  }
+  document.addEventListener('click',function(e){
+    const day=e.target.closest && e.target.closest('[data-pub-day]');
+    if(day){ selectedDate=day.getAttribute('data-pub-day')||selectedDate; renderPublic(); return; }
+    if(e.target.closest && e.target.closest('#pubPrevMonthV93')){ currentMonth.setMonth(currentMonth.getMonth()-1); renderPublic(); return; }
+    if(e.target.closest && e.target.closest('#pubNextMonthV93')){ currentMonth.setMonth(currentMonth.getMonth()+1); renderPublic(); return; }
+  },true);
+  document.addEventListener('submit',submitPublic,true);
+  function boot(){ enhanceAdmin(); if(isPublic()) loadPublic().then(renderPublic); else renderPublic(); }
+  window.addEventListener('hashchange',()=>setTimeout(boot,120));
+  document.addEventListener('DOMContentLoaded',()=>[100,700,1600,3200].forEach(t=>setTimeout(boot,t)));
+  setInterval(()=>{ try{ enhanceAdmin(); if(isPublic()) loadPublic().then(renderPublic); else publish(); }catch(e){} }, 8000);
+  setTimeout(boot,300); setTimeout(boot,1800); setTimeout(boot,4200);
+})();
