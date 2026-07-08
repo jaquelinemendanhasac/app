@@ -838,6 +838,23 @@ window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
   const incomingTime = stateFreshness(incoming);
   const localTime = stateFreshness(state);
 
+  // Proteção do autoagendamento: logo após receber pedido público, não deixar
+  // um snapshot remoto antigo apagar o agendamento recém-inserido.
+  try{
+    const recentPublic = Date.now() - Number(window.__SJM_LAST_PUBLIC_BOOKING_AT||0) < 15000;
+    if(recentPublic){
+      const localReqs = new Set((state.agenda||[]).map(a=>String(a.publicRequestId||'')).filter(Boolean));
+      const incomingReqs = new Set((incoming.agenda||[]).map(a=>String(a.publicRequestId||'')).filter(Boolean));
+      for(const rid of localReqs){
+        if(!incomingReqs.has(rid)){
+          window.__SJM_SET_SYNC_STATUS('Sync: remoto antigo ignorado após autoagendamento ✅');
+          scheduleCloudPush();
+          return;
+        }
+      }
+    }
+  }catch(e){}
+
   // Proteção forte: remoto mais vazio ou mais antigo não apaga dados/configurações locais.
   if(incomingScore < localScore || (incomingScore === localScore && incomingTime < localTime)){
     window.__SJM_SET_SYNC_STATUS("Sync: remoto antigo ignorado ✅");
@@ -956,6 +973,10 @@ applyTheme();
 
   function setRoute(route){
     let r = String(route||"").toLowerCase();
+    if(/^agendar(\/|$)/i.test(r)){
+      history.replaceState({}, "", `#${r}`);
+      return;
+    }
     if(!canAccessRoute(r)){
       alert(planUpgradeMessage(r));
       r = canAccessRoute("dashboard") ? "dashboard" : "agenda";
@@ -10902,7 +10923,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   const pubHash=()=>String(location.hash||'').replace(/^#/,'');
   const isPublic=()=>/^agendar(\/|$)/i.test(pubHash());
   const params=()=>{ const h=pubHash(); const q=h.includes('?')?h.slice(h.indexOf('?')+1):''; return new URLSearchParams(q); };
-  const ownerUid=()=> clean(params().get('sid')||params().get('studioId')||'');
+  const ownerUid=()=> clean(params().get('sid')||params().get('studioId')||publicSlug()||'');
   const baseUrl=()=>location.origin+location.pathname;
   let publicDataCache=null;
   let loadingPublic=false;
@@ -11044,10 +11065,30 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   function slotBusyLocal(data,hora,ignoreRequestId){
     return (state.agenda||[]).some(a=>a&&String(a.data)===String(data)&&String(a.hora).slice(0,5)===String(hora).slice(0,5)&&String(a.status||'').toLowerCase()!=='cancelado'&&String(a.publicRequestId||'')!==String(ignoreRequestId||''));
   }
-  function saveAll(reason){
+  async function saveAll(reason){
+    // Gravação forte: local + Firebase antes de considerar o autoagendamento processado.
+    try{
+      state.meta = state.meta && typeof state.meta==='object' ? state.meta : {};
+      state.meta.rev = Number(state.meta.rev||0) + 1;
+      state.meta.updatedAt = Date.now();
+      state.meta.reason = reason || BUILD;
+      window.__SJM_LAST_PUBLIC_BOOKING_AT = Date.now();
+    }catch(e){}
     try{ if(typeof saveSoft==='function') saveSoft(reason||BUILD); else if(typeof save==='function') save(); }catch(e){}
+    try{
+      const raw = JSON.stringify(state);
+      const keys = [
+        'sjm_sync_pro_v1','studio_sync_pro_db','studio_sync_pro_unico_v1',
+        'studioSyncState','studio_sync_pro_db__last_good'
+      ];
+      try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.push(ACTIVE_STORAGE_KEY); }catch(e){}
+      try{ if(typeof KEY !== 'undefined' && KEY) keys.push(KEY); }catch(e){}
+      [...new Set(keys)].forEach(k=>{ try{ localStorage.setItem(k, raw); }catch(e){} });
+    }catch(e){}
     try{ if(typeof scheduleCloudPush==='function') scheduleCloudPush(); }catch(e){}
-    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') window.__SJM_PUSH_TO_CLOUD(state); }catch(e){}
+    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') await window.__SJM_PUSH_TO_CLOUD(state); }catch(e){ console.warn(BUILD,'push imediato falhou:',e); }
+    setTimeout(()=>{ try{ window.__SJM_PUSH_TO_CLOUD?.(state); }catch(e){} }, 700);
+    setTimeout(()=>{ try{ window.__SJM_PUSH_TO_CLOUD?.(state); }catch(e){} }, 2200);
     setTimeout(publishPublic,250);
   }
   function notifyLocal(title,body){
@@ -11066,17 +11107,17 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       if(state.agenda.some(a=>String(a.publicRequestId||'')===String(req.id))){ state.autoagendamentoPedidosProcessados.push(req.id); return; }
       if(slotBusyLocal(req.data, req.hora, req.id)){
         notifyLocal('Conflito de autoagendamento', `${req.cliente||'Cliente'} tentou ${req.data} às ${req.hora}, mas o horário já está ocupado.`);
-        try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado'}); }catch(e){}
+        try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado',sourceStudioKey:req.__sourceStudioKey||''}); }catch(e){}
         return;
       }
       const c=findClient(req.cliente, req.wpp);
       if(!c) state.clientes.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),nome:req.cliente||'Cliente',wpp:req.wpp||'',tel:req.wpp||'',obs:'Criada pelo autoagendamento',fotos:[]});
       state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',data:req.data,hora:req.hora,status:'Confirmado',valor:Number(req.valor||0)||0,recebido:0,obs:req.obs||'',origem:'autoagendamento',publicRequestId:req.id,criadoEm:req.criadoEm||new Date().toISOString()});
       state.autoagendamentoPedidosProcessados.push(req.id);
-      saveAll('autoagendamento-recebido');
-      try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); if(typeof renderClientes==='function') renderClientes(); }catch(e){}
+      await saveAll('autoagendamento-recebido');
+      try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); if(typeof renderClientes==='function') renderClientes(); if(typeof renderDashboard==='function') renderDashboard(); }catch(e){}
       notifyLocal('Novo agendamento confirmado', `${req.cliente} • ${req.procedimento} • ${req.data} às ${req.hora}`);
-      try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'processado'}); }catch(e){}
+      try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'processado',sourceStudioKey:req.__sourceStudioKey||'',ownerKey:req.ownerKey||''}); }catch(e){}
     }catch(e){ console.warn(BUILD,'handle request:',e); }
   };
   function enhanceAdminLink(){
@@ -11099,4 +11140,30 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setInterval(()=>{ try{ if(!isPublic()) publishPublic(); }catch(e){} }, 60000);
   setInterval(()=>{ try{ enhanceAdminLink(); }catch(e){} }, 2500);
   setTimeout(boot,200); setTimeout(boot,1600); setTimeout(boot,3500);
+})();
+
+
+/* =========================================================
+   v86 base v80 — Correção real da rota pública de autoagendamento
+   - #agendar/slug não cai mais na trava de Plano Premium
+   - link sem sid usa o slug público do studio
+   - mantém app principal intacto
+   ========================================================= */
+(function publicBookingRouteGuardV85(){
+  function isPublic(){ return /^#agendar(\/|$)/i.test(String(location.hash||'')); }
+  function apply(){
+    if(isPublic()){
+      try{ document.body.classList.add('sjm-public-booking'); document.body.classList.remove('auth-locked'); }catch(e){}
+      try{ document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active')); }catch(e){}
+      try{ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); }catch(e){}
+    }
+  }
+  const oldAlert=window.alert;
+  window.alert=function(msg){
+    if(isPublic() && /Plano|Premium|plano superior/i.test(String(msg||''))){ apply(); return; }
+    return oldAlert.apply(this, arguments);
+  };
+  window.addEventListener('hashchange',()=>setTimeout(apply,20));
+  document.addEventListener('DOMContentLoaded',()=>[20,120,500,1200,2500].forEach(t=>setTimeout(apply,t)));
+  setTimeout(apply,20); setTimeout(apply,600); setTimeout(apply,1800);
 })();
