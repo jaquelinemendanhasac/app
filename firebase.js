@@ -6,14 +6,21 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   onAuthStateChanged,
-  signOut
+  signOut,
+  signInAnonymously,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   getFirestore,
   doc,
   setDoc,
   onSnapshot,
-  enableIndexedDbPersistence
+  enableIndexedDbPersistence,
+  getDoc,
+  collection
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 // V56_FORCE_LOGOUT
@@ -39,6 +46,8 @@ const DEV_PASSWORD = ""; // removido na versão cliente
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 if (__SJM_FORCE_LOGOUT_V56) {
   try { await signOut(auth); } catch(e) {}
@@ -53,6 +62,15 @@ try { await enableIndexedDbPersistence(db); } catch {}
 
 function globalDoc(user) {
   return doc(db, "studio", user.uid, "state", "globalState");
+}
+function studioPublicDoc(uid) {
+  return doc(db, "studio", uid, "public", "autoagendamento");
+}
+function bookingRequestDoc(uid, requestId) {
+  return doc(db, "studio", uid, "bookingRequests", requestId);
+}
+function isPublicBookingRoute(){
+  try { return /^#agendar(\/|$)/i.test(String(location.hash || "")); } catch(e){ return false; }
 }
 
 let applyingRemote = false;
@@ -77,9 +95,42 @@ function showAuthTab(which) {
   setMsg("");
 }
 
+async function entrarComGoogle() {
+  try {
+    setMsg("Abrindo login com Google...");
+    sessionStorage.removeItem("sjm_force_logout");
+    const cred = await signInWithPopup(auth, googleProvider);
+    const user = cred?.user;
+    if (user) {
+      window.__SJM_PENDING_SIGNUP = window.__SJM_PENDING_SIGNUP || {
+        studioNome: user.displayName ? `Studio ${user.displayName}` : "Meu Studio",
+        profissionalNome: user.displayName || "",
+        studioWpp: "",
+        plano: "basic"
+      };
+    }
+    setMsg("");
+  } catch (err) {
+    const code = String(err?.code || "");
+    console.warn("Login Google por popup falhou:", err);
+    if (code.includes("popup-blocked") || code.includes("popup-closed-by-user") || code.includes("cancelled-popup-request") || code.includes("operation-not-supported-in-this-environment")) {
+      try {
+        setMsg("Redirecionando para login com Google...");
+        await signInWithRedirect(auth, googleProvider);
+        return;
+      } catch (redirectErr) {
+        console.error("Login Google por redirecionamento falhou:", redirectErr);
+      }
+    }
+    if (code.includes("unauthorized-domain")) setMsg("Domínio não autorizado no Firebase Authentication.");
+    else setMsg("Não foi possível entrar com Google. Tente novamente.");
+  }
+}
+
 function bindAuthUI() {
   document.getElementById("authTabLogin")?.addEventListener("click", () => showAuthTab("login"));
   document.getElementById("authTabRegister")?.addEventListener("click", () => showAuthTab("register"));
+  document.getElementById("btnGoogleLogin")?.addEventListener("click", entrarComGoogle);
 
   document.getElementById("loginForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -93,14 +144,7 @@ function bindAuthUI() {
       setMsg("");
     } catch (err) {
       console.error("Login falhou:", err);
-      const code = String(err?.code || "");
-      if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) {
-        setMsg("Login inválido. Confira email e senha. Se alterou a senha no Firebase, use Recuperar senha.");
-      } else if (code.includes("too-many-requests")) {
-        setMsg("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
-      } else {
-        setMsg("Não foi possível entrar. Verifique a conexão e tente novamente.");
-      }
+      setMsg("Login inválido. Confira email e senha. Se o erro continuar, recadastre a senha no Firebase.");
     }
   });
 
@@ -149,6 +193,24 @@ function bindAuthUI() {
       else setMsg("Não foi possível enviar recuperação. Confira se o email está cadastrado e tente novamente.");
     }
   });
+}
+
+
+try {
+  const redirectCred = await getRedirectResult(auth);
+  const user = redirectCred?.user;
+  if (user) {
+    window.__SJM_PENDING_SIGNUP = window.__SJM_PENDING_SIGNUP || {
+      studioNome: user.displayName ? `Studio ${user.displayName}` : "Meu Studio",
+      profissionalNome: user.displayName || "",
+      studioWpp: "",
+      plano: "basic"
+    };
+    setMsg("");
+  }
+} catch (err) {
+  console.warn("Resultado do login Google falhou:", err);
+  setMsg("Não foi possível concluir o login com Google.");
 }
 
 bindAuthUI();
@@ -244,6 +306,68 @@ function subscribe(user) {
   });
 }
 
+
+window.__SJM_FIREBASE_AUTH_READY = () => !!auth.currentUser;
+window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO = async (publicData) => {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) throw new Error("Studio não autenticado para publicar autoagendamento.");
+  const payload = Object.assign({}, publicData || {}, {
+    ownerUid: user.uid,
+    updatedAt: Date.now(),
+    version: "v83-autoagendamento-completo"
+  });
+  await setDoc(studioPublicDoc(user.uid), payload, { merge: true });
+  return payload;
+};
+window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO = async (ownerUid) => {
+  const uid = String(ownerUid || "").trim();
+  if (!uid) return null;
+  if (!auth.currentUser) {
+    try { await signInAnonymously(auth); } catch(e) { console.warn("login público anônimo falhou:", e); }
+  }
+  const snap = await getDoc(studioPublicDoc(uid));
+  return snap.exists() ? (snap.data() || null) : null;
+};
+window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST = async (ownerUid, request) => {
+  const uid = String(ownerUid || "").trim();
+  if (!uid) throw new Error("Link sem identificação do studio.");
+  if (!auth.currentUser) {
+    try { await signInAnonymously(auth); } catch(e) { console.warn("login público anônimo falhou:", e); }
+  }
+  const id = String(request?.id || ("req_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,8)));
+  const payload = Object.assign({}, request || {}, {
+    id,
+    statusPedido: "novo",
+    createdAt: Date.now(),
+    source: "autoagendamento-publico"
+  });
+  await setDoc(bookingRequestDoc(uid, id), payload, { merge: true });
+  return payload;
+};
+window.__SJM_MARK_PUBLIC_BOOKING_REQUEST = async (requestId, data) => {
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous || !requestId) return;
+  await setDoc(bookingRequestDoc(user.uid, requestId), Object.assign({}, data || {}, { processedAt: Date.now() }), { merge: true });
+};
+
+let unsubscribeBookingRequests = null;
+function subscribeBookingRequests(user){
+  try { unsubscribeBookingRequests?.(); } catch(e) {}
+  if(!user || user.isAnonymous) return;
+  try{
+    unsubscribeBookingRequests = onSnapshot(collection(db, "studio", user.uid, "bookingRequests"), (snap)=>{
+      snap.docChanges().forEach((ch)=>{
+        if(ch.type !== "added" && ch.type !== "modified") return;
+        const data = ch.doc.data() || {};
+        if(data.statusPedido && data.statusPedido !== "novo") return;
+        if(typeof window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST === "function"){
+          try { window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST(Object.assign({id: ch.doc.id}, data)); } catch(e){ console.warn("pedido autoagendamento:", e); }
+        }
+      });
+    });
+  }catch(e){ console.warn("listener autoagendamento:", e); }
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (sessionStorage.getItem("sjm_force_logout") === "1") {
     try { if (user) await signOut(auth); } catch(e) {}
@@ -254,9 +378,21 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   if (!user) {
-    document.body?.classList.add("auth-locked");
     window.__SJM_CURRENT_USER = null;
     window.__SJM_DEV_UNLOCKED = false;
+    if (isPublicBookingRoute()) {
+      try { await signInAnonymously(auth); } catch(e) { console.warn("auth público anônimo falhou:", e); }
+      return;
+    }
+    document.body?.classList.add("auth-locked");
+    return;
+  }
+
+  if (user.isAnonymous && isPublicBookingRoute()) {
+    window.__SJM_CURRENT_USER = { uid: user.uid, email: "", name: "Visitante", role: "public" };
+    window.__SJM_DEV_UNLOCKED = false;
+    window.__SJM_IS_DEVELOPER = false;
+    document.body?.classList.remove("auth-locked");
     return;
   }
 
@@ -272,6 +408,7 @@ onAuthStateChanged(auth, async (user) => {
   if (isDevUser) setTimeout(() => { try { window.__SJM_SET_ROUTE?.("desenvolvedor"); } catch {} }, 500);
 
   subscribe(user);
+  subscribeBookingRequests(user);
 
   window.__SJM_PUSH_TO_CLOUD = async (state) => push(state, user);
   window.__SJM_SIGN_OUT = async () => signOut(auth);
