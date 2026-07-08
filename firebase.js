@@ -52,7 +52,7 @@ if (__SJM_FORCE_LOGOUT_V56) {
 try { await enableIndexedDbPersistence(db); } catch {}
 
 function globalDoc(user) {
-  return doc(db, "studios", user.uid, "state", "globalState");
+  return doc(db, "studio", user.uid, "state", "globalState");
 }
 
 let applyingRemote = false;
@@ -93,7 +93,14 @@ function bindAuthUI() {
       setMsg("");
     } catch (err) {
       console.error("Login falhou:", err);
-      setMsg("Login inválido. Confira email e senha.");
+      const code = String(err?.code || "");
+      if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) {
+        setMsg("Login inválido. Confira email e senha. Se alterou a senha no Firebase, use Recuperar senha.");
+      } else if (code.includes("too-many-requests")) {
+        setMsg("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+      } else {
+        setMsg("Não foi possível entrar. Verifique a conexão e tente novamente.");
+      }
     }
   });
 
