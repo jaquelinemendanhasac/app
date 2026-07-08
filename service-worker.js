@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "studio-sync-pro";
-const CACHE_VERSION = "v87-autoagendamento-publico-real";
+const CACHE_VERSION = "v88-delete-persistence";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./firebase.js", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 

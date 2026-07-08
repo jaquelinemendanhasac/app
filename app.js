@@ -11167,3 +11167,157 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   document.addEventListener('DOMContentLoaded',()=>[20,120,500,1200,2500].forEach(t=>setTimeout(apply,t)));
   setTimeout(apply,20); setTimeout(apply,600); setTimeout(apply,1800);
 })();
+
+/* =========================================================
+   v88 base v87 — Exclusão persistente e anti-ressurreição
+   - Exclusões ganham tombstone em state.meta.deletedAgendaIds
+   - Snapshot/localStorage antigo não recria agendamento excluído
+   - Empurra exclusão imediatamente para Firestore canônico
+   ========================================================= */
+(function sjmV88DeletePersistence(){
+  const BUILD = 'v88-delete-persistence';
+  function arr(v){ return Array.isArray(v) ? v : []; }
+  function now(){ return Date.now(); }
+  function ensureMetaLocal(s){
+    if(!s || typeof s !== 'object') return {deletedAgendaIds:{}};
+    s.meta = s.meta && typeof s.meta === 'object' ? s.meta : {};
+    s.meta.deletedAgendaIds = s.meta.deletedAgendaIds && typeof s.meta.deletedAgendaIds === 'object' ? s.meta.deletedAgendaIds : {};
+    return s.meta;
+  }
+  function agendaIds(s){ return new Set(arr(s && s.agenda).map(a=>String(a && a.id || '')).filter(Boolean)); }
+  function addTombstone(id, reason){
+    if(!id) return;
+    const meta = ensureMetaLocal(state);
+    meta.deletedAgendaIds[String(id)] = { at: now(), reason: reason || BUILD };
+    meta.updatedAt = now();
+    meta.rev = Number(meta.rev || 0) + 1;
+    meta.reason = reason || BUILD;
+  }
+  function tombstoneSetFrom(){
+    const set = new Set();
+    try{ Object.keys(ensureMetaLocal(state).deletedAgendaIds || {}).forEach(id=>set.add(String(id))); }catch(e){}
+    try{ Object.keys(window.__SJM_V88_DELETED_AGENDA_IDS || {}).forEach(id=>set.add(String(id))); }catch(e){}
+    return set;
+  }
+  function applyTombstonesToState(s){
+    if(!s || typeof s !== 'object') return s;
+    const meta = ensureMetaLocal(s);
+    const ids = new Set(Object.keys(meta.deletedAgendaIds || {}).map(String));
+    try{ Object.keys(window.__SJM_V88_DELETED_AGENDA_IDS || {}).forEach(id=>ids.add(String(id))); }catch(e){}
+    if(!ids.size) return s;
+    s.agenda = arr(s.agenda).filter(a=>!ids.has(String(a && a.id || '')));
+    s.atendimentos = arr(s.atendimentos).filter(at=>!ids.has(String(at && (at.agendaId || at.agId || at.idAgenda || at.id) || '')));
+    return s;
+  }
+  function pruneOldTombstones(s){
+    try{
+      const meta = ensureMetaLocal(s);
+      const keepMs = 1000 * 60 * 60 * 24 * 45;
+      const cutoff = now() - keepMs;
+      Object.keys(meta.deletedAgendaIds || {}).forEach(id=>{
+        const at = Number(meta.deletedAgendaIds[id]?.at || meta.deletedAgendaIds[id] || 0);
+        if(at && at < cutoff) delete meta.deletedAgendaIds[id];
+      });
+    }catch(e){}
+  }
+
+  window.__SJM_V88_DELETED_AGENDA_IDS = window.__SJM_V88_DELETED_AGENDA_IDS || {};
+  let lastAgendaIds = null;
+  function refreshLastIds(){ try{ lastAgendaIds = agendaIds(state); }catch(e){ lastAgendaIds = new Set(); } }
+  setTimeout(refreshLastIds, 200);
+  setTimeout(refreshLastIds, 1500);
+
+  const oldSaveSoft = typeof saveSoft === 'function' ? saveSoft : null;
+  if(oldSaveSoft && !oldSaveSoft.__v88DeletePersistence){
+    const wrappedSaveSoft = function(){
+      try{
+        ensureMetaLocal(state);
+        const current = agendaIds(state);
+        if(lastAgendaIds){
+          lastAgendaIds.forEach(id=>{ if(!current.has(id)) addTombstone(id, 'agenda-delete'); });
+        }
+        applyTombstonesToState(state);
+        pruneOldTombstones(state);
+      }catch(e){ console.warn(BUILD, 'pre-save:', e); }
+      const result = oldSaveSoft.apply(this, arguments);
+      try{ refreshLastIds(); }catch(e){}
+      try{ window.__SJM_PUSH_TO_CLOUD?.(state); }catch(e){}
+      setTimeout(()=>{ try{ window.__SJM_PUSH_TO_CLOUD?.(state); }catch(e){} }, 600);
+      return result;
+    };
+    wrappedSaveSoft.__v88DeletePersistence = true;
+    saveSoft = wrappedSaveSoft;
+  }
+
+  const oldRemoveAtendimento = typeof removeAtendimentoFromAgenda === 'function' ? removeAtendimentoFromAgenda : null;
+  if(oldRemoveAtendimento && !oldRemoveAtendimento.__v88DeletePersistence){
+    const wrappedRemove = function(agendaId){
+      try{ addTombstone(agendaId, 'agenda-delete'); }catch(e){}
+      return oldRemoveAtendimento.apply(this, arguments);
+    };
+    wrappedRemove.__v88DeletePersistence = true;
+    removeAtendimentoFromAgenda = wrappedRemove;
+  }
+
+  const oldApplyRemote = window.__SJM_APPLY_REMOTE_STATE;
+  if(typeof oldApplyRemote === 'function' && !oldApplyRemote.__v88DeletePersistence){
+    const wrappedApplyRemote = function(remoteState){
+      try{
+        const incoming = (typeof sanitizeState === 'function') ? sanitizeState(remoteState || {}) : (remoteState || {});
+        ensureMetaLocal(incoming);
+        ensureMetaLocal(state);
+        const localDeleted = ensureMetaLocal(state).deletedAgendaIds || {};
+        incoming.meta.deletedAgendaIds = Object.assign({}, incoming.meta.deletedAgendaIds || {}, localDeleted, window.__SJM_V88_DELETED_AGENDA_IDS || {});
+        applyTombstonesToState(incoming);
+        const before = agendaIds(state);
+        const result = oldApplyRemote.call(this, incoming);
+        try{
+          ensureMetaLocal(state).deletedAgendaIds = Object.assign({}, ensureMetaLocal(state).deletedAgendaIds || {}, incoming.meta.deletedAgendaIds || {});
+          applyTombstonesToState(state);
+          const after = agendaIds(state);
+          let changed = false;
+          before.forEach(id=>{ if(!after.has(id)) changed = true; });
+          if(changed){ try{ oldSaveSoft?.call(this); }catch(e){} }
+          refreshLastIds();
+        }catch(e){}
+        return result;
+      }catch(e){
+        console.warn(BUILD, 'apply remote fallback:', e);
+        return oldApplyRemote.apply(this, arguments);
+      }
+    };
+    wrappedApplyRemote.__v88DeletePersistence = true;
+    window.__SJM_APPLY_REMOTE_STATE = wrappedApplyRemote;
+    window.__SJM_SET_STATE_FROM_CLOUD = function(remoteState){
+      if(window.__SJM_IS_EDITING){ window.__SJM_PENDING_REMOTE = remoteState; return; }
+      window.__SJM_APPLY_REMOTE_STATE(remoteState);
+    };
+  }
+
+  // Reforço direto no botão Excluir do detalhe, caso algum listener antigo rode antes.
+  document.addEventListener('click', function(e){
+    const btn = e.target && e.target.closest ? e.target.closest('#agDetDel,[data-del-agenda],[data-delete-agenda]') : null;
+    if(!btn) return;
+    try{
+      const id = window.__agendaSelectedId || btn.dataset?.id || btn.dataset?.agendaId || '';
+      if(id) addTombstone(id, 'agenda-delete-click');
+    }catch(err){}
+  }, true);
+
+  window.__SJM_V88_FORCE_SYNC_NOW = async function(){
+    try{
+      ensureMetaLocal(state);
+      applyTombstonesToState(state);
+      pruneOldTombstones(state);
+      if(typeof saveSoft === 'function') saveSoft();
+      if(typeof window.__SJM_PUSH_TO_CLOUD === 'function') await window.__SJM_PUSH_TO_CLOUD(state);
+      if(typeof renderAllHard === 'function') renderAllHard();
+      else { try{ renderAgendaHard(); renderDashboard(); }catch(e){} }
+      refreshLastIds();
+      return true;
+    }catch(e){ console.warn(BUILD, 'force sync:', e); return false; }
+  };
+
+  setInterval(()=>{ try{ applyTombstonesToState(state); refreshLastIds(); }catch(e){} }, 5000);
+  console.log('Studio Sync Pro', BUILD, 'ativo');
+})();
