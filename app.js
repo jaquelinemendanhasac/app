@@ -625,14 +625,18 @@ function load(){
   function scoreLocalState(s){
     try{
       if(!s || typeof s !== "object") return -1;
-      return (Array.isArray(s.agenda)?s.agenda.length:0)
-        + (Array.isArray(s.clientes)?s.clientes.length:0)
-        + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
-        + (Array.isArray(s.materiais)?s.materiais.length:0)
-        + (Array.isArray(s.despesas)?s.despesas.length:0)
-        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
-        + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
-        + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
+      const procScore = Array.isArray(s.procedimentos)
+        ? s.procedimentos.filter(p => p && p.nome && !isSpecialProcedure(p.nome)).length * 1200
+        : 0;
+      return procScore
+        + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
+        + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
+        + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
+        + (Array.isArray(s.materiais)?s.materiais.length*400:0)
+        + (Array.isArray(s.despesas)?s.despesas.length*400:0)
+        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
+        + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
+        + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
     }catch{ return -1; }
   }
   function timeLocalState(s){
@@ -692,14 +696,18 @@ ensureMeta(state);
 function stateDataScore(s){
   try{
     if(!s || typeof s !== "object") return 0;
-    return (Array.isArray(s.agenda)?s.agenda.length:0)
-      + (Array.isArray(s.clientes)?s.clientes.length:0)
-      + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
-      + (Array.isArray(s.materiais)?s.materiais.length:0)
-      + (Array.isArray(s.despesas)?s.despesas.length:0)
-      + (Array.isArray(s.receitasExtras)?s.receitasExtras.length:0)
-      + (Array.isArray(s.wppQueue)?s.wppQueue.length:0)
-      + (Array.isArray(s.crmQueue)?s.crmQueue.length:0);
+    const procScore = Array.isArray(s.procedimentos)
+      ? s.procedimentos.filter(p => p && p.nome && !isSpecialProcedure(p.nome)).length * 1200
+      : 0;
+    return procScore
+      + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
+      + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
+      + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
+      + (Array.isArray(s.materiais)?s.materiais.length*400:0)
+      + (Array.isArray(s.despesas)?s.despesas.length*400:0)
+      + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
+      + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
+      + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
   }catch{ return 0; }
 }
 function stateFreshness(s){
@@ -11007,3 +11015,196 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
 })();
 
+
+
+/* =======================================================
+   PATCH v81 - Persistência real de Procedimentos
+   Motivo: a versão anterior podia mostrar na tela, mas no F5 o carregamento
+   escolhia uma base antiga porque a pontuação local quase não considerava
+   procedimentos. Este patch salva cada procedimento em backup próprio,
+   mescla no carregamento e impede remoto/cache antigo de apagar a lista.
+======================================================= */
+(function(){
+  'use strict';
+  if(window.__SJM_PROCEDIMENTOS_V81) return;
+  window.__SJM_PROCEDIMENTOS_V81 = true;
+
+  const PROC_KEY = 'sjm_sync_pro_v1__procedimentos_backup_v81';
+  const SYSTEM_NAMES = ['medico','folga','reuniao','compromisso'];
+
+  function norm(v){
+    return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' ');
+  }
+  function isSystemName(nome){ return SYSTEM_NAMES.includes(norm(nome)); }
+  function n(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    const x = Number(String(v??'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function newid(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+  function normalize(p, system){
+    return {
+      ...(p||{}),
+      id: String((p&&p.id) || newid()),
+      nome: String((p&&p.nome) || '').trim(),
+      preco: system ? 0 : n(p&&p.preco),
+      precoBase: system ? 0 : ((p&&p.precoBase!==undefined) ? n(p.precoBase) : n(p&&p.preco)),
+      reajuste: system ? '' : String((p&&p.reajuste) || ''),
+      duracaoMin: Math.max(1, Math.round(n(p&&p.duracaoMin) || 60)),
+      historico: system ? [] : (Array.isArray(p&&p.historico) ? p.historico : []),
+      especial: !!system,
+      fixado: !!system,
+      categoria: system ? 'Sistema' : '',
+      ativo: (p&&p.ativo) || 'S',
+      userCreated: !system
+    };
+  }
+  function custom(list){
+    const out=[];
+    (Array.isArray(list)?list:[]).forEach(p=>{
+      if(!p || !String(p.nome||'').trim()) return;
+      if(isSystemName(p.nome)) return;
+      out.push(normalize(p,false));
+    });
+    return out;
+  }
+  function read(k){
+    try{ const raw=localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+  }
+  function readBackup(){
+    const a = read(PROC_KEY);
+    if(Array.isArray(a)) return a;
+    if(a && Array.isArray(a.procedimentos)) return a.procedimentos;
+    return [];
+  }
+  function scanBackups(){
+    const list=[];
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(!k) continue;
+        if(k.indexOf('procedimentos_backup')<0 && k.indexOf('sjm_sync_pro_v1')!==0) continue;
+        const obj=read(k);
+        if(Array.isArray(obj)) list.push(...obj);
+        else if(obj && Array.isArray(obj.procedimentos)) list.push(...obj.procedimentos);
+      }
+    }catch(e){}
+    list.push(...readBackup());
+    return custom(list);
+  }
+  function systemList(current){
+    const labels = ['Médico','Folga','Reunião','Compromisso'];
+    return labels.map(nome=>{
+      const found = (Array.isArray(current)?current:[]).find(p=>isSystemName(p.nome) && norm(p.nome)===norm(nome));
+      return normalize({...(found||{}), nome, preco:0}, true);
+    });
+  }
+  function mergeCustom(a,b){
+    const result=[];
+    const seen = new Set();
+    custom(a).concat(custom(b)).forEach(p=>{
+      const key = p.id || (norm(p.nome)+'|'+n(p.preco)+'|'+n(p.duracaoMin));
+      if(seen.has(key)) return;
+      seen.add(key);
+      result.push(p);
+    });
+    return result;
+  }
+  function persistProceduresOnly(){
+    try{ localStorage.setItem(PROC_KEY, JSON.stringify(custom(window.state?.procedimentos || state?.procedimentos || []))); }catch(e){}
+  }
+  function saveAll(){
+    try{ if(typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    try{ if(!window.state && typeof state !== 'undefined') window.state = state; }catch(e){}
+    const s = window.state || (typeof state !== 'undefined' ? state : null);
+    if(!s) return;
+    persistProceduresOnly();
+    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch(e){}
+    try{ if(typeof bumpRev === 'function') bumpRev(); }catch(e){}
+    try{ localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(s)); }catch(e){}
+    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(s)); }catch(e){}
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+  }
+  function restore(){
+    try{ if(typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    const s = window.state || (typeof state !== 'undefined' ? state : null);
+    if(!s) return;
+    const atual = Array.isArray(s.procedimentos) ? s.procedimentos : [];
+    const rescued = scanBackups();
+    const merged = systemList(atual).concat(mergeCustom(atual, rescued));
+    const before = JSON.stringify(custom(atual));
+    s.procedimentos = merged;
+    try{ state = s; window.state = s; }catch(e){ window.state = s; }
+    persistProceduresOnly();
+    if(JSON.stringify(custom(merged)) !== before){ saveAll(); }
+  }
+
+  // garante que estado remoto antigo não remova procedimentos criados localmente
+  const oldApply = window.__SJM_APPLY_REMOTE_STATE;
+  if(typeof oldApply === 'function'){
+    window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+      try{
+        const local = (window.state || (typeof state !== 'undefined' ? state : null));
+        const rescued = mergeCustom(local?.procedimentos || [], scanBackups());
+        if(remoteState && typeof remoteState === 'object'){
+          remoteState.procedimentos = systemList(remoteState.procedimentos).concat(mergeCustom(remoteState.procedimentos || [], rescued));
+        }
+      }catch(e){}
+      return oldApply.apply(this, arguments);
+    };
+  }
+
+  // intercepta alterações na tabela e grava imediatamente, sem esperar debounce
+  document.addEventListener('input', function(e){
+    if(e.target && e.target.closest && e.target.closest('#tblProc')){
+      setTimeout(function(){ try{ restore(); saveAll(); }catch(err){} }, 0);
+    }
+  }, true);
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.closest && e.target.closest('#tblProc')){
+      setTimeout(function(){ try{ restore(); saveAll(); }catch(err){} }, 0);
+    }
+  }, true);
+  document.addEventListener('click', function(e){
+    if(!(e.target && e.target.closest)) return;
+
+    // Ao adicionar, NÃO rodar restore imediatamente, porque o novo procedimento
+    // nasce em branco e o restore remove itens sem nome. Primeiro deixa o usuário
+    // preencher; o salvamento real acontece no input/change.
+    if(e.target.closest('#btnAddProc')){
+      setTimeout(function(){ try{ saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(err){} }, 80);
+      return;
+    }
+
+    // Ao excluir, pode restaurar/mesclar normalmente.
+    if(e.target.closest('#tblProc [data-del]')){
+      setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(err){} }, 80);
+    }
+  }, true);
+
+  // atualiza pontuação usada contra sobrescrita: procedimento criado vale como dado importante
+  window.stateDataScore = function(s){
+    try{
+      if(!s || typeof s !== 'object') return 0;
+      return (Array.isArray(s.procedimentos)?custom(s.procedimentos).length*1500:0)
+        + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
+        + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
+        + (Array.isArray(s.atendimentos)?s.atendimentos.length*1000:0)
+        + (Array.isArray(s.materiais)?s.materiais.length*400:0)
+        + (Array.isArray(s.despesas)?s.despesas.length*400:0)
+        + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*400:0)
+        + (Array.isArray(s.wppQueue)?s.wppQueue.length*100:0)
+        + (Array.isArray(s.crmQueue)?s.crmQueue.length*100:0);
+    }catch(e){ return 0; }
+  };
+  try{ stateDataScore = window.stateDataScore; }catch(e){}
+
+  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 20);
+  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 900);
+  setTimeout(function(){ try{ restore(); saveAll(); if(typeof renderProcedimentos==='function') renderProcedimentos(); }catch(e){} }, 2500);
+  window.addEventListener('beforeunload', function(){ try{ restore(); saveAll(); }catch(e){} });
+})();
