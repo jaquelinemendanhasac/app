@@ -8,7 +8,7 @@
   - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
 */
 
-const APP_BUILD = "Studio Sync Pro v84 — Persistência Central Limpa";
+const APP_BUILD = "Studio Sync Pro — Limpa Estável 1.0";
 window.__SJM_APP_LOADED = true;
 
 // ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
@@ -509,7 +509,7 @@ function sanitizeState(parsed){
       if(a.hora === undefined) a.hora = "08:00";
       if(a.data === undefined) a.data = todayISO();
       if(a.cliente === undefined) a.cliente = "";
-      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.find?.(p=>p && p.nome && !p.especial)?.nome || "");
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Compromisso");
     }
   });
 
@@ -555,7 +555,7 @@ function sanitizeState(parsed){
       if(a.id === undefined) a.id = uid();
       if(a.data === undefined) a.data = todayISO();
       if(a.cliente === undefined) a.cliente = "";
-      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.find?.(p=>p && p.nome && !p.especial)?.nome || "");
+      if(a.procedimento === undefined) a.procedimento = (s.procedimentos?.[0]?.nome || "Compromisso");
       if(a.recebido === undefined) a.recebido = 0;
       if(a.maoObra === undefined) a.maoObra = 0;
       if(a.foto === undefined) a.foto = "";
@@ -625,7 +625,8 @@ function load(){
   function scoreLocalState(s){
     try{
       if(!s || typeof s !== "object") return -1;
-      return (Array.isArray(s.agenda)?s.agenda.length:0)
+      return (Array.isArray(s.procedimentos)?s.procedimentos.length:0)
+        + (Array.isArray(s.agenda)?s.agenda.length:0)
         + (Array.isArray(s.clientes)?s.clientes.length:0)
         + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
         + (Array.isArray(s.materiais)?s.materiais.length:0)
@@ -692,7 +693,8 @@ ensureMeta(state);
 function stateDataScore(s){
   try{
     if(!s || typeof s !== "object") return 0;
-    return (Array.isArray(s.agenda)?s.agenda.length:0)
+    return (Array.isArray(s.procedimentos)?s.procedimentos.length:0)
+      + (Array.isArray(s.agenda)?s.agenda.length:0)
       + (Array.isArray(s.clientes)?s.clientes.length:0)
       + (Array.isArray(s.atendimentos)?s.atendimentos.length:0)
       + (Array.isArray(s.materiais)?s.materiais.length:0)
@@ -1445,7 +1447,7 @@ function dayBadges(iso){
 // ✅ helper para criar "Novo agendamento" no dia selecionado
 function calNewAtSelectedDay(){
   const iso = __CAL_SELECTED_ISO || todayISO();
-  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || "";
+  const firstProc = state.procedimentos.find(p=>p.nome && !p.especial)?.nome || state.procedimentos.find(p=>p.nome)?.nome || "Compromisso";
   state.agenda.unshift({
     id:uid(),
     data: iso,
@@ -1793,7 +1795,7 @@ function setAgendaViewMode(mode){
 }
 
 onClick("btnAddAgenda", ()=>{
-  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || "";
+  const firstProc = state.procedimentos.find(p=>p.nome && !p.especial)?.nome || state.procedimentos.find(p=>p.nome)?.nome || "Compromisso";
   const novo = {
     id:uid(),
     data: todayISO(),
@@ -2022,7 +2024,7 @@ function renderAgendaCompact(){
       <label class="field"><span>Hora</span><input id="agDetHora" type="time" step="60" value="${escAttr(ag.hora||'')}"></label>
       <label class="field"><span>Cliente</span><input id="agDetCliente" list="agendaClientesDatalist" value="${escAttr(ag.cliente||'')}"></label>
       <label class="field"><span>Contato</span><input id="agDetWpp" value="${escAttr(wpp)}" readonly></label>
-      <label class="field"><span>Procedimento</span><select id="agDetProc" ${isBlock?'disabled':''}>${(isBlock?["—"]:(procNames.length?procNames:[])).map(n=>`<option value="${escAttr(n)}" ${n===(ag.procedimento||'')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
+      <label class="field"><span>Procedimento</span><select id="agDetProc" ${isBlock?'disabled':''}>${(isBlock?["—"]:(procNames.length?procNames:["Compromisso"])).map(n=>`<option value="${escAttr(n)}" ${n===(ag.procedimento||'')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
       <label class="field"><span>Valor</span><input id="agDetValor" type="text" value="${escAttr(val.toFixed(2))}" readonly></label>
       <label class="field"><span>Status</span><select id="agDetStatus">${statuses.map(n=>`<option value="${escAttr(n)}" ${n===(ag.status||'Agendado')?'selected':''}>${escapeHTML(n)}</option>`).join('')}</select></label>
       <label class="field"><span>Recebido</span><input id="agDetRecebido" type="number" step="0.01" inputmode="decimal" value="${escAttr(rec.toFixed(2))}" ${isBlock?'readonly':''}></label>
@@ -2125,7 +2127,7 @@ function renderAgendaHard(){
         <td>${inputHTML({value:a.hora, type:"time", step:"60"})}</td>
         <td>${agendaClienteInputHTML(a.cliente)}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:[]), readonly:isBlock})}</td>
+        <td>${inputHTML({value:procValue, options: isBlock ? ["—"] : (procNames.length?procNames:["Compromisso"]), readonly:isBlock})}</td>
         <td>${inputHTML({value:val.toFixed(2), type:"text", cls:"money", readonly:true})}</td>
         <td>${inputHTML({value:a.status, options: statuses})}</td>
         <td>${inputHTML({value:rec.toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly:isBlock})}</td>
@@ -2350,14 +2352,100 @@ function updateAgendaAutoCells(){
 ======================================================= */
 
 /* =================== PROCEDIMENTOS =================== */
-/* v85: fluxo antigo duplicado removido. Mantemos apenas uma função ponte para o boot inicial. */
 function renderProcedimentos(){
-  try{
-    if(window.renderProcedimentos && window.renderProcedimentos !== renderProcedimentos){
-      return window.renderProcedimentos();
-    }
-  }catch(e){}
+  const body = document.querySelector('#tblProc tbody');
+  if(!body) return;
+
+  body.innerHTML = state.procedimentos.map((p)=>{
+    return `
+      <tr data-id="${p.id}">
+        <td>${inputHTML({value:p.nome||"", readonly: !!p.especial})}</td>
+        <td>${inputHTML({value:num(p.preco).toFixed(2), type:"number", cls:"money", step:"0.01", inputmode:"decimal", readonly: !!p.especial})}</td>
+        <td>${inputHTML({value:p.reajuste||"", type:"date", readonly: !!p.especial})}</td>
+        <td>${inputHTML({value:(p.duracaoMin??60), type:"number", step:"1"})}</td>
+        <td>${p.especial ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del>✕</button>'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  body.querySelectorAll('tr').forEach((tr)=>{
+    const id = tr.dataset.id;
+    const p = state.procedimentos.find(x=>x.id===id);
+    if(!p) return;
+
+    const inpNome = getInp(getCell(tr,0));
+    const inpPreco= getInp(getCell(tr,1));
+    const inpReaj = getInp(getCell(tr,2));
+    const inpDur  = getInp(getCell(tr,3));
+
+    inpNome?.addEventListener('input', ()=>{ if(p.especial){ inpNome.value = p.nome || ""; return; } p.nome = inpNome.value; saveSoft(); scheduleSync(); });
+
+    inpPreco?.addEventListener('input', ()=>{
+      if(p.especial){ p.preco = 0; inpPreco.value = "0.00"; return; }
+      const novoPreco = num(inpPreco.value);
+      const tinhaHistorico = Array.isArray(p.historico) && p.historico.length > 0;
+      p.preco = novoPreco;
+      if(!tinhaHistorico && !p.reajuste){
+        p.precoBase = novoPreco;
+      }
+      saveSoft();
+      scheduleSync();
+    });
+
+    inpReaj?.addEventListener('change',()=>{
+      if(p.especial){ p.reajuste = ""; inpReaj.value = ""; return; }
+      p.reajuste = inpReaj.value || "";
+      if(!Array.isArray(p.historico)) p.historico = [];
+      if(p.reajuste){
+        const idxHist = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+        const entry = { dataInicio: p.reajuste, valor: num(p.preco) };
+        if(idxHist >= 0) p.historico[idxHist] = entry;
+        else p.historico.push(entry);
+        p.historico.sort((a,b)=> a.dataInicio.localeCompare(b.dataInicio));
+      }
+      saveSoft();
+      scheduleSync();
+      renderAgendaHard();
+      renderAtendimentosHard();
+      renderCalendar();
+      renderDashboard();
+    });
+
+    inpDur?.addEventListener('input', ()=>{ p.duracaoMin = Math.max(1, Math.round(num(inpDur.value)||60)); saveSoft(); scheduleSync(); });
+
+    tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
+      if(!confirmDel('este procedimento')) return;
+      state.procedimentos = state.procedimentos.filter(x=>x.id!==id);
+      if(!state.procedimentos.length){
+        state.procedimentos.push({ id: uid(), nome:'Alongamento', preco:130, reajuste:'', duracaoMin:120 });
+      }
+      saveSoft();
+      renderProcedimentos();
+      renderAgendaHard();
+      renderAtendimentosHard();
+      renderCalendar();
+      scheduleSync();
+    });
+  });
 }
+
+onClick('btnAddProc', ()=>{
+  state.procedimentos.unshift({ id: uid(), nome:'', preco:0, reajuste:'', duracaoMin:60 });
+  saveSoft();
+  renderProcedimentos();
+  scheduleSync();
+});
+
+onClick('btnResetProc', ()=>{
+  if(!confirm('Restaurar procedimentos padrão?')) return;
+  state.procedimentos = defaultState().procedimentos;
+  saveSoft();
+  renderProcedimentos();
+  renderAgendaHard();
+  renderAtendimentosHard();
+  renderCalendar();
+  scheduleSync();
+});
 
 /* =================== CLIENTES =================== */
 function renderClientes(){
@@ -2640,7 +2728,7 @@ function renderAtendimentosHard(){
         <td>${inputHTML({value:a.data||todayISO(), type:'date'})}</td>
         <td>${inputHTML({value:a.cliente||''})}</td>
         <td>${inputHTML({value:wpp, readonly:true})}</td>
-        <td>${inputHTML({value:a.procedimento||'', options: procNames.length?procNames:[]})}</td>
+        <td>${inputHTML({value:a.procedimento||'', options: procNames.length?procNames:['Alongamento']})}</td>
         <td>${inputHTML({value:valor.toFixed(2), type:'text', cls:'money', readonly:true})}</td>
         <td>${inputHTML({value:num(a.recebido).toFixed(2), type:'number', cls:'money', step:'0.01', inputmode:'decimal'})}</td>
         <td>${inputHTML({value:num(a.custoMaterial).toFixed(4), type:'text', cls:'money', readonly:true})}</td>
@@ -2784,7 +2872,7 @@ function updateAtendimentosAutoCells(){
 }
 
 function addAtendimentoManual(){
-  const firstProc = (state.procedimentos||[]).find(p=>p.nome && !p.especial)?.nome || '';
+  const firstProc = state.procedimentos.find(p=>p.nome)?.nome || 'Alongamento';
   state.atendimentos.unshift({
     id: uid(), data: todayISO(), cliente:'', procedimento:firstProc,
     recebido: 0, maoObra: 0, custoMaterial: 0, custoTotal: 0, lucro: 0,
@@ -7593,7 +7681,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
 
 
-/* BLOCO ANTIGO REMOVIDO NA v84: persistência/procedimentos duplicados substituídos pela regra central v83. */
+/* BLOCO v58 banco único removido na v81-limpa: substituído pelo salvamento central original + v62. */
 
 /* =========================================================
    v60 - Ajuste pedido: remover Equipe por enquanto, mover Indicação para Fidelidade,
@@ -7640,7 +7728,84 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
 
 
-/* LIMPEZA FINAL antiga removida na v85 para evitar importação duplicada. */
+/* =========================================================
+   LIMPEZA FINAL — CONFIG, IMPORTAÇÃO E BOOT ESTÁVEL
+   Mantém apenas um fluxo para logo/cor/importar e evita binds duplicados.
+   ========================================================= */
+(function(){
+  'use strict';
+  function el(id){ return document.getElementById(id); }
+  function currentState(){ return window.state || (typeof state !== 'undefined' ? state : null); }
+  function setCurrentState(s){ try{ window.state = s; state = s; }catch{ window.state = s; } }
+  function normalizeImportedState(parsed){
+    if(!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Backup inválido');
+    const clean = (typeof sanitizeState === 'function') ? sanitizeState(parsed) : parsed;
+    clean.settings = clean.settings && typeof clean.settings === 'object' ? clean.settings : {};
+    clean.settings.studioNome = clean.settings.studioNome || 'Studio Jaqueline Mendanha';
+    clean.settings.logoUrl = clean.settings.logoUrl || '';
+    clean.settings.corPrimaria = clean.settings.corPrimaria || '#7B2CBF';
+    clean.settings.corAcento = clean.settings.corAcento || '#F72585';
+    clean.settings.plano = clean.settings.plano || 'premium';
+    ['clientes','agenda','atendimentos','materiais','despesas','procedimentos'].forEach(k=>{ if(!Array.isArray(clean[k])) clean[k] = []; });
+    return clean;
+  }
+  async function importBackupFile(file){
+    if(!file) return;
+    try{
+      const parsed = JSON.parse(await file.text());
+      const clean = normalizeImportedState(parsed);
+      setCurrentState(clean);
+      try{ enforceAgendaRecebidoRules(); }catch{}
+      try{ syncAgendaToAtendimentos(); }catch{}
+      try{ state.materiais.forEach(calcularMaterial); }catch{}
+      try{ state.atendimentos.forEach(calcularAtendimento); }catch{}
+      try{ saveSoft(); }catch{}
+      try{ applyTheme(); }catch{}
+      try{ renderAllHard(); }catch{}
+      try{ scheduleSync(); }catch{}
+      alert('Backup importado ✅');
+    }catch(err){
+      console.error(err);
+      alert('Arquivo de backup inválido. Importe um JSON exportado pelo próprio app.');
+    }
+  }
+  function bindImportButton(){
+    const file = el('fileImport');
+    const btn = el('btnImportBackupFinal');
+    if(btn && file && !btn.__sjmImportBound){
+      btn.__sjmImportBound = true;
+      btn.addEventListener('click', ()=> file.click());
+    }
+    if(file && !file.__sjmImportBound){
+      file.__sjmImportBound = true;
+      file.addEventListener('change', async (e)=>{
+        await importBackupFile(e.target.files && e.target.files[0]);
+        e.target.value = '';
+      });
+    }
+  }
+  function refreshConfigFields(){
+    const s = currentState();
+    if(!s || !s.settings) return;
+    if(el('cfgStudioNome')) el('cfgStudioNome').value = s.settings.studioNome || '';
+    if(el('cfgLogoUrl')) el('cfgLogoUrl').value = s.settings.logoUrl || '';
+    if(el('cfgCorPrimaria')) el('cfgCorPrimaria').value = s.settings.corPrimaria || '#7B2CBF';
+    if(el('cfgCorAcento')) el('cfgCorAcento').value = s.settings.corAcento || '#F72585';
+    if(el('cfgStudioWpp')) el('cfgStudioWpp').value = s.settings.studioWpp || '';
+    if(el('cfgPlano')) el('cfgPlano').value = s.settings.plano || 'premium';
+  }
+  function bootCleanFinal(){
+    try{ bindImportButton(); }catch(e){ console.warn('bind import', e); }
+    try{ refreshConfigFields(); }catch(e){ console.warn('refresh config', e); }
+    try{ applyTheme(); }catch(e){ console.warn('theme', e); }
+    try{ applyPlanUI(); }catch(e){ console.warn('plan ui', e); }
+  }
+  document.addEventListener('DOMContentLoaded', bootCleanFinal);
+  window.addEventListener('load', bootCleanFinal);
+  setTimeout(bootCleanFinal, 100);
+  setTimeout(bootCleanFinal, 600);
+  window.__SJM_IMPORT_BACKUP_FILE = importBackupFile;
+})();
 
 /* =========================================================
    v70 DEV PRO — Central profissional de desenvolvimento e controle
@@ -9708,120 +9873,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(bindEasyColors,1000);
 })();
 
-/* =========================================================
-   ✅ v58 — Correção de velocidade na digitação
-   - Não redesenha a tela enquanto a profissional está digitando.
-   - Salva local/sync em lote, sem travar cada tecla.
-   - Mantém todas as funções existentes.
-   ========================================================= */
-(function(){
-  if(window.__SJM_FAST_INPUT_V58) return;
-  window.__SJM_FAST_INPUT_V58 = true;
 
-  function isFieldV58(el){
-    return !!(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
-  }
-  function activeFieldV58(){ return isFieldV58(document.activeElement); }
-  function isTextTypingV58(el){
-    if(!isFieldV58(el)) return false;
-    if(el.tagName === 'SELECT') return false;
-    const type = String(el.type || 'text').toLowerCase();
-    return !['button','checkbox','radio','file','submit','reset','date','time','color'].includes(type);
-  }
-  function debounceV58(fn, ms){
-    let t = null;
-    return function(){
-      const ctx = this, args = arguments;
-      clearTimeout(t);
-      t = setTimeout(function(){ fn.apply(ctx, args); }, ms);
-    };
-  }
-
-  let editingTimerV58 = null;
-  function markEditingV58(){
-    window.__SJM_IS_EDITING = true;
-    clearTimeout(editingTimerV58);
-    editingTimerV58 = setTimeout(function(){ window.__SJM_IS_EDITING = false; }, 700);
-  }
-  document.addEventListener('input', function(e){ if(isTextTypingV58(e.target)) markEditingV58(); }, true);
-  document.addEventListener('focusout', function(){
-    clearTimeout(editingTimerV58);
-    editingTimerV58 = setTimeout(function(){ window.__SJM_IS_EDITING = false; }, 250);
-  }, true);
-
-  const originalSaveSoftV58 = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
-  const originalScheduleSyncV58 = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
-  const originalScheduleCloudPushV58 = (typeof scheduleCloudPush === 'function') ? scheduleCloudPush : window.scheduleCloudPush;
-
-  const flushLocalV58 = debounceV58(function(){
-    try{
-      if(typeof ensureMeta === 'function') ensureMeta(state);
-      localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-      localStorage.setItem(KEY, JSON.stringify(state));
-    }catch(e){ console.warn('Save rápido falhou:', e); }
-    try{ if(typeof originalScheduleCloudPushV58 === 'function') originalScheduleCloudPushV58(); }catch(e){}
-  }, 350);
-
-  const fastSaveV58 = function(){
-    try{ if(!window.__SJM_FAST_SAVING && typeof bumpRev === 'function') bumpRev(); }catch(e){}
-    flushLocalV58();
-  };
-
-  // Substitui salvamento pesado por salvamento em lote.
-  try{ window.saveSoft = fastSaveV58; }catch(e){}
-  try{ saveSoft = fastSaveV58; }catch(e){}
-  try{ globalThis.saveSoft = fastSaveV58; }catch(e){}
-
-  // Sincronização também em lote, principalmente durante digitação.
-  if(typeof originalScheduleSyncV58 === 'function'){
-    const syncDebouncedV58 = debounceV58(function(){
-      if(activeFieldV58()){
-        flushLocalV58();
-        return;
-      }
-      try{ originalScheduleSyncV58(); }catch(e){}
-    }, 450);
-    try{ window.scheduleSync = syncDebouncedV58; }catch(e){}
-    try{ scheduleSync = syncDebouncedV58; }catch(e){}
-    try{ globalThis.scheduleSync = syncDebouncedV58; }catch(e){}
-  }
-
-  // Evita render geral roubar foco enquanto digita.
-  function wrapRenderV58(name){
-    const fn = window[name] || (typeof globalThis[name] === 'function' ? globalThis[name] : null);
-    if(typeof fn !== 'function' || fn.__v58Wrapped) return;
-    const wrapped = function(){
-      if(activeFieldV58() && window.__SJM_IS_EDITING){
-        flushLocalV58();
-        return;
-      }
-      return fn.apply(this, arguments);
-    };
-    wrapped.__v58Wrapped = true;
-    try{ window[name] = wrapped; }catch(e){}
-    try{ globalThis[name] = wrapped; }catch(e){}
-    try{ eval(name + ' = wrapped'); }catch(e){}
-  }
-  ['renderAllHard','renderAllOnce','renderDashboard','renderCRM','renderCalendar','renderAgendaHard','renderAgendaCompact','renderClientes','renderClientesCompactFinal','renderProcedimentos','renderMateriaisHard','renderAtendimentosHard','renderDespesas'].forEach(wrapRenderV58);
-
-  // Corrige especificamente Clientes: não redesenha a ficha a cada letra do nome.
-  document.addEventListener('input', function(e){
-    const el = e.target;
-    if(!el) return;
-    if(el.id === 'cliDetNome' || el.id === 'clientesCompactBusca' || el.id === 'clienteFiltroBusca'){
-      markEditingV58();
-    }
-  }, true);
-
-  // Salva imediatamente antes de sair/fechar, para não perder última digitação.
-  window.addEventListener('beforeunload', function(){
-    try{
-      if(typeof ensureMeta === 'function') ensureMeta(state);
-      localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-      localStorage.setItem(KEY, JSON.stringify(state));
-    }catch(e){}
-  });
-})();
+/* BLOCO v58 velocidade removido na v81-limpa: evitava sobrescrita de saveSoft/render. */
 
 /* =========================================================
    v62 — Correção definitiva: salvar agendamentos + limpar procedimentos especiais
@@ -10153,487 +10206,897 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 
-
-/* BLOCO ANTIGO REMOVIDO NA v84: persistência/procedimentos duplicados substituídos pela regra central v83. */
-
 /* =======================================================
-   v83 — PERSISTÊNCIA CENTRAL LIMPA
-   Corrige salvamento real, importação e procedimentos.
-   Mantém compatibilidade com os patches antigos, mas a última regra agora vence.
+   PATCH v79 - Procedimentos salvando de verdade
+   - Sistema: apenas Médico, Folga, Reunião e Compromisso
+   - Usuário pode criar quantos procedimentos quiser
+   - Não substitui um procedimento pelo outro
+   - Salva em state + localStorage + backup próprio
 ======================================================= */
 (function(){
   'use strict';
-  if(window.__SJM_V83_PERSISTENCIA_CENTRAL) return;
-  window.__SJM_V83_PERSISTENCIA_CENTRAL = true;
+  if(window.__SJM_PROCEDIMENTOS_V79) return;
+  window.__SJM_PROCEDIMENTOS_V79 = true;
 
-  const BUILD = 'v83-persistencia-central';
-  const STABLE_KEY = 'studio_sync_pro_estado_principal_v83';
-  const LAST_GOOD_KEY = 'studio_sync_pro_ultimo_estado_bom_v83';
-  const PROC_KEY = 'studio_sync_pro_procedimentos_usuario_v83';
-  const IMPORT_KEY = 'studio_sync_pro_ultimo_import_v83';
-  const SYSTEM_NAMES = ['Médico','Folga','Reunião','Compromisso'];
-  const LEGACY_NAMES = ['Alongamento','Manutenção','Remoção + Nova Aplicação','Remoção de Alongamento'];
+  const PROC_BACKUP_KEY = 'sjm_sync_pro_v1__procedimentos_backup_v79';
 
-  function getState(){ try{ return (typeof state !== 'undefined' && state) ? state : window.state; }catch{ return window.state; } }
-  function setState(s){ try{ state = s; window.state = s; }catch{ window.state = s; } }
-  function clone(v){ try{ return JSON.parse(JSON.stringify(v)); }catch{ return v; } }
-  function uidSafe(){ try{ if(typeof uid === 'function') return uid(); }catch{} return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
-  function n(v){ try{ if(typeof num === 'function') return num(v); }catch{} const x = Number(String(v ?? '0').replace(',','.')); return Number.isFinite(x) ? x : 0; }
-  function esc(v){ return String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
-  const SYSTEM_SET = new Set(SYSTEM_NAMES.map(norm));
-  const LEGACY_SET = new Set(LEGACY_NAMES.map(norm));
+  const SISTEMA = [
+    { nome:'Médico', duracaoMin:60 },
+    { nome:'Folga', duracaoMin:60 },
+    { nome:'Reunião', duracaoMin:60 },
+    { nome:'Compromisso', duracaoMin:60 }
+  ];
 
-  function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function read(k){ try{ const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }catch{ return null; } }
-  function write(k,v){ try{ if(k) localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('v83 save falhou em', k, e); } }
+  const LEGACY_DEFAULTS = {
+    'alongamento': { preco:130, duracaoMin:120 },
+    'manutencao': { preco:90, duracaoMin:120 },
+    'remocao + nova aplicacao': { preco:160, duracaoMin:150 },
+    'remocao de alongamento': { preco:60, duracaoMin:60 }
+  };
 
-  function userKeys(){
-    const keys = new Set();
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch{}
-    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch{}
-    const u = window.__SJM_CURRENT_USER || null;
-    try{
-      if(typeof storageKeyForUser === 'function'){
-        if(u?.uid) keys.add(storageKeyForUser(u.uid));
-        if(u?.email) keys.add(storageKeyForUser(u.email));
-        if(u) keys.add(storageKeyForUser(u));
-      }
-    }catch{}
-    keys.add(STABLE_KEY); keys.add(LAST_GOOD_KEY); keys.add(IMPORT_KEY);
-    return [...keys].filter(Boolean);
+  function by(id){ return document.getElementById(id); }
+  function norm(v){
+    return String(v||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().trim().replace(/\s+/g,' ');
   }
+  const sistemaNorm = new Set(SISTEMA.map(p=>norm(p.nome)));
 
-  function importantScore(s){
-    if(!isObj(s)) return -1;
-    const customProc = arr(s.procedimentos).filter(p=>p && p.nome && !SYSTEM_SET.has(norm(p.nome)) && (!LEGACY_SET.has(norm(p.nome)) || p.userCreated || p.manual || p.criadoPeloUsuario)).length;
-    let score = 0;
-    score += arr(s.agenda).length * 1000;
-    score += arr(s.clientes).length * 900;
-    score += arr(s.atendimentos).length * 900;
-    score += customProc * 850;
-    score += arr(s.materiais).length * 350;
-    score += arr(s.despesas).length * 300;
-    score += arr(s.receitasExtras).length * 250;
-    if(isObj(s.settings)) score += 100;
-    return score;
+  function esc(v){
+    return String(v??'').replace(/[&<>"']/g, m => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[m]));
   }
-  function fresh(s){ const t = Number(s?.meta?.updatedAt || s?.updatedAt || 0); return Number.isFinite(t) ? t : 0; }
-
-  function normalizeProc(p, system){
+  function n(v){
+    try{ if(typeof num === 'function') return num(v); }catch(e){}
+    const x = Number(String(v??'0').replace(',','.'));
+    return Number.isFinite(x) ? x : 0;
+  }
+  function id(){
+    try{ if(typeof uid === 'function') return uid(); }catch(e){}
+    return 'proc_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+  }
+  function isSystem(p){
+    return !!p && sistemaNorm.has(norm(p.nome));
+  }
+  function isLegacyDefault(p){
+    if(!p || !p.nome) return false;
+    const k = norm(p.nome);
+    const d = LEGACY_DEFAULTS[k];
+    if(!d) return false;
+    if(p.userCreated || p.criadoPeloUsuario || p.manual) return false;
+    const marcadoAntigo = !!p.fixado || !!p.especial || norm(p.categoria)==='sistema';
+    const precoIgual = Math.abs(n(p.preco) - d.preco) < 0.001;
+    const durIgual = Math.round(n(p.duracaoMin)||0) === d.duracaoMin;
+    return marcadoAntigo || (precoIgual && durIgual);
+  }
+  function normalizeProc(p, systemFlag){
     return {
-      ...(isObj(p) ? p : {}),
-      id: p?.id || uidSafe(),
-      nome: String(p?.nome || '').trim(),
-      preco: system ? 0 : n(p?.preco),
-      precoBase: system ? 0 : n(p?.precoBase ?? p?.preco),
-      reajuste: system ? '' : String(p?.reajuste || ''),
-      duracaoMin: Math.max(1, Math.round(n(p?.duracaoMin) || 60)),
-      historico: system ? [] : arr(p?.historico),
-      especial: !!system,
-      fixado: !!system,
-      categoria: system ? 'Sistema' : 'Geral',
-      ativo: p?.ativo || 'S',
-      userCreated: !system
+      ...(p || {}),
+      id: (p && p.id) || id(),
+      nome: String((p && p.nome) || '').trim(),
+      preco: systemFlag ? 0 : n(p && p.preco),
+      precoBase: systemFlag ? 0 : ((p && p.precoBase !== undefined) ? n(p.precoBase) : n(p && p.preco)),
+      reajuste: systemFlag ? '' : String((p && p.reajuste) || ''),
+      duracaoMin: Math.max(1, Math.round(n(p && p.duracaoMin) || 60)),
+      historico: systemFlag ? [] : (Array.isArray(p && p.historico) ? p.historico : []),
+      especial: !!systemFlag,
+      fixado: !!systemFlag,
+      categoria: systemFlag ? 'Sistema' : '',
+      ativo: (p && p.ativo) || 'S',
+      userCreated: !systemFlag
     };
   }
-  function customProcedures(list){
+
+  function customFrom(list){
     const out = [];
-    arr(list).forEach(p=>{
-      if(!p || !String(p.nome||'').trim()) return;
-      const k = norm(p.nome);
-      if(SYSTEM_SET.has(k)) return;
-      if(LEGACY_SET.has(k) && !(p.userCreated || p.manual || p.criadoPeloUsuario)) return;
+    (Array.isArray(list) ? list : []).forEach(p=>{
+      if(!p || !p.nome) return;
+      if(isSystem(p)) return;
+      if(isLegacyDefault(p)) return;
       out.push(normalizeProc(p, false));
     });
     return out;
   }
-  function mergeProcedures(){
-    const result = [];
-    const seen = new Set();
-    const add = (p)=>{
-      if(!p || !p.nome) return;
-      const sig = norm(p.nome) + '|' + n(p.preco).toFixed(2) + '|' + Math.round(n(p.duracaoMin)||60);
-      if(seen.has(sig)) return;
-      if(result.some(x => p.id && x.id === p.id)) p.id = uidSafe();
-      seen.add(sig); result.push(p);
-    };
-    for(const list of arguments) customProcedures(list).forEach(add);
-    return SYSTEM_NAMES.map(nome=>normalizeProc({nome, duracaoMin:60}, true)).concat(result);
-  }
-  function fixProcedures(s){
-    if(!isObj(s)) return s;
-    const backup = read(PROC_KEY);
-    s.procedimentos = mergeProcedures(s.procedimentos, backup);
-    return s;
-  }
-  function sanitizeV83(raw){
-    let s = raw;
-    try{ if(typeof sanitizeState === 'function') s = sanitizeState(clone(raw)); else s = clone(raw); }catch{ s = clone(raw); }
-    if(!isObj(s)){ try{ s = defaultState(); }catch{ s = {}; } }
-    s.settings = isObj(s.settings) ? s.settings : {};
-    ['clientes','agenda','atendimentos','materiais','despesas','receitasExtras','wppQueue','crmQueue'].forEach(k=>{ if(!Array.isArray(s[k])) s[k] = []; });
-    s.meta = isObj(s.meta) ? s.meta : {};
-    if(!s.meta.clientId){ try{ s.meta.clientId = CLIENT_ID; }catch{ s.meta.clientId = 'local'; } }
-    if(typeof s.meta.rev !== 'number') s.meta.rev = 0;
-    if(typeof s.meta.updatedAt !== 'number') s.meta.updatedAt = Date.now();
-    fixProcedures(s);
-    return s;
+
+  function readJson(k){
+    try{
+      const raw = localStorage.getItem(k);
+      if(!raw) return null;
+      return JSON.parse(raw);
+    }catch(e){ return null; }
   }
 
-  function allCandidates(extra){
-    const out = [];
-    if(extra) out.push(extra);
-    const keys = new Set(userKeys());
+  function readProcedureBackup(){
+    const b = readJson(PROC_BACKUP_KEY);
+    if(Array.isArray(b)) return b;
+    if(b && Array.isArray(b.procedimentos)) return b.procedimentos;
+    return [];
+  }
+
+  function writeProcedureBackup(){
     try{
-      for(let i=0;i<localStorage.length;i++){
+      localStorage.setItem(PROC_BACKUP_KEY, JSON.stringify(customFrom(state && state.procedimentos)));
+    }catch(e){}
+  }
+
+  function allStoredProcedures(){
+    const out = [];
+    try{
+      for(let i=0; i<localStorage.length; i++){
         const k = localStorage.key(i);
         if(!k) continue;
-        if(k.includes('studio_sync') || k.includes('sjm_sync_pro') || k.includes('Studio_Sync')) keys.add(k);
+        if(k.indexOf('sjm_sync_pro_v1') !== 0 && k !== PROC_BACKUP_KEY) continue;
+        const parsed = readJson(k);
+        if(Array.isArray(parsed)) out.push(...parsed);
+        else if(parsed && Array.isArray(parsed.procedimentos)) out.push(...parsed.procedimentos);
       }
-    }catch{}
-    keys.forEach(k=>{ const v = read(k); if(isObj(v)) out.push(v); });
-    const cur = getState(); if(cur) out.push(cur);
-    return out.map(sanitizeV83).filter(isObj);
+    }catch(e){}
+    out.push(...readProcedureBackup());
+    return out;
   }
-  function chooseBest(cands){
-    let best = null, bs = -1, bt = -1;
-    cands.forEach(s=>{
-      const sc = importantScore(s), tm = fresh(s);
-      if(sc > bs || (sc === bs && tm > bt)){ best = s; bs = sc; bt = tm; }
+
+  function mergeCustomProcedures(primary, rescue){
+    const result = [];
+    const seenId = new Set();
+
+    customFrom(primary).forEach(p=>{
+      if(seenId.has(p.id)) p.id = id();
+      seenId.add(p.id);
+      result.push(p);
     });
-    return best || sanitizeV83({});
-  }
-  function mergeState(base, candidates){
-    const chosen = sanitizeV83(base || chooseBest(candidates));
-    const procLists = [chosen.procedimentos];
-    candidates.forEach(c=>procLists.push(c.procedimentos));
-    procLists.push(read(PROC_KEY));
-    chosen.procedimentos = mergeProcedures.apply(null, procLists);
-    return chosen;
-  }
-  function persist(reason){
-    let s = sanitizeV83(getState());
-    try{ if(typeof ensureMeta === 'function') ensureMeta(s); }catch{}
-    s.meta = isObj(s.meta) ? s.meta : {};
-    s.meta.updatedAt = Date.now();
-    s.meta.build = BUILD;
-    if(reason !== 'no-rev') s.meta.rev = Number(s.meta.rev||0) + 1;
-    setState(s);
-    const custom = customProcedures(s.procedimentos);
-    write(PROC_KEY, custom);
-    userKeys().forEach(k=>write(k, s));
-    write(STABLE_KEY, s);
-    write(LAST_GOOD_KEY, s);
-    try{ sessionStorage.setItem(STABLE_KEY, JSON.stringify(s)); }catch{}
-    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch{}
-    return s;
+
+    // Recupera procedimentos que estavam salvos em outra chave/back-up.
+    customFrom(rescue).forEach(p=>{
+      const sameId = result.some(x => x.id === p.id);
+      const sameFull = result.some(x =>
+        norm(x.nome) === norm(p.nome) &&
+        Math.abs(n(x.preco)-n(p.preco)) < 0.001 &&
+        Math.round(n(x.duracaoMin)) === Math.round(n(p.duracaoMin))
+      );
+      if(sameId || sameFull) return;
+      if(seenId.has(p.id)) p.id = id();
+      seenId.add(p.id);
+      result.push(p);
+    });
+
+    return result;
   }
 
-  const oldSaveSoft = (typeof saveSoft === 'function') ? saveSoft : null;
-  window.__SJM_SAVE_NOW_V83 = function(reason){ return persist(reason || 'manual'); };
-  try{ saveSoft = function(){ return persist('saveSoft'); }; }catch{}
+  function garantirProcedimentosV79(){
+    // Usa o state real do app mesmo quando window.state ainda não foi exposto.
+    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    const s = (typeof state !== 'undefined' && state) ? state : window.state;
+    if(!s) return;
+    try{ state = s; window.state = s; }catch(e){ window.state = s; }
+    const atuais = Array.isArray(s.procedimentos) ? s.procedimentos : [];
+    const rescue = allStoredProcedures();
 
-  // Carregamento por usuário: escolhe a melhor base, mas sempre mescla procedimentos criados.
-  const oldAuth = window.__SJM_ON_AUTH_USER;
-  window.__SJM_ON_AUTH_USER = function(userInfo){
+    const sistema = SISTEMA.map(sp=>{
+      const found = atuais.find(p => isSystem(p) && norm(p.nome) === norm(sp.nome)) || {};
+      return normalizeProc({ ...found, nome:sp.nome, duracaoMin:found.duracaoMin || sp.duracaoMin }, true);
+    });
+
+    const personalizados = mergeCustomProcedures(atuais, rescue);
+    state.procedimentos = sistema.concat(personalizados);
+  }
+
+  function salvarProcedimentosV79(){
+    try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
+    try{ garantirProcedimentosV79(); }catch(e){}
+    try{ if(typeof ensureMeta === 'function') ensureMeta(state); }catch(e){}
+    try{ if(typeof bumpRev === 'function') bumpRev(); }catch(e){}
+    writeProcedureBackup();
+
+    try{ localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state)); }catch(e){}
     try{
-      window.__SJM_CURRENT_USER = userInfo || window.__SJM_CURRENT_USER || null;
-      try{ if(userInfo?.uid && typeof storageKeyForUser === 'function') ACTIVE_STORAGE_KEY = storageKeyForUser(userInfo.uid); }catch{}
-      const candidates = allCandidates();
-      const chosen = mergeState(chooseBest(candidates), candidates);
-      setState(chosen);
-      persist('auth-load');
-      try{ applyTheme(); }catch{}
-      try{ renderAllHard(); }catch{}
-      try{ if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch{}
-      try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch{}
-    }catch(e){ console.error('v83 auth load:', e); try{ oldAuth && oldAuth(userInfo); }catch{} }
-  };
+      if(typeof ACTIVE_STORAGE_KEY !== 'undefined'){
+        localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+      }
+    }catch(e){}
+    try{ if(typeof saveSoft === 'function') saveSoft(); }catch(e){}
+    try{ if(typeof scheduleCloudPush === 'function') scheduleCloudPush(); }catch(e){}
+  }
 
-  // Firebase remoto: nunca deixa um remoto velho apagar procedimento local; mescla antes de aplicar.
-  const oldApplyRemote = window.__SJM_APPLY_REMOTE_STATE;
-  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-    try{
-      const candidates = allCandidates(remoteState);
-      const remote = sanitizeV83(remoteState);
-      const local = sanitizeV83(getState());
-      const localScore = importantScore(local), remoteScore = importantScore(remote);
-      const localFresh = fresh(local), remoteFresh = fresh(remote);
-      let base = remote;
-      if(localScore > remoteScore || (localScore === remoteScore && localFresh > remoteFresh)) base = local;
-      const merged = mergeState(base, candidates);
-      setState(merged);
-      persist('remote-merge');
-      try{ enforceAgendaRecebidoRules(); }catch{}
-      try{ syncAgendaToAtendimentos(); }catch{}
-      try{ applyTheme(); }catch{}
-      try{ renderAllHard(); }catch{}
-      return;
-    }catch(e){ console.warn('v83 apply remote fallback:', e); }
-    try{ return oldApplyRemote && oldApplyRemote(remoteState); }catch{}
-  };
-
-  function nextProcName(){
-    const names = new Set(arr(getState()?.procedimentos).map(p=>norm(p.nome)));
-    let i = 1; while(names.has(norm('Novo procedimento ' + i))) i++;
+  function proximoNome(){
+    const nomes = new Set((state.procedimentos||[]).map(p=>norm(p.nome)));
+    let i = 1;
+    while(nomes.has(norm('Novo procedimento ' + i))) i++;
     return 'Novo procedimento ' + i;
   }
-  function updateAgendaNames(oldName, newName){
-    if(!oldName || !newName || norm(oldName) === norm(newName)) return;
-    const s = getState();
-    arr(s.agenda).forEach(a=>{ if(norm(a.procedimento) === norm(oldName)) a.procedimento = newName; });
-    arr(s.atendimentos).forEach(a=>{ if(norm(a.procedimento) === norm(oldName)) a.procedimento = newName; });
+
+  function atualizarAgendaPorNome(antigo, novo){
+    antigo = String(antigo||'').trim();
+    novo = String(novo||'').trim();
+    if(!antigo || !novo || norm(antigo) === norm(novo)) return;
+
+    (state.agenda||[]).forEach(a=>{
+      if(norm(a.procedimento) === norm(antigo)){
+        a.procedimento = novo;
+        try{
+          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
+          if((a.status||'Agendado') !== 'Bloqueio') a.valor = valor;
+          if((a.status||'Agendado') === 'Realizado') a.recebido = valor;
+        }catch(e){}
+      }
+    });
+
+    (state.atendimentos||[]).forEach(a=>{
+      if(norm(a.procedimento) === norm(antigo)){
+        a.procedimento = novo;
+        try{
+          const valor = isSystem({nome:novo}) ? 0 : n(procPrice(novo, a.data));
+          a.valor = valor;
+          if(a.recebido !== undefined) a.recebido = valor;
+        }catch(e){}
+      }
+    });
   }
 
   window.renderProcedimentos = function(){
-    const s = sanitizeV83(getState()); setState(s);
+    garantirProcedimentosV79();
+
     const body = document.querySelector('#tblProc tbody');
     if(!body) return;
-    body.innerHTML = arr(s.procedimentos).map(p=>{
-      const sys = SYSTEM_SET.has(norm(p.nome));
-      return `<tr data-id="${esc(p.id)}"><td><input value="${esc(p.nome)}" ${sys?'readonly':''}></td><td><input class="money" type="number" step="0.01" inputmode="decimal" value="${n(p.preco).toFixed(2)}" ${sys?'readonly':''}></td><td><input type="date" value="${esc(p.reajuste||'')}" ${sys?'readonly':''}></td><td><input type="number" step="1" value="${Math.max(1,Math.round(n(p.duracaoMin)||60))}"></td><td>${sys?'<span class="muted">Sistema</span>':'<button class="iconBtn" data-del>✕</button>'}</td></tr>`;
+
+    body.innerHTML = (state.procedimentos||[]).map(p=>{
+      const sistema = isSystem(p);
+      return `
+        <tr data-id="${esc(p.id)}">
+          <td><input value="${esc(p.nome)}" ${sistema ? 'readonly' : ''}></td>
+          <td><input class="money" type="number" step="0.01" inputmode="decimal" value="${n(p.preco).toFixed(2)}" ${sistema ? 'readonly' : ''}></td>
+          <td><input type="date" value="${esc(p.reajuste||'')}" ${sistema ? 'readonly' : ''}></td>
+          <td><input type="number" step="1" value="${Math.max(1, Math.round(n(p.duracaoMin)||60))}"></td>
+          <td>${sistema ? '<span class="muted">Sistema</span>' : '<button class="iconBtn" data-del title="Excluir procedimento">✕</button>'}</td>
+        </tr>`;
     }).join('');
+
     body.querySelectorAll('tr').forEach(tr=>{
-      const p = arr(getState().procedimentos).find(x=>String(x.id)===String(tr.dataset.id)); if(!p) return;
-      const sys = SYSTEM_SET.has(norm(p.nome));
+      const p = (state.procedimentos||[]).find(x => String(x.id) === String(tr.dataset.id));
+      if(!p) return;
+
+      const sistema = isSystem(p);
       const inputs = tr.querySelectorAll('input');
-      const nome = inputs[0], preco = inputs[1], data = inputs[2], dur = inputs[3];
-      let oldName = p.nome;
-      nome?.addEventListener('focus', ()=>{ oldName = p.nome || nome.value; });
-      nome?.addEventListener('change', ()=>{ if(sys){ nome.value=p.nome; return; } const novo = nome.value.trim() || nextProcName(); p.nome = novo; p.userCreated=true; updateAgendaNames(oldName, novo); persist('proc-name'); renderProcedimentos(); try{ renderAgendaHard(); renderCalendar(); renderAtendimentosHard(); }catch{} });
-      nome?.addEventListener('input', ()=>{ if(sys){ nome.value=p.nome; return; } p.nome = nome.value; p.userCreated=true; persist('proc-input'); });
-      preco?.addEventListener('input', ()=>{ if(sys){ p.preco=0; preco.value='0.00'; return; } p.preco=n(preco.value); p.precoBase=p.preco; p.userCreated=true; persist('proc-price'); });
-      data?.addEventListener('change', ()=>{ if(sys){ p.reajuste=''; data.value=''; return; } p.reajuste=data.value||''; if(p.reajuste){ p.historico=arr(p.historico); const ent={dataInicio:p.reajuste,valor:n(p.preco)}; const ix=p.historico.findIndex(h=>h.dataInicio===ent.dataInicio); if(ix>=0)p.historico[ix]=ent; else p.historico.push(ent); } p.userCreated=true; persist('proc-date'); });
-      dur?.addEventListener('input', ()=>{ p.duracaoMin=Math.max(1,Math.round(n(dur.value)||60)); if(!sys)p.userCreated=true; persist('proc-duration'); });
-      tr.querySelector('[data-del]')?.addEventListener('click', ()=>{ if(typeof confirmDel==='function' && !confirmDel('este procedimento')) return; getState().procedimentos=arr(getState().procedimentos).filter(x=>String(x.id)!==String(p.id)); persist('proc-delete'); renderProcedimentos(); });
+      const inpNome = inputs[0];
+      const inpPreco = inputs[1];
+      const inpReaj = inputs[2];
+      const inpDur = inputs[3];
+      let nomeOriginal = p.nome || '';
+
+      inpNome && inpNome.addEventListener('focus', ()=>{
+        nomeOriginal = p.nome || inpNome.value || '';
+      });
+
+      inpNome && inpNome.addEventListener('input', ()=>{
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        p.nome = inpNome.value;
+        p.userCreated = true;
+        writeProcedureBackup();
+        try{
+          localStorage.setItem('sjm_sync_pro_v1', JSON.stringify(state));
+          if(typeof ACTIVE_STORAGE_KEY !== 'undefined') localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
+        }catch(e){}
+      });
+
+      inpNome && inpNome.addEventListener('change', ()=>{
+        if(sistema){ inpNome.value = p.nome || ''; return; }
+        const novo = inpNome.value.trim() || proximoNome();
+        const antigo = nomeOriginal || p.nome || '';
+        p.nome = novo;
+        inpNome.value = novo;
+        p.userCreated = true;
+        atualizarAgendaPorNome(antigo, novo);
+        salvarProcedimentosV79();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+        try{ renderDashboard(); }catch(e){}
+      });
+
+      inpPreco && inpPreco.addEventListener('input', ()=>{
+        if(sistema){ p.preco = 0; inpPreco.value = '0.00'; return; }
+        p.preco = n(inpPreco.value);
+        if(!Array.isArray(p.historico) || !p.historico.length) p.precoBase = p.preco;
+        p.userCreated = true;
+        salvarProcedimentosV79();
+        try{ updateAgendaAutoCells(); }catch(e){}
+        try{ updateAtendimentosAutoCells(); }catch(e){}
+      });
+
+      inpReaj && inpReaj.addEventListener('change', ()=>{
+        if(sistema){ p.reajuste = ''; inpReaj.value = ''; return; }
+        p.reajuste = inpReaj.value || '';
+        if(!Array.isArray(p.historico)) p.historico = [];
+        if(p.reajuste){
+          const entrada = { dataInicio:p.reajuste, valor:n(p.preco) };
+          const idx = p.historico.findIndex(h => h.dataInicio === p.reajuste);
+          if(idx >= 0) p.historico[idx] = entrada;
+          else p.historico.push(entrada);
+          p.historico.sort((a,b)=>String(a.dataInicio).localeCompare(String(b.dataInicio)));
+        }
+        p.userCreated = true;
+        salvarProcedimentosV79();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
+
+      inpDur && inpDur.addEventListener('input', ()=>{
+        p.duracaoMin = Math.max(1, Math.round(n(inpDur.value)||60));
+        if(!sistema) p.userCreated = true;
+        salvarProcedimentosV79();
+      });
+
+      const del = tr.querySelector('[data-del]');
+      del && del.addEventListener('click', ()=>{
+        if(typeof confirmDel === 'function' && !confirmDel('este procedimento')) return;
+        state.procedimentos = (state.procedimentos||[]).filter(x => String(x.id) !== String(p.id));
+        salvarProcedimentosV79();
+        renderProcedimentos();
+        try{ renderAgendaHard(); }catch(e){}
+        try{ renderAtendimentosHard(); }catch(e){}
+        try{ renderCalendar(); }catch(e){}
+      });
     });
-    const add = document.getElementById('btnAddProc'); if(add) add.textContent = '+ Adicionar novo procedimento';
-    const reset = document.getElementById('btnResetProc'); if(reset) reset.style.display = 'none';
-  };
-  try{ renderProcedimentos = window.renderProcedimentos; }catch{}
 
-  document.addEventListener('click', function(e){
-    const add = e.target?.closest?.('#btnAddProc');
+    const add = by('btnAddProc');
     if(add){
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      const s = sanitizeV83(getState()); setState(s);
-      const p = normalizeProc({id:uidSafe(), nome:nextProcName(), preco:0, precoBase:0, duracaoMin:60, userCreated:true}, false);
-      s.procedimentos.push(p); setState(s); persist('proc-add'); renderProcedimentos();
-      setTimeout(()=>{ try{ const row=document.querySelector('#tblProc tbody tr[data-id="'+CSS.escape(p.id)+'"]'); const inp=row?.querySelector('input'); inp?.focus(); inp?.select(); }catch{} }, 30);
+      add.textContent = '+ Adicionar novo procedimento';
+      add.title = 'Cadastrar um novo procedimento';
     }
-    const reset = e.target?.closest?.('#btnResetProc');
-    if(reset){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+    const reset = by('btnResetProc');
+    if(reset) reset.style.display = 'none';
+  };
+  try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
+
+  // Captura primeiro e impede listeners antigos de criar/restaurar procedimento errado.
+  window.addEventListener('click', function(e){
+    const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
+    if(!add) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    garantirProcedimentosV79();
+    const novo = normalizeProc({
+      id:id(),
+      nome:proximoNome(),
+      preco:0,
+      precoBase:0,
+      reajuste:'',
+      duracaoMin:60,
+      historico:[],
+      userCreated:true
+    }, false);
+
+    state.procedimentos.push(novo);
+    salvarProcedimentosV79();
+    renderProcedimentos();
+
+    setTimeout(()=>{
+      try{
+        const linha = document.querySelector('#tblProc tbody tr[data-id="' + CSS.escape(novo.id) + '"]');
+        const input = linha ? linha.querySelector('input') : null;
+        if(input){ input.focus(); input.select(); }
+      }catch(e){}
+    }, 30);
   }, true);
 
-  async function importBackupFileV83(file){
-    if(!file) return;
-    try{
-      const parsed = JSON.parse(await file.text());
-      const incoming = sanitizeV83(parsed.state && isObj(parsed.state) ? parsed.state : parsed);
-      const merged = mergeState(incoming, allCandidates(incoming));
-      setState(merged);
-      persist('import');
-      write(IMPORT_KEY, merged);
-      try{ enforceAgendaRecebidoRules(); syncAgendaToAtendimentos(); }catch{}
-      try{ applyTheme(); renderAllHard(); renderProcedimentos(); }catch{}
-      try{ scheduleCloudPush(); }catch{}
-      alert('Backup importado e salvo ✅');
-    }catch(err){ console.error('Importação v83:', err); alert('Arquivo inválido. Escolha o JSON exportado pelo Studio Sync Pro.'); }
-  }
-  window.__SJM_IMPORT_BACKUP_FILE = importBackupFileV83;
-
-  document.addEventListener('change', function(e){
-    const f = e.target;
-    if(f && f.id === 'fileImport'){
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      importBackupFileV83(f.files && f.files[0]).finally(()=>{ try{ f.value=''; }catch{} });
-    }
-  }, true);
-  document.addEventListener('click', function(e){
-    const btn = e.target?.closest?.('#btnImportBackupFinal,#btnUserImportBackupV72,#btnImportUser54,[data-import-backup]');
-    if(btn){ e.preventDefault(); e.stopPropagation(); const file=document.getElementById('fileImport'); if(file) file.click(); }
-    const exp = e.target?.closest?.('#btnExport');
-    if(exp){
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      const s = persist('export');
-      const blob = new Blob([JSON.stringify(s,null,2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob); const a = document.createElement('a');
-      a.href=url; a.download='studio-sync-pro-backup-'+(new Date().toISOString().slice(0,10))+'.json'; document.body.appendChild(a); a.click();
-      setTimeout(()=>{ try{ a.remove(); URL.revokeObjectURL(url); }catch{} }, 800);
-    }
+  window.addEventListener('click', function(e){
+    const reset = e.target && e.target.closest ? e.target.closest('#btnResetProc') : null;
+    if(!reset) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
   }, true);
 
+  // Procedimentos contam como dados importantes no anti-sobrescrita do Firebase.
+  try{
+    window.stateDataScore = function(s){
+      try{
+        if(!s || typeof s !== 'object') return 0;
+        return (Array.isArray(s.procedimentos)?s.procedimentos.length*500:0)
+          + (Array.isArray(s.agenda)?s.agenda.length*1000:0)
+          + (Array.isArray(s.clientes)?s.clientes.length*1000:0)
+          + (Array.isArray(s.atendimentos)?s.atendimentos.length*1200:0)
+          + (Array.isArray(s.materiais)?s.materiais.length*300:0)
+          + (Array.isArray(s.despesas)?s.despesas.length*300:0)
+          + (Array.isArray(s.receitasExtras)?s.receitasExtras.length*300:0)
+          + (Array.isArray(s.wppQueue)?s.wppQueue.length*50:0)
+          + (Array.isArray(s.crmQueue)?s.crmQueue.length*50:0);
+      }catch(e){ return 0; }
+    };
+    try{ stateDataScore = window.stateDataScore; }catch(e){}
+  }catch(e){}
+
+  // Se vier estado remoto antigo, preserva os procedimentos criados pelo usuário.
+  try{
+    const oldApply = window.__SJM_APPLY_REMOTE_STATE;
+    if(typeof oldApply === 'function'){
+      window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
+        try{
+          const localCustom = customFrom((state && state.procedimentos) || []).concat(readProcedureBackup());
+          if(remoteState && typeof remoteState === 'object'){
+            const remoteCustom = customFrom(remoteState.procedimentos || []);
+            remoteState.procedimentos = SISTEMA.map(sp => normalizeProc(sp, true)).concat(mergeCustomProcedures(remoteCustom, localCustom));
+          }
+        }catch(e){}
+        return oldApply.apply(this, arguments);
+      };
+    }
+  }catch(e){}
+
+  // Inicialização final: roda depois dos patches antigos e salva a lista certa.
   function boot(){
     try{
-      const candidates = allCandidates();
-      const merged = mergeState(chooseBest(candidates), candidates);
-      setState(merged); persist('boot');
-      try{ applyTheme(); }catch{}
-      try{ renderProcedimentos(); }catch{}
-    }catch(e){ console.warn('boot v83:', e); }
+      garantirProcedimentosV79();
+      salvarProcedimentosV79();
+      renderProcedimentos();
+      try{ renderAgendaHard(); }catch(e){}
+      try{ renderCalendar(); }catch(e){}
+    }catch(e){ console.warn('Patch v79 procedimentos:', e); }
   }
   setTimeout(boot, 50);
-  setTimeout(boot, 900);
-  window.addEventListener('beforeunload', ()=>{ try{ persist('beforeunload'); }catch{} });
+  setTimeout(boot, 1700);
+  window.addEventListener('beforeunload', function(){
+    try{ salvarProcedimentosV79(); }catch(e){}
+  });
 })();
 
 
-/* =======================================================
-   v86 — AUDITORIA GERAL: IMPORTAR/EXPORTAR E RESTAURAÇÃO FORÇADA
-   Correção segura: backup importado vira a base atual e não perde para cache/Firebase antigo.
-======================================================= */
-(function(){
-  'use strict';
-  if(window.__SJM_V86_IMPORT_EXPORT_AUDIT) return;
-  window.__SJM_V86_IMPORT_EXPORT_AUDIT = true;
 
-  const FORCE_KEY = 'studio_sync_pro_importacao_forcada_v86';
-  const MAIN_KEY = 'studio_sync_pro_estado_principal_v83';
-  const LAST_KEY = 'studio_sync_pro_ultimo_estado_bom_v83';
-  const PROC_KEY = 'studio_sync_pro_procedimentos_usuario_v83';
-  const SYSTEM_NAMES = ['Médico','Folga','Reunião','Compromisso'];
-  const LEGACY_NAMES = ['Alongamento','Manutenção','Remoção + Nova Aplicação','Remoção de Alongamento'];
-  function norm(v){ return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim().replace(/\s+/g,' '); }
-  const SYSTEM_SET = new Set(SYSTEM_NAMES.map(norm));
-  const LEGACY_SET = new Set(LEGACY_NAMES.map(norm));
-  function isObj(v){ return v && typeof v === 'object' && !Array.isArray(v); }
-  function arr(v){ return Array.isArray(v) ? v : []; }
-  function clone(v){ try{return JSON.parse(JSON.stringify(v));}catch{return v;} }
-  function uidSafe(){ try{ if(typeof uid === 'function') return uid(); }catch{} return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
-  function num(v){ try{ if(typeof window.num === 'function') return window.num(v); }catch{} try{ if(typeof num === 'function') return num(v); }catch{} const n=Number(String(v??'0').replace(',','.')); return Number.isFinite(n)?n:0; }
-  function getState(){ try{ return (typeof state !== 'undefined' && state) ? state : window.state; }catch{ return window.state; } }
-  function setState(s){ try{ state=s; window.state=s; }catch{ window.state=s; } }
-  function read(k){ try{ const raw=localStorage.getItem(k); return raw?JSON.parse(raw):null; }catch{return null;} }
-  function write(k,v){ try{ if(k) localStorage.setItem(k, JSON.stringify(v)); }catch(e){ console.warn('v86 write falhou', k, e); } }
-  function collectStorageKeys(){
-    const keys=new Set([MAIN_KEY,LAST_KEY,FORCE_KEY]);
-    try{ if(typeof KEY !== 'undefined' && KEY) keys.add(KEY); }catch{}
-    try{ if(typeof ACTIVE_STORAGE_KEY !== 'undefined' && ACTIVE_STORAGE_KEY) keys.add(ACTIVE_STORAGE_KEY); }catch{}
-    try{
-      const u=window.__SJM_CURRENT_USER;
-      if(typeof storageKeyForUser==='function'){
-        if(u?.uid) keys.add(storageKeyForUser(u.uid));
-        if(u?.email) keys.add(storageKeyForUser(u.email));
-        if(u) keys.add(storageKeyForUser(u));
-      }
-    }catch{}
-    try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i)||''; if(k.includes('studio_sync')||k.includes('sjm_sync_pro')||k.includes('Studio_Sync')) keys.add(k); } }catch{}
-    return [...keys].filter(Boolean);
-  }
-  function normalizeProc(p, system){
-    return Object.assign({}, isObj(p)?p:{}, {
-      id: p?.id || uidSafe(),
-      nome: String(p?.nome||'').trim(),
-      preco: system ? 0 : num(p?.preco),
-      precoBase: system ? 0 : num(p?.precoBase ?? p?.preco),
-      reajuste: system ? '' : String(p?.reajuste||''),
-      duracaoMin: Math.max(1, Math.round(num(p?.duracaoMin)||60)),
-      historico: system ? [] : arr(p?.historico),
-      especial: !!system,
-      fixado: !!system,
-      categoria: system ? 'Sistema' : (p?.categoria || 'Geral'),
-      ativo: p?.ativo || 'S',
-      userCreated: !system
-    });
-  }
-  function cleanProcedures(list){
-    const out=[], seen=new Set();
-    arr(list).forEach(p=>{
-      if(!p || !String(p.nome||'').trim()) return;
-      const k=norm(p.nome);
-      if(SYSTEM_SET.has(k)) return;
-      if(LEGACY_SET.has(k) && !(p.userCreated||p.manual||p.criadoPeloUsuario)) return;
-      const np=normalizeProc(p,false);
-      const sig=norm(np.nome)+'|'+num(np.preco).toFixed(2)+'|'+Math.round(num(np.duracaoMin)||60);
-      if(seen.has(sig)) return;
-      seen.add(sig); out.push(np);
-    });
-    return SYSTEM_NAMES.map(nome=>normalizeProc({nome,duracaoMin:60},true)).concat(out);
-  }
-  function sanitize(s){
-    try{ if(typeof sanitizeState==='function') s=sanitizeState(clone(s)); else s=clone(s); }catch{ s=clone(s); }
-    if(!isObj(s)){ try{s=defaultState();}catch{s={};} }
-    s.settings=isObj(s.settings)?s.settings:{};
-    ['clientes','agenda','atendimentos','materiais','despesas','receitasExtras','wppQueue','crmQueue'].forEach(k=>{ if(!Array.isArray(s[k])) s[k]=[]; });
-    s.procedimentos=cleanProcedures(s.procedimentos);
-    s.meta=isObj(s.meta)?s.meta:{};
-    try{ if(!s.meta.clientId) s.meta.clientId=CLIENT_ID; }catch{ if(!s.meta.clientId) s.meta.clientId='local'; }
-    s.meta.updatedAt=Date.now();
-    s.meta.rev=Math.max(Number(s.meta.rev||0), Date.now());
-    s.meta.build='v86-auditoria-import-export';
-    return s;
-  }
-  function saveEverywhere(s, reason){
-    s=sanitize(s);
-    setState(s);
-    const custom=arr(s.procedimentos).filter(p=>p && p.nome && !SYSTEM_SET.has(norm(p.nome)));
-    write(PROC_KEY, custom);
-    collectStorageKeys().forEach(k=>write(k,s));
-    write(FORCE_KEY, s); write(MAIN_KEY, s); write(LAST_KEY, s);
-    try{ sessionStorage.setItem(FORCE_KEY, JSON.stringify(s)); }catch{}
-    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') window.__SJM_PUSH_TO_CLOUD(s); }catch(e){ console.warn('v86 push cloud', e); }
-    try{ if(typeof scheduleCloudPush==='function') scheduleCloudPush(); }catch{}
-    try{ window.__SJM_SET_SYNC_STATUS?.('Sync: salvo '+(reason||'')+' ✅'); }catch{}
-    return s;
-  }
-  function exportCurrent(){
-    const s=saveEverywhere(getState(),'export');
-    const blob=new Blob([JSON.stringify(s,null,2)], {type:'application/json'});
-    const url=URL.createObjectURL(blob), a=document.createElement('a');
-    a.href=url; a.download='studio-sync-pro-backup-'+new Date().toISOString().slice(0,10)+'.json';
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ try{ a.remove(); URL.revokeObjectURL(url); }catch{} }, 800);
-  }
-  async function importFile(file){
-    if(!file) return;
-    try{
-      const parsed=JSON.parse(await file.text());
-      const incoming=sanitize(parsed && parsed.state && isObj(parsed.state) ? parsed.state : parsed);
-      saveEverywhere(incoming,'import');
-      try{ enforceAgendaRecebidoRules(); syncAgendaToAtendimentos(); }catch{}
-      try{ applyTheme(); renderAllHard(); renderProcedimentos(); }catch{}
-      alert('Backup importado e salvo de verdade ✅');
-    }catch(err){ console.error('Importação v86:', err); alert('Arquivo inválido. Use um backup JSON exportado pelo Studio Sync Pro.'); }
-  }
-  window.__SJM_IMPORT_BACKUP_FILE = importFile;
-  window.__SJM_EXPORT_BACKUP_V86 = exportCurrent;
-  window.__SJM_SAVE_EVERYWHERE_V86 = saveEverywhere;
+/* v81-limpa-base-v80: limpeza segura aplicada em app.js. */
 
-  const oldRemote=window.__SJM_APPLY_REMOTE_STATE;
-  window.__SJM_APPLY_REMOTE_STATE=function(remote){
-    try{
-      const forced=read(FORCE_KEY) || (()=>{try{return JSON.parse(sessionStorage.getItem(FORCE_KEY)||'null')}catch{return null}})();
-      const local=sanitize(getState());
-      const r=isObj(remote)?remote:null;
-      const rt=Number(r?.meta?.updatedAt||0), rr=Number(r?.meta?.rev||0);
-      const lt=Number(local?.meta?.updatedAt||0), lr=Number(local?.meta?.rev||0);
-      if(forced && (rt < Number(forced?.meta?.updatedAt||0) || rr < Number(forced?.meta?.rev||0))){
-        saveEverywhere(forced,'remote-antigo-ignorado');
-        try{ renderAllHard(); }catch{}
-        return;
-      }
-      if(r && (rt < lt || rr < lr)){
-        saveEverywhere(local,'remote-antigo-ignorado');
-        return;
-      }
-    }catch(e){ console.warn('v86 remote guard', e); }
-    try{ return oldRemote ? oldRemote(remote) : undefined; }catch(e){ console.warn('v86 remote fallback', e); }
+
+/* =========================================================
+   v82 base v80 — Autoagendamento público funcional
+   - corrige link que não gerava página
+   - cria rota #agendar/slug dentro do GitHub Pages/PWA
+   - permite confirmação direta se o studio estiver logado
+   - para visitante sem login, gera pedido pronto no WhatsApp do studio
+   ========================================================= */
+(function autoAgendamentoPublicoV82(){
+  const BUILD_AUTO_PUBLIC = 'v82-autoagendamento-publico';
+  const $ = (id)=>document.getElementById(id);
+  const clean = (v)=>String(v ?? '').trim();
+  const onlyDigits = (v)=>String(v ?? '').replace(/\D/g,'');
+  const moneyBR = (v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const esc = (v)=>String(v ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+  const slugLocal = (v)=>String(v ?? 'studio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'studio';
+  const nowId = ()=> 'pub_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+  const publicHash = ()=>String(location.hash||'').replace(/^#/,'');
+  const isPublicRoute = ()=> /^agendar(\/|$)/i.test(publicHash());
+  const publicSlug = ()=> decodeURIComponent((publicHash().split('/')[1]||'studio').split('?')[0] || 'studio');
+  const hashParams = ()=>{
+    const raw = publicHash();
+    const q = raw.includes('?') ? raw.slice(raw.indexOf('?')+1) : '';
+    return new URLSearchParams(q);
   };
-
-  document.addEventListener('click', function(e){
-    const importBtn=e.target?.closest?.('#btnImportBackupFinal,#btnUserImportBackupV72,#btnImportUser54,[data-import-backup]');
-    if(importBtn){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); const f=document.getElementById('fileImport'); if(f) f.click(); return; }
-    const exportBtn=e.target?.closest?.('#btnExport');
-    if(exportBtn){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); exportCurrent(); return; }
-  }, true);
-  document.addEventListener('change', function(e){
-    const f=e.target;
-    if(f && f.id==='fileImport'){
-      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      importFile(f.files && f.files[0]).finally(()=>{ try{ f.value=''; }catch{} });
+  function baseUrl(){ return location.origin + location.pathname; }
+  function getStudioPhone(){
+    try{
+      return onlyDigits(state?.settings?.studioWpp || state?.settings?.whatsapp || state?.settings?.wpp || state?.wpp?.studioWpp || hashParams().get('tel') || '');
+    }catch(e){ return onlyDigits(hashParams().get('tel') || ''); }
+  }
+  function getStudioName(){
+    try{ return clean(state?.settings?.studioNome) || 'Studio'; }catch(e){ return 'Studio'; }
+  }
+  function getAutoConfig(){
+    try{
+      state.autoagendamento = state.autoagendamento && typeof state.autoagendamento === 'object' ? state.autoagendamento : {};
+      state.autoagendamento.slug = slugLocal(state.autoagendamento.slug || state.settings?.studioNome || 'studio');
+      if(typeof state.autoagendamento.ativo !== 'boolean') state.autoagendamento.ativo = true;
+      state.autoagendamento.horaIni = state.autoagendamento.horaIni || '08:00';
+      state.autoagendamento.horaFim = state.autoagendamento.horaFim || '18:00';
+      state.autoagendamento.intervalo = Number(state.autoagendamento.intervalo || 30) || 30;
+      state.autoagendamento.pixPct = Number(state.autoagendamento.pixPct || 0) || 0;
+      state.autoagendamento.pixChave = state.autoagendamento.pixChave || '';
+      return state.autoagendamento;
+    }catch(e){ return {slug:'studio',ativo:true,horaIni:'08:00',horaFim:'18:00',intervalo:30,pixPct:0,pixChave:''}; }
+  }
+  function publicLink(){
+    const a = getAutoConfig();
+    const tel = getStudioPhone();
+    const extra = tel ? ('?tel=' + encodeURIComponent(tel)) : '';
+    return baseUrl() + '#agendar/' + encodeURIComponent(slugLocal(a.slug || getStudioName())) + extra;
+  }
+  function minFromHHMM(h){ const m=String(h||'').match(/^(\d{1,2}):(\d{2})$/); return m ? (Number(m[1])*60+Number(m[2])) : 0; }
+  function hhmmFromMin(m){ const h=String(Math.floor(m/60)).padStart(2,'0'); const mm=String(m%60).padStart(2,'0'); return h+':'+mm; }
+  function procList(){
+    try{
+      const list = Array.isArray(state?.procedimentos) ? state.procedimentos : [];
+      const out = list.filter(p=>p && String(p.nome||'').trim() && !/^(m[eé]dico|folga|reuni[aã]o|compromisso)$/i.test(String(p.nome||'').trim()));
+      return out.length ? out : [{nome:'Procedimento',preco:0,duracaoMin:60}];
+    }catch(e){ return [{nome:'Procedimento',preco:0,duracaoMin:60}]; }
+  }
+  function busyAt(date, time){
+    try{
+      return (state.agenda||[]).some(a => String(a.data||'')===String(date) && String(a.hora||'').slice(0,5)===String(time).slice(0,5) && String(a.status||'').toLowerCase() !== 'cancelado');
+    }catch(e){ return false; }
+  }
+  function timeOptions(date){
+    const a=getAutoConfig();
+    const ini=minFromHHMM(a.horaIni||'08:00'), fim=minFromHHMM(a.horaFim||'18:00'), step=Math.max(5, Number(a.intervalo||30)||30);
+    const opts=[];
+    for(let m=ini; m<=fim; m+=step){
+      const h=hhmmFromMin(m);
+      if(!date || !busyAt(date,h)) opts.push(h);
     }
-  }, true);
-  setTimeout(()=>{ try{ const forced=read(FORCE_KEY); if(forced){ saveEverywhere(forced,'boot-import-forcado'); try{renderAllHard();}catch{} } }catch{} }, 120);
+    return opts.length ? opts : [a.horaIni||'08:00'];
+  }
+  function ensurePublicRoot(){
+    let root = $('sjmPublicBookingRoot');
+    if(!root){
+      root=document.createElement('div');
+      root.id='sjmPublicBookingRoot';
+      root.className='sjmPublicBooking';
+      document.body.appendChild(root);
+    }
+    return root;
+  }
+  function renderPublicBooking(){
+    if(!isPublicRoute()){
+      document.body.classList.remove('sjm-public-booking');
+      const r=$('sjmPublicBookingRoot'); if(r) r.style.display='none';
+      return;
+    }
+    document.body.classList.add('sjm-public-booking');
+    const root=ensurePublicRoot();
+    root.style.display='block';
+    const a=getAutoConfig();
+    const studio=getStudioName();
+    if(a.ativo === false){
+      root.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>O ${esc(studio)} desativou o link de agendamento no momento.</p></div>`;
+      return;
+    }
+    const today = (typeof todayISO === 'function') ? todayISO() : new Date().toISOString().slice(0,10);
+    const procs=procList();
+    const selectedDate = clean($('pubAgData')?.value) || today;
+    const horarios=timeOptions(selectedDate);
+    root.innerHTML=`
+      <div class="sjmPublicBookingCard">
+        <h1>Agendar horário</h1>
+        <p>${esc(studio)} • Escolha o procedimento, data e horário.</p>
+        <form id="pubAgForm">
+          <div class="sjmPublicGrid">
+            <label class="sjmPublicField"><span>Nome completo</span><input id="pubAgNome" autocomplete="name" required placeholder="Seu nome"></label>
+            <label class="sjmPublicField"><span>WhatsApp</span><input id="pubAgWpp" inputmode="tel" autocomplete="tel" required placeholder="(17) 99999-9999"></label>
+            <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProc">${procs.map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(moneyBR(p.preco)):''}</option>`).join('')}</select></label>
+            <label class="sjmPublicField"><span>Data</span><input id="pubAgData" type="date" min="${esc(today)}" value="${esc(selectedDate)}" required></label>
+            <label class="sjmPublicField"><span>Horário livre</span><select id="pubAgHora">${horarios.map(h=>`<option value="${h}">${h}</option>`).join('')}</select></label>
+            <label class="sjmPublicField"><span>Observação</span><input id="pubAgObs" placeholder="Opcional"></label>
+          </div>
+          <div class="sjmPublicHint">${a.pixPct ? `Sinal Pix: ${esc(String(a.pixPct))}%${a.pixChave ? ' • Chave: '+esc(a.pixChave) : ''}` : 'Após enviar, o studio confirma o horário.'}</div>
+          <div class="sjmPublicActions"><button class="sjmPublicBtn" type="submit">Solicitar agendamento</button><button class="sjmPublicBtn secondary" type="button" id="pubAgBack">Voltar</button></div>
+        </form>
+      </div>`;
+    const dateInp=$('pubAgData');
+    dateInp?.addEventListener('change',()=>renderPublicBooking());
+    $('pubAgBack')?.addEventListener('click',()=>{ location.hash='dashboard'; });
+    $('pubAgForm')?.addEventListener('submit', submitPublicBooking);
+  }
+  function submitPublicBooking(e){
+    e.preventDefault();
+    const nome=clean($('pubAgNome')?.value);
+    const wpp=onlyDigits($('pubAgWpp')?.value);
+    const procedimento=clean($('pubAgProc')?.value);
+    const data=clean($('pubAgData')?.value);
+    const hora=clean($('pubAgHora')?.value);
+    const obs=clean($('pubAgObs')?.value);
+    if(!nome || !wpp || !procedimento || !data || !hora){ alert('Preencha nome, WhatsApp, procedimento, data e horário.'); return; }
+    const proc = procList().find(p=>String(p.nome)===procedimento) || {};
+    const ag = { id:nowId(), cliente:nome, wpp, procedimento, data, hora, status:'Agendado', valor:Number(proc.preco||0)||0, recebido:0, obs, origem:'autoagendamento', criadoEm:new Date().toISOString() };
+    let savedDirect=false;
+    try{
+      if(typeof state === 'object' && state){
+        state.clientes = Array.isArray(state.clientes) ? state.clientes : [];
+        if(!state.clientes.some(c=>String(c.nome||'').trim().toLowerCase()===nome.toLowerCase())){
+          state.clientes.push({id:nowId(),nome,wpp,tel:wpp,obs:'Criada pelo autoagendamento',fotos:[]});
+        }
+        state.agenda = Array.isArray(state.agenda) ? state.agenda : [];
+        if(!busyAt(data,hora)) state.agenda.push(ag);
+        if(typeof saveSoft === 'function') saveSoft();
+        if(typeof scheduleSync === 'function') scheduleSync();
+        if(typeof scheduleCloudPush === 'function') scheduleCloudPush();
+        savedDirect = !!window.__SJM_CURRENT_USER;
+      }
+    }catch(err){ console.warn('autoagendamento direto:', err); }
+    try{
+      const pending = JSON.parse(localStorage.getItem('sjm_autoagendamento_pedidos')||'[]');
+      pending.unshift(ag); localStorage.setItem('sjm_autoagendamento_pedidos', JSON.stringify(pending.slice(0,100)));
+    }catch(e){}
+    const studioPhone=getStudioPhone();
+    const msg=`Olá! Quero solicitar um agendamento.%0A%0ANome: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}${obs?`%0AObs: ${encodeURIComponent(obs)}`:''}`;
+    if(savedDirect){
+      alert('Agendamento criado e salvo ✅');
+      location.hash='agenda';
+      try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); }catch(e){}
+    }else if(studioPhone){
+      alert('Pedido criado ✅\nAgora vamos abrir o WhatsApp para enviar a solicitação ao studio.');
+      window.open(`https://wa.me/55${studioPhone}?text=${msg}`,'_blank','noopener,noreferrer');
+    }else{
+      alert('Pedido criado neste aparelho ✅\nAtenção: para visitante sem login salvar direto no Firebase, será necessário liberar gravação pública segura ou usar Cloud Function.');
+    }
+  }
+  function fillAutoAdmin(){
+    try{
+      const a=getAutoConfig();
+      const link=publicLink();
+      if($('agSlug')) $('agSlug').value = slugLocal($('agSlug').value || a.slug || getStudioName());
+      if($('agLink')) $('agLink').value = a.ativo === false ? 'Autoagenda desativada' : link;
+      const prev=$('agPreview');
+      if(prev && !isPublicRoute()){
+        const old=prev.innerHTML||'';
+        if(!old.includes('#agendar/')){
+          prev.innerHTML = `<div class="simpleItem"><b>Link público:</b> ${esc(link)}</div>` + old;
+        }
+      }
+    }catch(e){}
+  }
+  function bindAutoAdmin(){
+    const save=$('btnSalvarAutoAg');
+    if(save && !save.__autoPublicV82){
+      save.__autoPublicV82=true;
+      save.addEventListener('click',()=>setTimeout(()=>{
+        try{
+          const a=getAutoConfig();
+          a.slug=slugLocal($('agSlug')?.value || a.slug || getStudioName());
+          a.ativo=($('agAtivo')?.value !== 'false');
+          a.horaIni=$('agHoraIni')?.value || a.horaIni || '08:00';
+          a.horaFim=$('agHoraFim')?.value || a.horaFim || '18:00';
+          a.intervalo=Number($('agIntervalo')?.value || a.intervalo || 30)||30;
+          a.pixPct=Number($('agPixPct')?.value || a.pixPct || 0)||0;
+          a.pixChave=$('agPixChave')?.value || a.pixChave || '';
+          if(typeof saveSoft==='function') saveSoft();
+          if(typeof scheduleCloudPush==='function') scheduleCloudPush();
+          fillAutoAdmin();
+        }catch(e){ console.warn(BUILD_AUTO_PUBLIC, e); }
+      },80), true);
+    }
+    const copy=$('btnCopiarLinkAg');
+    if(copy && !copy.__autoPublicV82){
+      copy.__autoPublicV82=true;
+      copy.addEventListener('click',async(ev)=>{
+        try{
+          const link=publicLink();
+          if($('agLink')) $('agLink').value=link;
+          ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+          if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(link);
+          else if(typeof copyToClipboardSafe==='function') await copyToClipboardSafe(link);
+          alert('Link do autoagendamento copiado ✅');
+        }catch(e){}
+      }, true);
+    }
+    fillAutoAdmin();
+  }
+  function boot(){
+    try{ bindAutoAdmin(); renderPublicBooking(); }catch(e){ console.warn(BUILD_AUTO_PUBLIC, e); }
+  }
+  window.addEventListener('hashchange', boot);
+  document.addEventListener('DOMContentLoaded',()=>[50,300,900,1800].forEach(t=>setTimeout(boot,t)));
+  setTimeout(boot,100);
+  setTimeout(boot,1200);
+})();
+
+/* =========================================================
+   v83 base v80 — Autoagendamento completo e seguro
+   - publica dados públicos do studio para o link do cliente
+   - cliente envia pedido direto ao Firestore quando o link tem sid
+   - app do studio recebe pedido, salva na agenda e cria cliente
+   - evita duplicidade por requestId e por horário ocupado
+   - gera notificação local no navegador e mensagens de WhatsApp
+   Observação: para visitante salvar sem login de dono, ative Anonymous Auth no Firebase.
+   ========================================================= */
+(function autoAgendamentoCompletoV83(){
+  const BUILD='v83-autoagendamento-completo';
+  const $=(id)=>document.getElementById(id);
+  const clean=(v)=>String(v??'').trim();
+  const digits=(v)=>String(v??'').replace(/\D/g,'');
+  const esc=(v)=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const money=(v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  const slug=(v)=>String(v??'studio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'studio';
+  const today=()=> new Date().toISOString().slice(0,10);
+  const id=()=> 'req_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+  const pubHash=()=>String(location.hash||'').replace(/^#/,'');
+  const isPublic=()=>/^agendar(\/|$)/i.test(pubHash());
+  const params=()=>{ const h=pubHash(); const q=h.includes('?')?h.slice(h.indexOf('?')+1):''; return new URLSearchParams(q); };
+  const ownerUid=()=> clean(params().get('sid')||params().get('studioId')||'');
+  const baseUrl=()=>location.origin+location.pathname;
+  let publicDataCache=null;
+  let loadingPublic=false;
+
+  function getAuto(){
+    try{
+      state.autoagendamento = state.autoagendamento && typeof state.autoagendamento==='object' ? state.autoagendamento : {};
+      const a=state.autoagendamento;
+      a.slug=slug(a.slug || state.settings?.studioNome || 'studio');
+      if(typeof a.ativo!=='boolean') a.ativo=true;
+      a.horaIni=a.horaIni||'08:00'; a.horaFim=a.horaFim||'18:00'; a.intervalo=Number(a.intervalo||30)||30;
+      a.pixPct=Number(a.pixPct||0)||0; a.pixChave=a.pixChave||'';
+      return a;
+    }catch(e){ return {ativo:true,slug:'studio',horaIni:'08:00',horaFim:'18:00',intervalo:30,pixPct:0,pixChave:''}; }
+  }
+  function studioName(){ try{return clean(state?.settings?.studioNome)||'Studio';}catch(e){return 'Studio';} }
+  function studioPhone(){ try{return digits(state?.settings?.studioWpp||state?.settings?.whatsapp||state?.wpp?.studioWpp||'');}catch(e){return '';} }
+  function procListFromState(){
+    try{
+      const sys=/^(m[eé]dico|folga|reuni[aã]o|compromisso)$/i;
+      const arr=Array.isArray(state?.procedimentos)?state.procedimentos:[];
+      return arr.filter(p=>p&&clean(p.nome)&&!sys.test(clean(p.nome))).map(p=>({
+        nome:clean(p.nome), preco:Number(p.preco||0)||0, duracaoMin:Number(p.duracaoMin||p.duracao||60)||60
+      }));
+    }catch(e){return []}
+  }
+  function busySlotsFromState(){
+    try{
+      return (Array.isArray(state?.agenda)?state.agenda:[])
+        .filter(a=>a&&a.data&&a.hora&&String(a.status||'').toLowerCase()!=='cancelado')
+        .map(a=>({data:String(a.data),hora:String(a.hora).slice(0,5),status:a.status||'Agendado',cliente:a.cliente||''}));
+    }catch(e){return []}
+  }
+  function publicPayload(){
+    const a=getAuto();
+    return {
+      studioNome: studioName(),
+      studioWpp: studioPhone(),
+      autoagendamento: {ativo:a.ativo!==false,slug:slug(a.slug||studioName()),horaIni:a.horaIni||'08:00',horaFim:a.horaFim||'18:00',intervalo:Number(a.intervalo||30)||30,pixPct:Number(a.pixPct||0)||0,pixChave:a.pixChave||''},
+      procedimentos: procListFromState(),
+      busySlots: busySlotsFromState().slice(0,1500)
+    };
+  }
+  function publicLinkV83(){
+    const a=getAuto(); const uid=clean(window.__SJM_CURRENT_USER?.uid||''); const tel=studioPhone();
+    const q=[]; if(uid) q.push('sid='+encodeURIComponent(uid)); if(tel) q.push('tel='+encodeURIComponent(tel));
+    return baseUrl()+'#agendar/'+encodeURIComponent(slug(a.slug||studioName()))+(q.length?'?'+q.join('&'):'');
+  }
+  async function publishPublic(){
+    try{
+      if(!window.__SJM_CURRENT_USER?.uid || window.__SJM_CURRENT_USER?.role==='public') return;
+      if(typeof window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO==='function') await window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO(publicPayload());
+    }catch(e){ console.warn(BUILD,'publish público:',e); }
+  }
+  function min(h){ const m=String(h||'').match(/^(\d{1,2}):(\d{2})$/); return m?Number(m[1])*60+Number(m[2]):0; }
+  function hh(m){ return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+  function getPublicData(){
+    if(publicDataCache) return publicDataCache;
+    try{ return publicPayload(); }catch(e){ return {studioNome:'Studio',studioWpp:digits(params().get('tel')||''),autoagendamento:{ativo:true,horaIni:'08:00',horaFim:'18:00',intervalo:30},procedimentos:[],busySlots:[]}; }
+  }
+  function isBusy(data,hora){
+    const pd=getPublicData();
+    return (pd.busySlots||[]).some(x=>String(x.data)===String(data)&&String(x.hora).slice(0,5)===String(hora).slice(0,5));
+  }
+  function availableTimes(data){
+    const pd=getPublicData(); const a=pd.autoagendamento||{};
+    const ini=min(a.horaIni||'08:00'), fim=min(a.horaFim||'18:00'), step=Math.max(5,Number(a.intervalo||30)||30);
+    const out=[]; for(let m=ini;m<=fim;m+=step){ const h=hh(m); if(!data||!isBusy(data,h)) out.push(h); }
+    return out;
+  }
+  async function loadPublicData(){
+    const uid=ownerUid();
+    if(!isPublic()||!uid||loadingPublic) return;
+    loadingPublic=true;
+    try{
+      if(typeof window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO==='function'){
+        const data=await window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO(uid);
+        if(data) publicDataCache=data;
+      }
+    }catch(e){ console.warn(BUILD,'load público:',e); }
+    finally{ loadingPublic=false; }
+  }
+  function publicRoot(){ let r=$('sjmPublicBookingRoot'); if(!r){ r=document.createElement('div'); r.id='sjmPublicBookingRoot'; r.className='sjmPublicBooking'; document.body.appendChild(r); } return r; }
+  function renderPublicV83(){
+    if(!isPublic()){ const r=$('sjmPublicBookingRoot'); if(r) r.style.display='none'; document.body.classList.remove('sjm-public-booking'); return; }
+    document.body.classList.add('sjm-public-booking');
+    const r=publicRoot(); r.style.display='block';
+    const pd=getPublicData(); const a=pd.autoagendamento||{}; const studio=pd.studioNome||'Studio';
+    if(a.ativo===false){ r.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>${esc(studio)} desativou o link no momento.</p></div>`; return; }
+    const procs=(pd.procedimentos||[]).filter(p=>p&&clean(p.nome));
+    const d=clean($('pubAgDataV83')?.value)||today(); const times=availableTimes(d);
+    r.innerHTML=`<div class="sjmPublicBookingCard"><h1>Agendar horário</h1><p>${esc(studio)} • Escolha uma data e um horário disponível.</p>
+      <form id="pubAgFormV83"><div class="sjmPublicGrid">
+        <label class="sjmPublicField"><span>Nome completo</span><input id="pubAgNomeV83" autocomplete="name" required placeholder="Seu nome"></label>
+        <label class="sjmPublicField"><span>WhatsApp</span><input id="pubAgWppV83" inputmode="tel" autocomplete="tel" required placeholder="(17) 99999-9999"></label>
+        <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProcV83" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
+        <label class="sjmPublicField"><span>Data</span><input id="pubAgDataV83" type="date" min="${today()}" value="${esc(d)}" required></label>
+        <label class="sjmPublicField"><span>Horário livre</span><select id="pubAgHoraV83" required>${times.length?times.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sem horário livre</option>'}</select></label>
+        <label class="sjmPublicField"><span>Observação</span><input id="pubAgObsV83" placeholder="Opcional"></label>
+      </div><div class="sjmPublicHint">${a.pixPct?`Sinal Pix: ${esc(a.pixPct)}%${a.pixChave?' • Chave: '+esc(a.pixChave):''}`:'Ao confirmar, o horário será enviado para a agenda do studio.'}</div>
+      <div class="sjmPublicActions"><button class="sjmPublicBtn" type="submit">Confirmar agendamento</button><button class="sjmPublicBtn secondary" type="button" id="pubAgBackV83">Voltar</button></div></form></div>`;
+    $('pubAgDataV83')?.addEventListener('change',()=>renderPublicV83());
+    $('pubAgBackV83')?.addEventListener('click',()=>{ location.hash='dashboard'; });
+  }
+  async function submitPublicV83(ev){
+    const form=ev.target; if(!form || form.id!=='pubAgFormV83') return;
+    ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
+    const nome=clean($('pubAgNomeV83')?.value), wpp=digits($('pubAgWppV83')?.value), procedimento=clean($('pubAgProcV83')?.value), data=clean($('pubAgDataV83')?.value), hora=clean($('pubAgHoraV83')?.value), obs=clean($('pubAgObsV83')?.value);
+    if(!nome||!wpp||!procedimento||!data||!hora){ alert('Preencha nome, WhatsApp, procedimento, data e horário.'); return; }
+    if(isBusy(data,hora)){ alert('Esse horário acabou de ser ocupado. Escolha outro horário.'); renderPublicV83(); return; }
+    const pd=getPublicData(); const proc=(pd.procedimentos||[]).find(p=>clean(p.nome)===procedimento)||{};
+    const req={id:id(),cliente:nome,wpp,procedimento,data,hora,valor:Number(proc.preco||0)||0,obs,status:'Confirmado',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
+    let sent=false;
+    try{
+      const uid=ownerUid();
+      if(uid && typeof window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST==='function'){
+        await window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST(uid, req);
+        sent=true;
+      }
+    }catch(e){ console.warn(BUILD,'pedido firebase:',e); }
+    try{ localStorage.setItem('sjm_ultimo_autoagendamento_cliente', JSON.stringify(req)); }catch(e){}
+    const studioTel=digits(pd.studioWpp||params().get('tel')||'');
+    const msgCliente=`Olá, ${nome}! Seu pedido de agendamento foi enviado para ${pd.studioNome||'o studio'}.%0A%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}`;
+    const msgStudio=`Novo agendamento pelo link.%0A%0ACliente: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}${obs?'%0AObs: '+encodeURIComponent(obs):''}`;
+    try{ notifyLocal('Agendamento enviado', `${procedimento} em ${data} às ${hora}`); }catch(e){}
+    if(sent){
+      alert('Agendamento enviado e registrado ✅\nVocê receberá a confirmação pelo studio.');
+      if(studioTel) window.open(`https://wa.me/55${studioTel}?text=${msgStudio}`,'_blank','noopener,noreferrer');
+      renderPublicV83();
+    }else if(studioTel){
+      alert('Não consegui gravar direto no banco. Vou abrir o WhatsApp para enviar o pedido ao studio.');
+      window.open(`https://wa.me/55${studioTel}?text=${msgStudio}`,'_blank','noopener,noreferrer');
+    }else alert('Pedido preparado, mas este link ainda não tem identificação do studio para gravar direto. Gere novamente o link estando logado.');
+  }
+  function findClient(nome,wpp){
+    const nd=clean(nome).toLowerCase(), wd=digits(wpp);
+    return (state.clientes||[]).find(c=>digits(c.wpp||c.tel)===wd || clean(c.nome).toLowerCase()===nd);
+  }
+  function slotBusyLocal(data,hora,ignoreRequestId){
+    return (state.agenda||[]).some(a=>a&&String(a.data)===String(data)&&String(a.hora).slice(0,5)===String(hora).slice(0,5)&&String(a.status||'').toLowerCase()!=='cancelado'&&String(a.publicRequestId||'')!==String(ignoreRequestId||''));
+  }
+  function saveAll(reason){
+    try{ if(typeof saveSoft==='function') saveSoft(reason||BUILD); else if(typeof save==='function') save(); }catch(e){}
+    try{ if(typeof scheduleCloudPush==='function') scheduleCloudPush(); }catch(e){}
+    try{ if(typeof window.__SJM_PUSH_TO_CLOUD==='function') window.__SJM_PUSH_TO_CLOUD(state); }catch(e){}
+    setTimeout(publishPublic,250);
+  }
+  function notifyLocal(title,body){
+    try{
+      if(!('Notification' in window)) return;
+      if(Notification.permission==='granted') new Notification(title,{body});
+      else if(Notification.permission==='default') Notification.requestPermission().then(p=>{ if(p==='granted') new Notification(title,{body}); });
+    }catch(e){}
+  }
+  window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST = async function(req){
+    try{
+      state.agenda=Array.isArray(state.agenda)?state.agenda:[];
+      state.clientes=Array.isArray(state.clientes)?state.clientes:[];
+      state.autoagendamentoPedidosProcessados=Array.isArray(state.autoagendamentoPedidosProcessados)?state.autoagendamentoPedidosProcessados:[];
+      if(state.autoagendamentoPedidosProcessados.includes(req.id)) return;
+      if(state.agenda.some(a=>String(a.publicRequestId||'')===String(req.id))){ state.autoagendamentoPedidosProcessados.push(req.id); return; }
+      if(slotBusyLocal(req.data, req.hora, req.id)){
+        notifyLocal('Conflito de autoagendamento', `${req.cliente||'Cliente'} tentou ${req.data} às ${req.hora}, mas o horário já está ocupado.`);
+        try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado'}); }catch(e){}
+        return;
+      }
+      const c=findClient(req.cliente, req.wpp);
+      if(!c) state.clientes.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),nome:req.cliente||'Cliente',wpp:req.wpp||'',tel:req.wpp||'',obs:'Criada pelo autoagendamento',fotos:[]});
+      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',data:req.data,hora:req.hora,status:'Confirmado',valor:Number(req.valor||0)||0,recebido:0,obs:req.obs||'',origem:'autoagendamento',publicRequestId:req.id,criadoEm:req.criadoEm||new Date().toISOString()});
+      state.autoagendamentoPedidosProcessados.push(req.id);
+      saveAll('autoagendamento-recebido');
+      try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); if(typeof renderClientes==='function') renderClientes(); }catch(e){}
+      notifyLocal('Novo agendamento confirmado', `${req.cliente} • ${req.procedimento} • ${req.data} às ${req.hora}`);
+      try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'processado'}); }catch(e){}
+    }catch(e){ console.warn(BUILD,'handle request:',e); }
+  };
+  function enhanceAdminLink(){
+    try{
+      const link=publicLinkV83();
+      if($('agLink')) $('agLink').value=link;
+      const copy=$('btnCopiarLinkAg');
+      if(copy && !copy.__v83){ copy.__v83=true; copy.addEventListener('click',async(e)=>{ try{ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); if($('agLink')) $('agLink').value=link; await navigator.clipboard?.writeText(link); alert('Link do autoagendamento copiado ✅'); publishPublic(); }catch(err){} }, true); }
+      const save=$('btnSalvarAutoAg');
+      if(save && !save.__v83){ save.__v83=true; save.addEventListener('click',()=>setTimeout(()=>{ publishPublic(); enhanceAdminLink(); },200), true); }
+    }catch(e){}
+  }
+  function boot(){
+    try{ enhanceAdminLink(); publishPublic(); }catch(e){}
+    if(isPublic()) loadPublicData().then(()=>renderPublicV83()); else renderPublicV83();
+  }
+  document.addEventListener('submit',submitPublicV83,true);
+  window.addEventListener('hashchange',()=>setTimeout(boot,100));
+  document.addEventListener('DOMContentLoaded',()=>[100,600,1500,3000].forEach(t=>setTimeout(boot,t)));
+  setInterval(()=>{ try{ if(!isPublic()) publishPublic(); }catch(e){} }, 60000);
+  setInterval(()=>{ try{ enhanceAdminLink(); }catch(e){} }, 2500);
+  setTimeout(boot,200); setTimeout(boot,1600); setTimeout(boot,3500);
 })();
