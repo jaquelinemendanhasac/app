@@ -1,10 +1,5 @@
-Studio Sync Pro — Limpa Estável 1.0
+Studio Sync Pro v90
 
-Versão consolidada com foco em estabilidade:
-- Fidelidade/indicação/cashback com ativar/desativar funcional.
-- Área do Desenvolvedor refeita como painel completo e estável.
-- Remoção de relatórios soltos do pacote.
-- Manifest e service worker limpos.
-- Patch para evitar re-render em todo clique e reduzir travamento de digitação/edição.
-
-Importante: ao testar, abra em aba anônima ou limpe cache para não carregar uma versão antiga do navegador.
+Base criada em cima do arquivo enviado pelo usuário.
+Inclui sincronização canônica, exclusão persistente, agenda limpa e autoagendamento público funcional.
+Suba os arquivos descompactados no GitHub Pages; não envie o ZIP para o repositório.

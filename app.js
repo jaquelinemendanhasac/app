@@ -8,7 +8,7 @@
   - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
 */
 
-const APP_BUILD = "Studio Sync Pro — Limpa Estável 1.0";
+const APP_BUILD = "Studio Sync Pro — v90 base final limpa";
 window.__SJM_APP_LOADED = true;
 
 // ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
@@ -1829,6 +1829,7 @@ onClick("btnAddAgenda", ()=>{
     atendId:""
   };
   state.agenda.unshift(novo);
+  clearAgendaFilters();
   window.__agendaSelectedId = novo.id;
   setAgendaViewMode("form");
   saveSoft();
@@ -1950,6 +1951,8 @@ function agendaCompactFiltered(){
   const data = byId('agendaFiltroData')?.value || "";
   const status = byId('agendaFiltroStatus')?.value || "";
   const hoje = agendaCompactTodayISO();
+  const temBuscaOuFiltro = Boolean(busca || data || status);
+
   return state.agenda.slice().filter(a=>{
     const st = (a.status || "Agendado");
     const agData = String(a.data || "");
@@ -1957,8 +1960,12 @@ function agendaCompactFiltered(){
     if(data && agData !== data) return false;
     if(status && st !== status) return false;
 
+    // v89: a tela principal da Agenda não deve abrir atendimentos Realizados antigos.
+    // Realizados continuam salvos e aparecem apenas quando o usuário pesquisar/filtrar.
+    if(st === "Realizado" && !temBuscaOuFiltro) return false;
+
     // Quando o filtro estiver em "Agendado", esconder datas passadas.
-    // Datas antigas continuam disponíveis no Histórico, Busca, Relatórios e no filtro "Todos".
+    // Datas antigas continuam disponíveis pela busca/lupa, filtros e relatórios.
     if(status === "Agendado" && agData && agData < hoje) return false;
 
     if(busca){
@@ -1980,6 +1987,15 @@ function bindAgendaCompactFilters(){
     });
   });
 }
+function clearAgendaFilters(){
+  const busca = byId('agendaFiltroBusca');
+  const data = byId('agendaFiltroData');
+  const status = byId('agendaFiltroStatus');
+  if(busca) busca.value = '';
+  if(data) data.value = '';
+  if(status) status.value = '';
+}
+
 function renderAgendaCompact(){
   const list = byId('agendaCompactList');
   const detail = byId('agendaCompactDetail');
@@ -1987,15 +2003,25 @@ function renderAgendaCompact(){
   bindAgendaCompactFilters();
 
   const items = agendaCompactFiltered();
-  agendaCompactEnsureSelected(items);
+  const selectedDirect = window.__agendaSelectedId ? state.agenda.find(x=>x && x.id===window.__agendaSelectedId) : null;
 
-  if(!items.length){
+  // v90: se o formulário estiver aberto, manter exatamente o agendamento selecionado.
+  // Isso impede que filtros/listas puxem um realizado antigo enquanto o usuário está criando um novo.
+  if(window.__agendaViewMode !== 'form' || !selectedDirect){
+    agendaCompactEnsureSelected(items);
+  }
+
+  if(!items.length && !selectedDirect){
     list.innerHTML = `<div class="hint" style="padding:16px;">Nenhum agendamento encontrado.</div>`;
-    detail.innerHTML = `<div class="hint">Selecione outro filtro ou crie um novo agendamento.</div>`;
+    detail.innerHTML = `
+      <div class="hint" style="margin-bottom:12px;">Nenhum agendamento aberto. Clique em <b>+ Novo agendamento</b> para cadastrar.</div>
+      <button class="btn" id="agendaEmptyNew" type="button">+ Novo agendamento</button>
+    `;
+    byId('agendaEmptyNew')?.addEventListener('click', ()=> byId('btnAddAgenda')?.click());
     return;
   }
 
-  list.innerHTML = items.map(a=>{
+  list.innerHTML = items.length ? items.map(a=>{
     const st = a.status || "Agendado";
     const active = a.id === window.__agendaSelectedId ? ' isActive' : '';
     return `<button type="button" class="agendaItem${active}" data-agenda-id="${escAttr(a.id)}">
@@ -2010,7 +2036,7 @@ function renderAgendaCompact(){
       </div>
       <div class="agendaItem__arrow">›</div>
     </button>`;
-  }).join('');
+  }).join('') : `<div class="hint" style="padding:16px;">Use o formulário aberto ao lado para cadastrar.</div>`;
 
   list.querySelectorAll('[data-agenda-id]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -2020,8 +2046,9 @@ function renderAgendaCompact(){
     });
   });
 
-  const ag = state.agenda.find(x=>x.id===window.__agendaSelectedId) || items[0];
+  const ag = selectedDirect || state.agenda.find(x=>x.id===window.__agendaSelectedId) || items[0];
   if(!ag) return;
+  window.__agendaSelectedId = ag.id;
   const idx = state.agenda.findIndex(x=>x.id===ag.id);
   const isBlock = (ag.status === 'Bloqueio');
   const procNames = state.procedimentos.map(p=>p.nome).filter(Boolean);
@@ -2052,13 +2079,14 @@ function renderAgendaCompact(){
       <label class="field agendaDetail__wide"><span>Observação</span><textarea id="agDetObs" rows="3">${escapeHTML(ag.obs||'')}</textarea></label>
     </div>
     <div class="agendaDetail__actions">
+      <button class="btn" id="agDetSave" type="button">Salvar agendamento</button>
       <button class="btn btn--ghost" id="agDetConf" type="button" ${isBlock?'disabled':''}>📩 Confirmação</button>
       <button class="btn btn--ghost" id="agDetLem" type="button" ${isBlock?'disabled':''}>⏰ Lembrete</button>
       <button class="btn btn--ghost" id="agDetAgr" type="button" ${isBlock?'disabled':''}>💬 Agradecimento</button>
       <button class="btn btn--ghost" id="agDetDel" type="button">Excluir</button>
     </div>`;
 
-  const refresh = ()=>{
+  const saveAgendaDetail = (showMsg=false)=>{
     if(!isSpecialProcedure(ag.procedimento) && (ag.status||'Agendado') !== 'Bloqueio'){
       ag.valor = procPrice(ag.procedimento, ag.data);
     } else {
@@ -2068,9 +2096,12 @@ function renderAgendaCompact(){
     saveSoft();
     syncAgendaToAtendimentos();
     updateConflictUI();
+    renderCalendar();
     scheduleSync();
-    renderAgendaCompact();
+    if(showMsg) alert('Agendamento salvo ✅');
   };
+  const refresh = ()=> saveAgendaDetail(false);
+  byId('agDetSave')?.addEventListener('click', ()=> saveAgendaDetail(true));
   byId('agDetData')?.addEventListener('change', e=>{ ag.data=e.target.value; refresh(); });
   byId('agDetHora')?.addEventListener('change', e=>{ ag.hora=e.target.value; refresh(); });
   byId('agDetCliente')?.addEventListener('input', e=>{
@@ -2111,7 +2142,7 @@ function renderAgendaCompact(){
   byId('agDetConf')?.addEventListener('click', ()=>{ const phone=clientWpp(ag.cliente); if(!phone){ alert('Cliente sem WhatsApp. Preencha em Clientes.'); setRoute('clientes'); return; } window.open(waLink(phone, fillTpl(state.wpp.tplConfirmacao, ag)), '_blank'); });
   byId('agDetLem')?.addEventListener('click', ()=>{ const phone=clientWpp(ag.cliente); if(!phone){ alert('Cliente sem WhatsApp. Preencha em Clientes.'); setRoute('clientes'); return; } window.open(waLink(phone, fillTpl(state.wpp.tplLembrete, ag)), '_blank'); });
   byId('agDetAgr')?.addEventListener('click', async ()=>{ const phone=clientWpp(ag.cliente); if(!phone){ alert('Cliente sem WhatsApp. Preencha em Clientes.'); setRoute('clientes'); return; } const at=getAtendimentoByAgendaId(ag.id)||{...ag,id:ag.id}; const txt=gratitudeMsgForAtendimento(at); const ok=await copyToClipboardSafe(txt); if(ok) alert('Mensagem de agradecimento copiada ✅'); window.open(waLink(phone, txt), '_blank'); });
-  byId('agDetDel')?.addEventListener('click', ()=>{ if(!confirmDel('este agendamento')) return; removeAtendimentoFromAgenda(ag.id); state.agenda=state.agenda.filter(x=>x.id!==ag.id); window.__agendaSelectedId=''; saveSoft(); scheduleSync(); renderAgendaHard(); });
+  byId('agDetDel')?.addEventListener('click', ()=>{ if(!confirmDel('este agendamento')) return; removeAtendimentoFromAgenda(ag.id); state.agenda=state.agenda.filter(x=>x.id!==ag.id); window.__agendaSelectedId=''; saveSoft(); scheduleSync(); renderAgendaHard(); renderCalendar(); });
 }
 
 function renderAgendaHard(){
@@ -5920,212 +5951,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 })();
 
 
-/* =========================================================
-   Studio Sync Pro v45 — correções de dashboard/CRM/persistência
-   - Meta mensal salva e atualiza o dashboard na hora.
-   - Aba Relatórios removida do menu; indicadores foram para o CRM.
-   - Proteção extra para login não sobrescrever dados locais com base vazia.
-   ========================================================= */
-(function(){
-  function $id(id){ return document.getElementById(id); }
-  function toNum(v){ return Number(String(v ?? 0).replace('R$','').replace(/\./g,'').replace(',','.')) || 0; }
-  function brl(v){ try{return (Number(v)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}catch{return 'R$ 0,00';} }
-  function today(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-  function ym(){ return today().slice(0,7); }
-  function sameMonth(d){ return String(d||'').slice(0,7)===ym(); }
-  function safeArray(v){ return Array.isArray(v) ? v : []; }
-  function dataScoreV45(s){
-    try{
-      if(!s || typeof s!=='object') return 0;
-      let photoCount=0;
-      safeArray(s.clientes).forEach(c=>{ photoCount += safeArray(c.fotos).length; });
-      return safeArray(s.agenda).length*4 + safeArray(s.clientes).length*4 + safeArray(s.atendimentos).length*5 + safeArray(s.materiais).length*2 + safeArray(s.despesas).length*2 + safeArray(s.receitasExtras).length*2 + safeArray(s.crmQueue).length + photoCount*2;
-    }catch{return 0;}
-  }
-  function newer(a,b){ return Number(a?.meta?.updatedAt||0) >= Number(b?.meta?.updatedAt||0); }
-  function byIdMap(arr){ const m=new Map(); safeArray(arr).forEach(x=>{ if(x && x.id) m.set(String(x.id), x); }); return m; }
-  function mergeById(localArr, remoteArr){
-    const m=byIdMap(remoteArr);
-    safeArray(localArr).forEach(x=>{ if(x && x.id) m.set(String(x.id), x); });
-    const noId=[...safeArray(remoteArr),...safeArray(localArr)].filter(x=>x && !x.id);
-    return [...m.values(), ...noId];
-  }
-  function mergeStatesV45(local, remote){
-    const l = (typeof sanitizeState==='function') ? sanitizeState(local||{}) : (local||{});
-    const r = (typeof sanitizeState==='function') ? sanitizeState(remote||{}) : (remote||{});
-    const ls=dataScoreV45(l), rs=dataScoreV45(r);
-    if(rs===0 && ls>0) return l;
-    if(ls===0 && rs>0) return r;
-    const base = newer(l,r) ? structuredClone(l) : structuredClone(r);
-    const other = base===l ? r : l;
-    base.settings = {...(other.settings||{}), ...(base.settings||{})};
-    base.wpp = {...(other.wpp||{}), ...(base.wpp||{})};
-    base.financeiro = {...(other.financeiro||{}), ...(base.financeiro||{})};
-    ['agenda','clientes','atendimentos','materiais','despesas','receitasExtras','wppQueue','crmQueue','profissionais'].forEach(k=>{ base[k]=mergeById(base[k], other[k]); });
-    if(!base.meta) base.meta={};
-    base.meta.updatedAt = Math.max(Number(l?.meta?.updatedAt||0), Number(r?.meta?.updatedAt||0), Date.now());
-    return (typeof sanitizeState==='function') ? sanitizeState(base) : base;
-  }
-  function currentUserKeyV45(userInfo){
-    try{ return (typeof storageKeyForUser==='function') ? storageKeyForUser(userInfo) : null; }catch{return null;}
-  }
-  function persistEverywhereV45(){
-    try{
-      if(typeof ensureV41State==='function') ensureV41State();
-      if(typeof ensureMeta==='function') ensureMeta(state);
-      const raw=JSON.stringify(state);
-      localStorage.setItem(typeof ACTIVE_STORAGE_KEY!=='undefined' ? ACTIVE_STORAGE_KEY : 'studio_sync_pro_state', raw);
-      if(typeof KEY!=='undefined') localStorage.setItem(KEY, raw);
-      const u=window.__SJM_CURRENT_USER;
-      const k=currentUserKeyV45(u);
-      if(k) localStorage.setItem(k, raw);
-      const email=(u?.email||'').toLowerCase().trim();
-      if(email) localStorage.setItem('studio_sync_backup_email_'+email, raw);
-      const uid=(u?.uid||'').trim();
-      if(uid) localStorage.setItem('studio_sync_backup_uid_'+uid, raw);
-    }catch(e){ console.warn('v45 persist:',e); }
-  }
 
-  // Mantém backup local forte antes de sair ou trocar de aba.
-  window.addEventListener('beforeunload', persistEverywhereV45);
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') persistEverywhereV45(); });
-
-  // Reforço no login: sempre mescla em vez de trocar por estado vazio.
-  const previousAuthHandler = window.__SJM_ON_AUTH_USER;
-  window.__SJM_ON_AUTH_USER = function(userInfo){
-    try{
-      const userKey=currentUserKeyV45(userInfo);
-      const candidates=[];
-      try{ if(typeof state==='object') candidates.push(state); }catch{}
-      try{ if(userKey && localStorage.getItem(userKey)) candidates.push(JSON.parse(localStorage.getItem(userKey))); }catch{}
-      try{ if(typeof KEY!=='undefined' && localStorage.getItem(KEY)) candidates.push(JSON.parse(localStorage.getItem(KEY))); }catch{}
-      try{ const email=(userInfo?.email||'').toLowerCase().trim(); if(email && localStorage.getItem('studio_sync_backup_email_'+email)) candidates.push(JSON.parse(localStorage.getItem('studio_sync_backup_email_'+email))); }catch{}
-      try{ const uid=(userInfo?.uid||'').trim(); if(uid && localStorage.getItem('studio_sync_backup_uid_'+uid)) candidates.push(JSON.parse(localStorage.getItem('studio_sync_backup_uid_'+uid))); }catch{}
-      let merged=candidates[0] || (typeof defaultState==='function' ? defaultState() : {});
-      candidates.slice(1).forEach(c=>{ merged=mergeStatesV45(merged,c); });
-      if(userKey && typeof ACTIVE_STORAGE_KEY!=='undefined') ACTIVE_STORAGE_KEY=userKey;
-      state = (typeof sanitizeState==='function') ? sanitizeState(merged) : merged;
-      persistEverywhereV45();
-      if(typeof applyTheme==='function') applyTheme();
-      if(typeof renderAllHard==='function') renderAllHard();
-      if(typeof scheduleCloudPush==='function') scheduleCloudPush();
-      window.__SJM_SET_SYNC_STATUS?.('Sync: dados preservados ✅');
-    }catch(e){
-      console.warn('v45 auth merge falhou, usando handler anterior:', e);
-      try{ previousAuthHandler?.(userInfo); }catch{}
-    }
-  };
-
-  // Remoto do Firebase nunca apaga uma base local mais completa.
-  const previousRemoteApply = window.__SJM_APPLY_REMOTE_STATE;
-  window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
-    try{
-      const localScore=dataScoreV45(state);
-      const remoteScore=dataScoreV45(remoteState);
-      if(localScore>0 && remoteScore===0){
-        window.__SJM_SET_SYNC_STATUS?.('Sync: remoto vazio ignorado ✅');
-        if(typeof scheduleCloudPush==='function') scheduleCloudPush();
-        return;
-      }
-      const merged=mergeStatesV45(state, remoteState);
-      state=(typeof sanitizeState==='function') ? sanitizeState(merged) : merged;
-      persistEverywhereV45();
-      if(typeof enforceAgendaRecebidoRules==='function') enforceAgendaRecebidoRules();
-      if(typeof syncAgendaToAtendimentos==='function') syncAgendaToAtendimentos();
-      if(typeof renderAllHard==='function') renderAllHard();
-      window.__SJM_SET_SYNC_STATUS?.('Sync: atualizado sem perda ✅');
-    }catch(e){
-      console.warn('v45 remote merge falhou:', e);
-      try{ previousRemoteApply?.(remoteState); }catch{}
-    }
-  };
-  window.__SJM_SET_STATE_FROM_CLOUD = function(remoteState){
-    if(window.__SJM_IS_EDITING){ window.__SJM_PENDING_REMOTE=remoteState; return; }
-    window.__SJM_APPLY_REMOTE_STATE(remoteState);
-  };
-
-  function updateDashboardMetaV45(){
-    try{
-      if(!state.financeiro) state.financeiro={};
-      const receita = safeArray(state.atendimentos).filter(a=>sameMonth(a.data)).reduce((s,a)=>s+toNum(a.recebido),0) + safeArray(state.receitasExtras).filter(r=>sameMonth(r.data)).reduce((s,r)=>s+toNum(r.valor),0);
-      const meta=toNum(state.financeiro.metaMensal||0);
-      const pct=meta>0 ? Math.min(100, Math.round((receita/meta)*100)) : 0;
-      const txt=$id('dashMetaTexto'); if(txt) txt.textContent=`${brl(receita)} / ${brl(meta)}`;
-      const pctEl=$id('dashMetaPct'); if(pctEl) pctEl.textContent=pct+'%';
-      const bar=$id('dashMetaBar'); if(bar) bar.style.width=pct+'%';
-      const metaInput=$id('finMetaInput'); if(metaInput && document.activeElement!==metaInput) metaInput.value = meta || '';
-      const diaInput=$id('finDiaFechamento'); if(diaInput && document.activeElement!==diaInput) diaInput.value = state.financeiro.diaFechamento || 1;
-    }catch(e){ console.warn('v45 meta:',e); }
-  }
-  function bindCaixaV45(){
-    const btn=$id('btnSalvarFinanceiroConfig');
-    if(btn && !btn.__v45Bound){
-      btn.__v45Bound=true;
-      btn.addEventListener('click', ()=>{
-        state.financeiro = state.financeiro || {};
-        state.financeiro.metaMensal = toNum($id('finMetaInput')?.value);
-        state.financeiro.diaFechamento = Math.max(1, Math.min(31, Math.round(toNum($id('finDiaFechamento')?.value)||1)));
-        if(typeof saveSoft==='function') saveSoft();
-        persistEverywhereV45();
-        updateDashboardMetaV45();
-        alert('Configuração de caixa salva ✅');
-      }, true);
-    }
-  }
-
-  function groupSumV45(arr, keyFn, valFn){
-    const m=new Map();
-    safeArray(arr).forEach(x=>{ const k=String(keyFn(x)||'—').trim()||'—'; m.set(k,(m.get(k)||0)+toNum(valFn(x))); });
-    return [...m.entries()].sort((a,b)=>b[1]-a[1]);
-  }
-  function renderListV45(id, rows, empty='Sem dados ainda.'){ const el=$id(id); if(el) el.innerHTML = rows.length ? rows.map((r,i)=>`<div class="simpleItem"><b>${i+1}. ${String(r[0])}</b> — ${typeof r[1]==='number'?brl(r[1]):r[1]}</div>`).join('') : `<div class="hint">${empty}</div>`; }
-  function renderCrmReportsV45(){
-    try{
-      const atend=safeArray(state.atendimentos);
-      const agenda=safeArray(state.agenda);
-      renderListV45('crmTopClientes', groupSumV45(atend, a=>a.cliente, a=>a.recebido).slice(0,5));
-      renderListV45('crmTopServicos', groupSumV45(atend, a=>a.procedimento, a=>a.recebido).slice(0,5));
-      const totalAg=agenda.length;
-      const faltas=agenda.filter(a=>['Cancelado','Falta','Faltou'].includes(String(a.status||''))).length;
-      const taxa=totalAg ? ((faltas/totalAg)*100).toFixed(1)+'%' : '0%';
-      const tx=$id('crmTaxaFaltas'); if(tx) tx.innerHTML=`<div class="simpleItem"><b>${faltas}</b> faltas/cancelamentos de ${totalAg} agendamentos (${taxa}).</div>`;
-      renderListV45('crmLucroServico', groupSumV45(atend, a=>a.procedimento, a=>a.lucro).slice(0,5));
-    }catch(e){ console.warn('v45 crm reports:', e); }
-  }
-  function removeRelatoriosV45(){
-    try{
-      document.querySelectorAll('[data-tab="relatorios"], .tab[data-tab="relatorios"], button[data-route="relatorios"], a[href="#relatorios"]').forEach(x=>x.remove());
-      document.querySelectorAll('.panel[data-route="relatorios"]').forEach(x=>x.remove());
-      if(location.hash==='#relatorios') location.hash='#crm';
-      ['pro','premium','developer'].forEach(p=>{ if(window.PLAN_FEATURES?.[p]) PLAN_FEATURES[p]=PLAN_FEATURES[p].filter(x=>x!=='relatorios'); });
-    }catch(e){ console.warn('v45 remove relatorios:',e); }
-  }
-
-  const oldRenderAllV45 = window.renderAllHard;
-  if(typeof oldRenderAllV45==='function' && !window.__SJM_V45_RENDER_PATCHED){
-    window.__SJM_V45_RENDER_PATCHED=true;
-    window.renderAllHard=function(){
-      const r=oldRenderAllV45.apply(this, arguments);
-      removeRelatoriosV45(); bindCaixaV45(); updateDashboardMetaV45(); renderCrmReportsV45();
-      return r;
-    };
-  }
-  const oldRenderDashV45=window.renderDashboard;
-  if(typeof oldRenderDashV45==='function'){
-    window.renderDashboard=function(){ const r=oldRenderDashV45.apply(this,arguments); bindCaixaV45(); updateDashboardMetaV45(); return r; };
-  }
-  const oldRenderCrmV45=window.renderCRM;
-  if(typeof oldRenderCrmV45==='function'){
-    window.renderCRM=function(){ const r=oldRenderCrmV45.apply(this,arguments); renderCrmReportsV45(); return r; };
-  }
-
-  function bootV45(){ removeRelatoriosV45(); bindCaixaV45(); updateDashboardMetaV45(); renderCrmReportsV45(); persistEverywhereV45(); }
-  document.addEventListener('DOMContentLoaded', ()=>setTimeout(bootV45,100));
-  setTimeout(bootV45,500);
-  setTimeout(bootV45,1500);
-  window.__SJM_V45_PERSIST_NOW = persistEverywhereV45;
-})();
-
+/* v90: bloco legado v45 de persistência múltipla removido. */
 
 /* =========================================================
    Studio Sync Pro v46 — correções de estabilidade e visual
@@ -10671,235 +10498,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 /* v81-limpa-base-v80: limpeza segura aplicada em app.js. */
 
 
-/* =========================================================
-   v82 base v80 — Autoagendamento público funcional
-   - corrige link que não gerava página
-   - cria rota #agendar/slug dentro do GitHub Pages/PWA
-   - permite confirmação direta se o studio estiver logado
-   - para visitante sem login, gera pedido pronto no WhatsApp do studio
-   ========================================================= */
-(function autoAgendamentoPublicoV82(){
-  const BUILD_AUTO_PUBLIC = 'v82-autoagendamento-publico';
-  const $ = (id)=>document.getElementById(id);
-  const clean = (v)=>String(v ?? '').trim();
-  const onlyDigits = (v)=>String(v ?? '').replace(/\D/g,'');
-  const moneyBR = (v)=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-  const esc = (v)=>String(v ?? '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
-  const slugLocal = (v)=>String(v ?? 'studio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'') || 'studio';
-  const nowId = ()=> 'pub_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
-  const publicHash = ()=>String(location.hash||'').replace(/^#/,'');
-  const isPublicRoute = ()=> /^agendar(\/|$)/i.test(publicHash());
-  const publicSlug = ()=> decodeURIComponent((publicHash().split('/')[1]||'studio').split('?')[0] || 'studio');
-  const hashParams = ()=>{
-    const raw = publicHash();
-    const q = raw.includes('?') ? raw.slice(raw.indexOf('?')+1) : '';
-    return new URLSearchParams(q);
-  };
-  function baseUrl(){ return location.origin + location.pathname; }
-  function getStudioPhone(){
-    try{
-      return onlyDigits(state?.settings?.studioWpp || state?.settings?.whatsapp || state?.settings?.wpp || state?.wpp?.studioWpp || hashParams().get('tel') || '');
-    }catch(e){ return onlyDigits(hashParams().get('tel') || ''); }
-  }
-  function getStudioName(){
-    try{ return clean(state?.settings?.studioNome) || 'Studio'; }catch(e){ return 'Studio'; }
-  }
-  function getAutoConfig(){
-    try{
-      state.autoagendamento = state.autoagendamento && typeof state.autoagendamento === 'object' ? state.autoagendamento : {};
-      state.autoagendamento.slug = slugLocal(state.autoagendamento.slug || state.settings?.studioNome || 'studio');
-      if(typeof state.autoagendamento.ativo !== 'boolean') state.autoagendamento.ativo = true;
-      state.autoagendamento.horaIni = state.autoagendamento.horaIni || '08:00';
-      state.autoagendamento.horaFim = state.autoagendamento.horaFim || '18:00';
-      state.autoagendamento.intervalo = Number(state.autoagendamento.intervalo || 30) || 30;
-      state.autoagendamento.pixPct = Number(state.autoagendamento.pixPct || 0) || 0;
-      state.autoagendamento.pixChave = state.autoagendamento.pixChave || '';
-      return state.autoagendamento;
-    }catch(e){ return {slug:'studio',ativo:true,horaIni:'08:00',horaFim:'18:00',intervalo:30,pixPct:0,pixChave:''}; }
-  }
-  function publicLink(){
-    const a = getAutoConfig();
-    const tel = getStudioPhone();
-    const extra = tel ? ('?tel=' + encodeURIComponent(tel)) : '';
-    return baseUrl() + '#agendar/' + encodeURIComponent(slugLocal(a.slug || getStudioName())) + extra;
-  }
-  function minFromHHMM(h){ const m=String(h||'').match(/^(\d{1,2}):(\d{2})$/); return m ? (Number(m[1])*60+Number(m[2])) : 0; }
-  function hhmmFromMin(m){ const h=String(Math.floor(m/60)).padStart(2,'0'); const mm=String(m%60).padStart(2,'0'); return h+':'+mm; }
-  function procList(){
-    try{
-      const list = Array.isArray(state?.procedimentos) ? state.procedimentos : [];
-      const out = list.filter(p=>p && String(p.nome||'').trim() && !/^(m[eé]dico|folga|reuni[aã]o|compromisso)$/i.test(String(p.nome||'').trim()));
-      return out.length ? out : [{nome:'Procedimento',preco:0,duracaoMin:60}];
-    }catch(e){ return [{nome:'Procedimento',preco:0,duracaoMin:60}]; }
-  }
-  function busyAt(date, time){
-    try{
-      return (state.agenda||[]).some(a => String(a.data||'')===String(date) && String(a.hora||'').slice(0,5)===String(time).slice(0,5) && String(a.status||'').toLowerCase() !== 'cancelado');
-    }catch(e){ return false; }
-  }
-  function timeOptions(date){
-    const a=getAutoConfig();
-    const ini=minFromHHMM(a.horaIni||'08:00'), fim=minFromHHMM(a.horaFim||'18:00'), step=Math.max(5, Number(a.intervalo||30)||30);
-    const opts=[];
-    for(let m=ini; m<=fim; m+=step){
-      const h=hhmmFromMin(m);
-      if(!date || !busyAt(date,h)) opts.push(h);
-    }
-    return opts.length ? opts : [a.horaIni||'08:00'];
-  }
-  function ensurePublicRoot(){
-    let root = $('sjmPublicBookingRoot');
-    if(!root){
-      root=document.createElement('div');
-      root.id='sjmPublicBookingRoot';
-      root.className='sjmPublicBooking';
-      document.body.appendChild(root);
-    }
-    return root;
-  }
-  function renderPublicBooking(){
-    if(!isPublicRoute()){
-      document.body.classList.remove('sjm-public-booking');
-      const r=$('sjmPublicBookingRoot'); if(r) r.style.display='none';
-      return;
-    }
-    document.body.classList.add('sjm-public-booking');
-    const root=ensurePublicRoot();
-    root.style.display='block';
-    const a=getAutoConfig();
-    const studio=getStudioName();
-    if(a.ativo === false){
-      root.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>O ${esc(studio)} desativou o link de agendamento no momento.</p></div>`;
-      return;
-    }
-    const today = (typeof todayISO === 'function') ? todayISO() : new Date().toISOString().slice(0,10);
-    const procs=procList();
-    const selectedDate = clean($('pubAgData')?.value) || today;
-    const horarios=timeOptions(selectedDate);
-    root.innerHTML=`
-      <div class="sjmPublicBookingCard">
-        <h1>Agendar horário</h1>
-        <p>${esc(studio)} • Escolha o procedimento, data e horário.</p>
-        <form id="pubAgForm">
-          <div class="sjmPublicGrid">
-            <label class="sjmPublicField"><span>Nome completo</span><input id="pubAgNome" autocomplete="name" required placeholder="Seu nome"></label>
-            <label class="sjmPublicField"><span>WhatsApp</span><input id="pubAgWpp" inputmode="tel" autocomplete="tel" required placeholder="(17) 99999-9999"></label>
-            <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProc">${procs.map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(moneyBR(p.preco)):''}</option>`).join('')}</select></label>
-            <label class="sjmPublicField"><span>Data</span><input id="pubAgData" type="date" min="${esc(today)}" value="${esc(selectedDate)}" required></label>
-            <label class="sjmPublicField"><span>Horário livre</span><select id="pubAgHora">${horarios.map(h=>`<option value="${h}">${h}</option>`).join('')}</select></label>
-            <label class="sjmPublicField"><span>Observação</span><input id="pubAgObs" placeholder="Opcional"></label>
-          </div>
-          <div class="sjmPublicHint">${a.pixPct ? `Sinal Pix: ${esc(String(a.pixPct))}%${a.pixChave ? ' • Chave: '+esc(a.pixChave) : ''}` : 'Após enviar, o studio confirma o horário.'}</div>
-          <div class="sjmPublicActions"><button class="sjmPublicBtn" type="submit">Solicitar agendamento</button><button class="sjmPublicBtn secondary" type="button" id="pubAgBack">Voltar</button></div>
-        </form>
-      </div>`;
-    const dateInp=$('pubAgData');
-    dateInp?.addEventListener('change',()=>renderPublicBooking());
-    $('pubAgBack')?.addEventListener('click',()=>{ location.hash='dashboard'; });
-    $('pubAgForm')?.addEventListener('submit', submitPublicBooking);
-  }
-  function submitPublicBooking(e){
-    e.preventDefault();
-    const nome=clean($('pubAgNome')?.value);
-    const wpp=onlyDigits($('pubAgWpp')?.value);
-    const procedimento=clean($('pubAgProc')?.value);
-    const data=clean($('pubAgData')?.value);
-    const hora=clean($('pubAgHora')?.value);
-    const obs=clean($('pubAgObs')?.value);
-    if(!nome || !wpp || !procedimento || !data || !hora){ alert('Preencha nome, WhatsApp, procedimento, data e horário.'); return; }
-    const proc = procList().find(p=>String(p.nome)===procedimento) || {};
-    const ag = { id:nowId(), cliente:nome, wpp, procedimento, data, hora, status:'Agendado', valor:Number(proc.preco||0)||0, recebido:0, obs, origem:'autoagendamento', criadoEm:new Date().toISOString() };
-    let savedDirect=false;
-    try{
-      if(typeof state === 'object' && state){
-        state.clientes = Array.isArray(state.clientes) ? state.clientes : [];
-        if(!state.clientes.some(c=>String(c.nome||'').trim().toLowerCase()===nome.toLowerCase())){
-          state.clientes.push({id:nowId(),nome,wpp,tel:wpp,obs:'Criada pelo autoagendamento',fotos:[]});
-        }
-        state.agenda = Array.isArray(state.agenda) ? state.agenda : [];
-        if(!busyAt(data,hora)) state.agenda.push(ag);
-        if(typeof saveSoft === 'function') saveSoft();
-        if(typeof scheduleSync === 'function') scheduleSync();
-        if(typeof scheduleCloudPush === 'function') scheduleCloudPush();
-        savedDirect = !!window.__SJM_CURRENT_USER;
-      }
-    }catch(err){ console.warn('autoagendamento direto:', err); }
-    try{
-      const pending = JSON.parse(localStorage.getItem('sjm_autoagendamento_pedidos')||'[]');
-      pending.unshift(ag); localStorage.setItem('sjm_autoagendamento_pedidos', JSON.stringify(pending.slice(0,100)));
-    }catch(e){}
-    const studioPhone=getStudioPhone();
-    const msg=`Olá! Quero solicitar um agendamento.%0A%0ANome: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}${obs?`%0AObs: ${encodeURIComponent(obs)}`:''}`;
-    if(savedDirect){
-      alert('Agendamento criado e salvo ✅');
-      location.hash='agenda';
-      try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); }catch(e){}
-    }else if(studioPhone){
-      alert('Pedido criado ✅\nAgora vamos abrir o WhatsApp para enviar a solicitação ao studio.');
-      window.open(`https://wa.me/55${studioPhone}?text=${msg}`,'_blank','noopener,noreferrer');
-    }else{
-      alert('Pedido criado neste aparelho ✅\nAtenção: para visitante sem login salvar direto no Firebase, será necessário liberar gravação pública segura ou usar Cloud Function.');
-    }
-  }
-  function fillAutoAdmin(){
-    try{
-      const a=getAutoConfig();
-      const link=publicLink();
-      if($('agSlug')) $('agSlug').value = slugLocal($('agSlug').value || a.slug || getStudioName());
-      if($('agLink')) $('agLink').value = a.ativo === false ? 'Autoagenda desativada' : link;
-      const prev=$('agPreview');
-      if(prev && !isPublicRoute()){
-        const old=prev.innerHTML||'';
-        if(!old.includes('#agendar/')){
-          prev.innerHTML = `<div class="simpleItem"><b>Link público:</b> ${esc(link)}</div>` + old;
-        }
-      }
-    }catch(e){}
-  }
-  function bindAutoAdmin(){
-    const save=$('btnSalvarAutoAg');
-    if(save && !save.__autoPublicV82){
-      save.__autoPublicV82=true;
-      save.addEventListener('click',()=>setTimeout(()=>{
-        try{
-          const a=getAutoConfig();
-          a.slug=slugLocal($('agSlug')?.value || a.slug || getStudioName());
-          a.ativo=($('agAtivo')?.value !== 'false');
-          a.horaIni=$('agHoraIni')?.value || a.horaIni || '08:00';
-          a.horaFim=$('agHoraFim')?.value || a.horaFim || '18:00';
-          a.intervalo=Number($('agIntervalo')?.value || a.intervalo || 30)||30;
-          a.pixPct=Number($('agPixPct')?.value || a.pixPct || 0)||0;
-          a.pixChave=$('agPixChave')?.value || a.pixChave || '';
-          if(typeof saveSoft==='function') saveSoft();
-          if(typeof scheduleCloudPush==='function') scheduleCloudPush();
-          fillAutoAdmin();
-        }catch(e){ console.warn(BUILD_AUTO_PUBLIC, e); }
-      },80), true);
-    }
-    const copy=$('btnCopiarLinkAg');
-    if(copy && !copy.__autoPublicV82){
-      copy.__autoPublicV82=true;
-      copy.addEventListener('click',async(ev)=>{
-        try{
-          const link=publicLink();
-          if($('agLink')) $('agLink').value=link;
-          ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
-          if(navigator.clipboard?.writeText) await navigator.clipboard.writeText(link);
-          else if(typeof copyToClipboardSafe==='function') await copyToClipboardSafe(link);
-          alert('Link do autoagendamento copiado ✅');
-        }catch(e){}
-      }, true);
-    }
-    fillAutoAdmin();
-  }
-  function boot(){
-    try{ bindAutoAdmin(); renderPublicBooking(); }catch(e){ console.warn(BUILD_AUTO_PUBLIC, e); }
-  }
-  window.addEventListener('hashchange', boot);
-  document.addEventListener('DOMContentLoaded',()=>[50,300,900,1800].forEach(t=>setTimeout(boot,t)));
-  setTimeout(boot,100);
-  setTimeout(boot,1200);
-})();
+
+/* v90: bloco legado v82 de autoagendamento removido; mantida implementação pública segura atual. */
 
 /* =========================================================
    v83 base v80 — Autoagendamento completo e seguro
