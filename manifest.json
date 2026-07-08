@@ -1,5 +1,5 @@
 {
-  "name": "Studio Sync Pro — Limpa Estável 1.0",
+  "name": "Studio Sync Pro — v83 autoagendamento completo",
   "short_name": "Studio Sync Pro",
   "id": "studio-sync-pro-limpa-estavel-1",
   "start_url": "./",
@@ -17,18 +17,6 @@
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
-    },
-    {
-      "src": "maskable-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
     }
   ]
 }
