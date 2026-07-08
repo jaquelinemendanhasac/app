@@ -10371,11 +10371,17 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
         try{ renderCalendar(); }catch(e){}
       });
 
-      inpDur && inpDur.addEventListener('input', ()=>{
-        p.duracaoMin = Math.max(1, Math.round(n(inpDur.value)||60));
+      function saveDuracaoProcV94(){
+        const v = Math.max(1, Math.round(n(inpDur && inpDur.value)||60));
+        p.duracaoMin = v;
+        p.duracao = v;
         if(!sistema) p.userCreated = true;
         salvarProcedimentosV79();
-      });
+        try{ if(typeof publish==='function') setTimeout(publish,300); }catch(e){}
+      }
+      inpDur && inpDur.addEventListener('input', saveDuracaoProcV94);
+      inpDur && inpDur.addEventListener('change', saveDuracaoProcV94);
+      inpDur && inpDur.addEventListener('blur', saveDuracaoProcV94);
 
       const del = tr.querySelector('[data-del]');
       del && del.addEventListener('click', ()=>{
@@ -10628,8 +10634,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       <form id="pubAgFormV83"><div class="sjmPublicGrid">
         <label class="sjmPublicField"><span>Nome completo</span><input id="pubAgNomeV83" autocomplete="name" required placeholder="Seu nome"></label>
         <label class="sjmPublicField"><span>WhatsApp</span><input id="pubAgWppV83" inputmode="tel" autocomplete="tel" required placeholder="(17) 99999-9999"></label>
-        <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProcV83" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
-        <label class="sjmPublicField"><span>Profissional</span><select id="pubAgProfV83">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}</option>`).join('')}</select></label>
+        <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProcV83" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}" ${clean(p.nome)===clean(selectedProcName)?'selected':''}>${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
+        <label class="sjmPublicField"><span>Profissional</span><select id="pubAgProfV83">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}" ${clean(p.nome)===clean(selectedProcName)?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></label>
         <label class="sjmPublicField"><span>Data</span><input id="pubAgDataV83" type="date" min="${today()}" value="${esc(d)}" required></label>
         <label class="sjmPublicField"><span>Horário livre</span><select id="pubAgHoraV83" required>${times.length?times.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sem horário livre</option>'}</select></label>
         <label class="sjmPublicField"><span>Observação</span><input id="pubAgObsV83" placeholder="Opcional"></label>
@@ -10716,7 +10722,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       state.autoagendamentoPedidosProcessados=Array.isArray(state.autoagendamentoPedidosProcessados)?state.autoagendamentoPedidosProcessados:[];
       if(state.autoagendamentoPedidosProcessados.includes(req.id)) return;
       if(state.agenda.some(a=>String(a.publicRequestId||'')===String(req.id))){ state.autoagendamentoPedidosProcessados.push(req.id); return; }
-      if(slotBusyLocal(req.data, req.hora, req.id)){
+      if(slotBusyLocal(req.data, req.hora, req.id, req.procedimento)){
         notifyLocal('Conflito de autoagendamento', `${req.cliente||'Cliente'} tentou ${req.data} às ${req.hora}, mas o horário já está ocupado.`);
         try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado',sourceStudioKey:req.__sourceStudioKey||''}); }catch(e){}
         return;
@@ -10810,6 +10816,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   let publicDataCache = null;
   let currentMonth = new Date(today()+'T12:00:00');
   let selectedDate = today();
+  let selectedProcName = '';
   let lastRenderKey = '';
 
   function parseMin(h){ const m=String(h||'').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1])*60+Number(m[2]) : 0; }
@@ -10844,7 +10851,10 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       .map(p=>({nome:clean(p.nome),preco:Number(p.preco||0)||0,duracaoMin:Number(p.duracaoMin||p.duracao||60)||60}));
     const busySlots=(Array.isArray(state?.agenda)?state.agenda:[])
       .filter(a=>a && a.data && a.hora && String(a.status||'').toLowerCase() !== 'cancelado')
-      .map(a=>({data:String(a.data),hora:normTime(a.hora),status:a.status||'Agendado',cliente:a.cliente||'',procedimento:a.procedimento||'',profissional:a.profissional||''}));
+      .map(a=>{
+        const proc=(Array.isArray(state?.procedimentos)?state.procedimentos:[]).find(p=>clean(p.nome)===clean(a.procedimento))||{};
+        return {data:String(a.data),hora:normTime(a.hora),status:a.status||'Agendado',cliente:a.cliente||'',procedimento:a.procedimento||'',profissional:a.profissional||'',duracaoMin:Number(a.duracaoMin||proc.duracaoMin||60)||60};
+      });
     return {
       studioNome: clean(state?.settings?.studioNome) || 'Studio',
       studioWpp: digits(state?.settings?.studioWpp || state?.settings?.whatsapp || state?.wpp?.studioWpp || ''),
@@ -10881,8 +10891,21 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       }
     }catch(e){ console.warn(BUILD,'load public:',e); }
   }
-  function occupied(pd,date,hora){
-    return (pd.busySlots||[]).some(s=>String(s.data)===String(date) && normTime(s.hora)===normTime(hora) && String(s.status||'').toLowerCase()!=='cancelado');
+  function procDur(pd,nome){
+    const p=(pd.procedimentos||[]).find(x=>clean(x.nome)===clean(nome));
+    return Math.max(1,Number(p?.duracaoMin||60)||60);
+  }
+  function busyDur(pd,s){
+    const p=(pd.procedimentos||[]).find(x=>clean(x.nome)===clean(s.procedimento));
+    return Math.max(1,Number(s.duracaoMin||p?.duracaoMin||60)||60);
+  }
+  function overlaps(aStart,aDur,bStart,bDur){
+    const a=parseMin(aStart), b=parseMin(bStart);
+    return a < b + bDur && b < a + aDur;
+  }
+  function occupied(pd,date,hora,procName){
+    const dur=procDur(pd,procName);
+    return (pd.busySlots||[]).some(s=>String(s.data)===String(date) && String(s.status||'').toLowerCase()!=='cancelado' && overlaps(normTime(s.hora),busyDur(pd,s),normTime(hora),dur));
   }
   function baseTimes(pd){
     const a=pd.autoagendamento||{};
@@ -10893,9 +10916,11 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     for(let m=ini;m<=fim;m+=step) out.push(toHHMM(m));
     return out;
   }
-  function freeTimes(date){
+  function freeTimes(date,procName){
     const pd=data();
-    return baseTimes(pd).filter(h=>!occupied(pd,date,h));
+    const dur=procDur(pd,procName);
+    const fim=parseMin((pd.autoagendamento||{}).horaFim||'18:00');
+    return baseTimes(pd).filter(h=>parseMin(h)+dur<=fim && !occupied(pd,date,h,procName));
   }
   function daysInCalendar(dt){
     const y=dt.getFullYear(), m=dt.getMonth();
@@ -10906,13 +10931,13 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return {days:out, month:m, last};
   }
   function isoDate(d){ return d.toISOString().slice(0,10); }
-  function dayHasFree(iso){ return iso >= today() && freeTimes(iso).length > 0; }
+  function dayHasFree(iso){ return iso >= today() && freeTimes(iso, selectedProcName).length > 0; }
   function renderCalendarGrid(){
     const {days,month}=daysInCalendar(currentMonth);
     const wd=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
     return `<div class="sjmPubCalWeek">${wd.map(w=>`<b>${w}</b>`).join('')}</div><div class="sjmPubCalGrid">${days.map(d=>{
       const iso=isoDate(d), other=d.getMonth()!==month, past=iso<today(), free=dayHasFree(iso), sel=iso===selectedDate;
-      const count=freeTimes(iso).length;
+      const count=freeTimes(iso, selectedProcName).length;
       return `<button type="button" class="sjmPubDay ${other?'other':''} ${past?'past':''} ${free?'free':'full'} ${sel?'sel':''}" data-pub-day="${iso}" ${(!free||past)?'disabled':''}><span>${d.getDate()}</span>${free?`<small>${count} livre${count>1?'s':''}</small>`:'<small>—</small>'}</button>`;
     }).join('')}</div>`;
   }
@@ -10930,12 +10955,14 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(a.ativo===false){ root.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>${esc(pd.studioNome||'Studio')} desativou o link no momento.</p></div>`; return; }
     const procs=(pd.procedimentos||[]).filter(p=>clean(p.nome));
     const profs=(pd.profissionais||[]).filter(p=>clean(p.nome));
+    if(!selectedProcName && procs.length) selectedProcName=clean(procs[0].nome);
+    if(selectedProcName && procs.length && !procs.some(p=>clean(p.nome)===clean(selectedProcName))) selectedProcName=clean(procs[0].nome);
     if(!dayHasFree(selectedDate)){
       const first=daysInCalendar(currentMonth).days.map(isoDate).find(dayHasFree);
       if(first) selectedDate=first;
     }
-    const times=freeTimes(selectedDate);
-    const renderKey=JSON.stringify({selectedDate,month:currentMonth.getMonth(),year:currentMonth.getFullYear(),busy:(pd.busySlots||[]).length,upd:pd.updatedAt||0});
+    const times=freeTimes(selectedDate, selectedProcName);
+    const renderKey=JSON.stringify({selectedDate,selectedProcName,month:currentMonth.getMonth(),year:currentMonth.getFullYear(),busy:(pd.busySlots||[]).length,upd:pd.updatedAt||0});
     // não reescreve enquanto a cliente digita, exceto quando muda calendário/dados
     if(document.activeElement && root.contains(document.activeElement) && lastRenderKey===renderKey) return;
     lastRenderKey=renderKey;
@@ -10949,8 +10976,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
         <div class="sjmPublicGrid">
           <label class="sjmPublicField"><span>Nome completo</span><input id="pubNomeV93" required autocomplete="name" placeholder="Seu nome"></label>
           <label class="sjmPublicField"><span>WhatsApp</span><input id="pubWppV93" required inputmode="tel" autocomplete="tel" placeholder="(17) 99999-9999"></label>
-          <label class="sjmPublicField"><span>Procedimento</span><select id="pubProcV93" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
-          <label class="sjmPublicField"><span>Profissional</span><select id="pubProfV93">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}</option>`).join('')}</select></label>
+          <label class="sjmPublicField"><span>Procedimento</span><select id="pubProcV93" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}" ${clean(p.nome)===clean(selectedProcName)?'selected':''}>${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
+          <label class="sjmPublicField"><span>Profissional</span><select id="pubProfV93">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}" ${clean(p.nome)===clean(selectedProcName)?'selected':''}>${esc(p.nome)}</option>`).join('')}</select></label>
           <label class="sjmPublicField"><span>Horário disponível</span><select id="pubHoraV93" required>${times.length?times.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sem horário livre neste dia</option>'}</select></label>
           <label class="sjmPublicField"><span>Observação</span><input id="pubObsV93" placeholder="Opcional"></label>
         </div>
@@ -10968,9 +10995,9 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     const nome=clean($('pubNomeV93')?.value), wpp=digits($('pubWppV93')?.value), procedimento=clean($('pubProcV93')?.value), profissional=clean($('pubProfV93')?.value)||'Profissional principal', hora=normTime($('pubHoraV93')?.value), obs=clean($('pubObsV93')?.value);
     if(!nome || wpp.length<10 || !procedimento || !selectedDate || !hora){ alert('Preencha nome, WhatsApp, procedimento e horário disponível.'); return; }
     await loadPublic();
-    if(occupied(data(),selectedDate,hora)){ alert('Esse horário acabou de ser ocupado. Escolha outro horário.'); renderPublic(); return; }
+    if(occupied(data(),selectedDate,hora,procedimento)){ alert('Esse horário acabou de ser ocupado ou não cabe na duração do procedimento. Escolha outro horário.'); renderPublic(); return; }
     const proc=(data().procedimentos||[]).find(p=>clean(p.nome)===procedimento)||{};
-    const req={id:uid(),cliente:nome,wpp,procedimento,profissional,data:selectedDate,hora,valor:Number(proc.preco||0)||0,obs,status:'Agendado',statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
+    const req={id:uid(),cliente:nome,wpp,procedimento,profissional,data:selectedDate,hora,duracaoMin:Number(proc.duracaoMin||60)||60,valor:Number(proc.preco||0)||0,obs,status:'Agendado',statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
     let sent=false;
     try{
       const key=ownerKey();
@@ -10982,7 +11009,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{
       publicDataCache = data();
       publicDataCache.busySlots = Array.isArray(publicDataCache.busySlots) ? publicDataCache.busySlots : [];
-      publicDataCache.busySlots.push({data:selectedDate,hora,status:'Agendado',cliente:nome,procedimento,profissional});
+      publicDataCache.busySlots.push({data:selectedDate,hora,status:'Agendado',cliente:nome,procedimento,profissional,duracaoMin:Number(proc.duracaoMin||60)||60});
       publicDataCache.updatedAt=Date.now();
       localStorage.setItem('sjm_ultimo_autoagendamento_cliente', JSON.stringify(req));
     }catch(_){ }
@@ -11001,8 +11028,9 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     const nd=clean(nome).toLowerCase(), wd=digits(wpp);
     return (state.clientes||[]).find(c=>digits(c.wpp||c.tel)===wd || clean(c.nome).toLowerCase()===nd);
   }
-  function slotBusyLocal(date,hora,ignore){
-    return (state.agenda||[]).some(a=>a && String(a.data)===String(date) && normTime(a.hora)===normTime(hora) && String(a.status||'').toLowerCase()!=='cancelado' && String(a.publicRequestId||'')!==String(ignore||''));
+  function slotBusyLocal(date,hora,ignore,procName){
+    const pd=statePayload();
+    return (pd.busySlots||[]).some(a=>String(a.data)===String(date) && String(a.status||'').toLowerCase()!=='cancelado' && String(a.publicRequestId||'')!==String(ignore||'') && overlaps(normTime(a.hora),busyDur(pd,a),normTime(hora),procDur(pd,procName)));
   }
   async function saveStrong(reason){
     try{ state.meta=state.meta&&typeof state.meta==='object'?state.meta:{}; state.meta.rev=Number(state.meta.rev||0)+1; state.meta.updatedAt=Date.now(); state.meta.reason=reason||BUILD; }catch(e){}
@@ -11023,14 +11051,14 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       state.autoagendamentoPedidosProcessados=Array.isArray(state.autoagendamentoPedidosProcessados)?state.autoagendamentoPedidosProcessados:[];
       if(state.autoagendamentoPedidosProcessados.includes(req.id)) return;
       if(state.agenda.some(a=>String(a.publicRequestId||'')===String(req.id))){ state.autoagendamentoPedidosProcessados.push(req.id); await saveStrong('autoagendamento-ja-existente'); return; }
-      if(slotBusyLocal(req.data, req.hora, req.id)){
+      if(slotBusyLocal(req.data, req.hora, req.id, req.procedimento)){
         try{ await window.__SJM_MARK_PUBLIC_BOOKING_REQUEST?.(req.id,{statusPedido:'conflito',motivo:'Horário ocupado',sourceStudioKey:req.__sourceStudioKey||'',ownerKey:req.ownerKey||''}); }catch(_){ }
         return;
       }
       if(!findClient(req.cliente, req.wpp)){
         state.clientes.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),nome:req.cliente||'Cliente',wpp:req.wpp||'',tel:req.wpp||'',obs:'Criada pelo autoagendamento',fotos:[]});
       }
-      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',profissional:req.profissional||'Profissional principal',data:req.data,hora:normTime(req.hora),status:'Agendado',valor:Number(req.valor||0)||0,recebido:0,obs:(req.obs?req.obs+'\n':'')+'Autoagendamento: cliente confirmou pelo link. Aguardando confirmação da profissional.',origem:'autoagendamento',publicRequestId:req.id,statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:req.criadoEm||new Date().toISOString()});
+      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',profissional:req.profissional||'Profissional principal',data:req.data,hora:normTime(req.hora),duracaoMin:Number(req.duracaoMin||60)||60,status:'Agendado',valor:Number(req.valor||0)||0,recebido:0,obs:(req.obs?req.obs+'\n':'')+'Autoagendamento: cliente confirmou pelo link. Aguardando confirmação da profissional.',origem:'autoagendamento',publicRequestId:req.id,statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:req.criadoEm||new Date().toISOString()});
       state.autoagendamentoPedidosProcessados.push(req.id);
       await saveStrong('autoagendamento-recebido-v93');
       try{ renderAgendaHard?.(); renderCalendar?.(); renderClientes?.(); renderDashboard?.(); }catch(_){ }
@@ -11053,6 +11081,14 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(e.target.closest && e.target.closest('#pubPrevMonthV93')){ currentMonth.setMonth(currentMonth.getMonth()-1); renderPublic(); return; }
     if(e.target.closest && e.target.closest('#pubNextMonthV93')){ currentMonth.setMonth(currentMonth.getMonth()+1); renderPublic(); return; }
   },true);
+
+  document.addEventListener('change',function(e){
+    if(e.target && e.target.id==='pubProcV93'){
+      selectedProcName=clean(e.target.value);
+      lastRenderKey='';
+      renderPublic();
+    }
+  },true);
   document.addEventListener('submit',submitPublic,true);
   function boot(){ enhanceAdmin(); if(isPublic()) loadPublic().then(renderPublic); else renderPublic(); }
   window.addEventListener('hashchange',()=>setTimeout(boot,120));
@@ -11060,3 +11096,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setInterval(()=>{ try{ enhanceAdmin(); if(isPublic()) loadPublic().then(renderPublic); else publish(); }catch(e){} }, 8000);
   setTimeout(boot,300); setTimeout(boot,1800); setTimeout(boot,4200);
 })();
+
+
+/* v94 — correção duração dos procedimentos + autoagenda respeita duração e bloqueios por intervalo. */
