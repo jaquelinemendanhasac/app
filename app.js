@@ -8,7 +8,7 @@
   - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
 */
 
-const APP_BUILD = "Studio Sync Pro — Limpa Estável 1.0";
+const APP_BUILD = "Studio Sync Pro — v89 Agenda limpa";
 window.__SJM_APP_LOADED = true;
 
 // ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
@@ -1950,6 +1950,8 @@ function agendaCompactFiltered(){
   const data = byId('agendaFiltroData')?.value || "";
   const status = byId('agendaFiltroStatus')?.value || "";
   const hoje = agendaCompactTodayISO();
+  const temBuscaOuFiltro = Boolean(busca || data || status);
+
   return state.agenda.slice().filter(a=>{
     const st = (a.status || "Agendado");
     const agData = String(a.data || "");
@@ -1957,8 +1959,12 @@ function agendaCompactFiltered(){
     if(data && agData !== data) return false;
     if(status && st !== status) return false;
 
+    // v89: a tela principal da Agenda não deve abrir atendimentos Realizados antigos.
+    // Realizados continuam salvos e aparecem apenas quando o usuário pesquisar/filtrar.
+    if(st === "Realizado" && !temBuscaOuFiltro) return false;
+
     // Quando o filtro estiver em "Agendado", esconder datas passadas.
-    // Datas antigas continuam disponíveis no Histórico, Busca, Relatórios e no filtro "Todos".
+    // Datas antigas continuam disponíveis pela busca/lupa, filtros e relatórios.
     if(status === "Agendado" && agData && agData < hoje) return false;
 
     if(busca){
@@ -1991,7 +1997,11 @@ function renderAgendaCompact(){
 
   if(!items.length){
     list.innerHTML = `<div class="hint" style="padding:16px;">Nenhum agendamento encontrado.</div>`;
-    detail.innerHTML = `<div class="hint">Selecione outro filtro ou crie um novo agendamento.</div>`;
+    detail.innerHTML = `
+      <div class="hint" style="margin-bottom:12px;">Nenhum agendamento aberto. Clique em <b>+ Novo agendamento</b> para cadastrar.</div>
+      <button class="btn" id="agendaEmptyNew" type="button">+ Novo agendamento</button>
+    `;
+    byId('agendaEmptyNew')?.addEventListener('click', ()=> byId('btnAddAgenda')?.click());
     return;
   }
 
