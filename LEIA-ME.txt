@@ -1,5 +1,10 @@
-Studio Sync Pro v90
+Studio Sync Pro v92
 
-Base criada em cima do arquivo enviado pelo usuário.
-Inclui sincronização canônica, exclusão persistente, agenda limpa e autoagendamento público funcional.
-Suba os arquivos descompactados no GitHub Pages; não envie o ZIP para o repositório.
+Correções aplicadas:
+- Autoagendamento com horários liberados manualmente pela profissional.
+- Link público exibe formulário de agendamento.
+- Cliente confirma o pedido pelo link.
+- Pedido entra na agenda como Agendado e bloqueia o horário.
+- Profissional confirma depois pelo fluxo de confirmação da agenda.
+- Calendário e autoagendamento usam os mesmos horários ocupados.
+- Sem duplicar arquivos do projeto.

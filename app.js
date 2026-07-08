@@ -5527,6 +5527,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     state.autoagendamento.intervalo = num(state.autoagendamento.intervalo || 15);
     state.autoagendamento.pixPct = num(state.autoagendamento.pixPct || 0);
     state.autoagendamento.pixChave = state.autoagendamento.pixChave || '';
+    state.autoagendamento.horariosPermitidos = Array.isArray(state.autoagendamento.horariosPermitidos) ? state.autoagendamento.horariosPermitidos : (String(state.autoagendamento.horariosPermitidos||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean));
 
     state.profissionais = Array.isArray(state.profissionais) ? state.profissionais : [];
     if(!state.profissionais.length){
@@ -5636,7 +5637,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   function renderAutoAg(){
     ensureV41State();
     const a=state.autoagendamento;
-    safeValue('agSlug', a.slug); safeValue('agAtivo', String(a.ativo !== false)); safeValue('agHoraIni', a.horaIni); safeValue('agHoraFim', a.horaFim); safeValue('agIntervalo', a.intervalo); safeValue('agPixPct', a.pixPct); safeValue('agPixChave', a.pixChave);
+    safeValue('agSlug', a.slug); safeValue('agAtivo', String(a.ativo !== false)); safeValue('agHoraIni', a.horaIni); safeValue('agHoraFim', a.horaFim); safeValue('agIntervalo', a.intervalo); safeValue('agHorariosPermitidos', (Array.isArray(a.horariosPermitidos)?a.horariosPermitidos:[]).join(', ')); safeValue('agPixPct', a.pixPct); safeValue('agPixChave', a.pixChave);
     const link=`https://app.jaquelinemendanha.com/agendar/${a.slug}`;
     safeValue('agLink', a.ativo === false ? 'Autoagenda desativada' : link);
     const prev=byId('agPreview');
@@ -5644,7 +5645,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       if(a.ativo === false){
         prev.innerHTML = `<div class="simpleItem"><b>Status:</b> Autoagenda desativada. O link público fica bloqueado e clientes não conseguem agendar sozinhas.</div>`;
       }else{
-        prev.innerHTML = `<div class="simpleItem"><b>Status:</b> Autoagenda ativada.</div><div class="simpleItem"><b>Cliente escolhe:</b> serviço, profissional e horário livre.</div><div class="simpleItem"><b>Sinal Pix:</b> ${a.pixPct}% • Chave: ${esc(a.pixChave||'não definida')}</div><div class="simpleItem"><b>Link:</b> ${esc(link)}</div>`;
+        prev.innerHTML = `<div class="simpleItem"><b>Status:</b> Autoagenda ativada.</div><div class="simpleItem"><b>Cliente confirma:</b> nome, WhatsApp, serviço, profissional e horário livre.</div><div class="simpleItem"><b>Profissional confirma:</b> o pedido entra na agenda como Agendado e o botão Confirmação pode marcar como Confirmado.</div><div class="simpleItem"><b>Horários liberados:</b> ${esc((Array.isArray(a.horariosPermitidos)&&a.horariosPermitidos.length)?a.horariosPermitidos.join(', '):'por intervalo')}</div><div class="simpleItem"><b>Sinal Pix:</b> ${a.pixPct}% • Chave: ${esc(a.pixChave||'não definida')}</div><div class="simpleItem"><b>Link:</b> ${esc(link)}</div>`;
       }
     }
   }
@@ -5654,7 +5655,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       a.ativo=(byId('agAtivo')?.value !== 'false');
       a.slug=slugify(byId('agSlug')?.value || state.settings?.studioNome || 'studio');
       a.horaIni=byId('agHoraIni')?.value || '08:00'; a.horaFim=byId('agHoraFim')?.value || '18:00';
-      a.intervalo=num(byId('agIntervalo')?.value); a.pixPct=num(byId('agPixPct')?.value); a.pixChave=byId('agPixChave')?.value||'';
+      a.intervalo=num(byId('agIntervalo')?.value); a.horariosPermitidos=String(byId('agHorariosPermitidos')?.value||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).map(x=>x.padStart(5,'0')).filter(x=>/^\d{2}:\d{2}$/.test(x)); a.pixPct=num(byId('agPixPct')?.value); a.pixChave=byId('agPixChave')?.value||'';
       saveSoft(); renderAutoAg(); alert('Autoagendamento salvo ✅');
     });
     onClick('btnCopiarLinkAg', async()=>{ ensureV41State(); if(state.autoagendamento?.ativo === false){ alert('Autoagenda está desativada. Ative antes de copiar o link.'); return; } await copyToClipboardSafe(byId('agLink')?.value||''); alert('Link copiado ✅'); });
@@ -10535,7 +10536,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       a.slug=slug(a.slug || state.settings?.studioNome || 'studio');
       if(typeof a.ativo!=='boolean') a.ativo=true;
       a.horaIni=a.horaIni||'08:00'; a.horaFim=a.horaFim||'18:00'; a.intervalo=Number(a.intervalo||30)||30;
-      a.pixPct=Number(a.pixPct||0)||0; a.pixChave=a.pixChave||'';
+      a.pixPct=Number(a.pixPct||0)||0; a.pixChave=a.pixChave||''; a.horariosPermitidos=Array.isArray(a.horariosPermitidos)?a.horariosPermitidos:String(a.horariosPermitidos||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
       return a;
     }catch(e){ return {ativo:true,slug:'studio',horaIni:'08:00',horaFim:'18:00',intervalo:30,pixPct:0,pixChave:''}; }
   }
@@ -10562,8 +10563,9 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return {
       studioNome: studioName(),
       studioWpp: studioPhone(),
-      autoagendamento: {ativo:a.ativo!==false,slug:slug(a.slug||studioName()),horaIni:a.horaIni||'08:00',horaFim:a.horaFim||'18:00',intervalo:Number(a.intervalo||30)||30,pixPct:Number(a.pixPct||0)||0,pixChave:a.pixChave||''},
+      autoagendamento: {ativo:a.ativo!==false,slug:slug(a.slug||studioName()),horaIni:a.horaIni||'08:00',horaFim:a.horaFim||'18:00',intervalo:Number(a.intervalo||30)||30,horariosPermitidos:Array.isArray(a.horariosPermitidos)?a.horariosPermitidos:[],pixPct:Number(a.pixPct||0)||0,pixChave:a.pixChave||''},
       procedimentos: procListFromState(),
+      profissionais: (Array.isArray(state?.profissionais)?state.profissionais:[]).filter(p=>p&&p.ativo!==false).map(p=>({id:p.id||'',nome:p.nome||'Profissional'})),
       busySlots: busySlotsFromState().slice(0,1500)
     };
   }
@@ -10590,9 +10592,15 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }
   function availableTimes(data){
     const pd=getPublicData(); const a=pd.autoagendamento||{};
-    const ini=min(a.horaIni||'08:00'), fim=min(a.horaFim||'18:00'), step=Math.max(5,Number(a.intervalo||30)||30);
-    const out=[]; for(let m=ini;m<=fim;m+=step){ const h=hh(m); if(!data||!isBusy(data,h)) out.push(h); }
-    return out;
+    const explicit=(Array.isArray(a.horariosPermitidos)?a.horariosPermitidos:String(a.horariosPermitidos||'').split(/[,;\n]+/))
+      .map(x=>String(x||'').trim().padStart(5,'0')).filter(x=>/^\d{2}:\d{2}$/.test(x));
+    let base=[];
+    if(explicit.length){ base=[...new Set(explicit)].sort(); }
+    else{
+      const ini=min(a.horaIni||'08:00'), fim=min(a.horaFim||'18:00'), step=Math.max(5,Number(a.intervalo||30)||30);
+      for(let m=ini;m<=fim;m+=step) base.push(hh(m));
+    }
+    return base.filter(h=>!data||!isBusy(data,h));
   }
   async function loadPublicData(){
     const uid=ownerUid();
@@ -10614,16 +10622,18 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     const pd=getPublicData(); const a=pd.autoagendamento||{}; const studio=pd.studioNome||'Studio';
     if(a.ativo===false){ r.innerHTML=`<div class="sjmPublicBookingCard"><h1>Autoagendamento indisponível</h1><p>${esc(studio)} desativou o link no momento.</p></div>`; return; }
     const procs=(pd.procedimentos||[]).filter(p=>p&&clean(p.nome));
+    const profs=(pd.profissionais||[]).filter(p=>p&&clean(p.nome));
     const d=clean($('pubAgDataV83')?.value)||today(); const times=availableTimes(d);
     r.innerHTML=`<div class="sjmPublicBookingCard"><h1>Agendar horário</h1><p>${esc(studio)} • Escolha uma data e um horário disponível.</p>
       <form id="pubAgFormV83"><div class="sjmPublicGrid">
         <label class="sjmPublicField"><span>Nome completo</span><input id="pubAgNomeV83" autocomplete="name" required placeholder="Seu nome"></label>
         <label class="sjmPublicField"><span>WhatsApp</span><input id="pubAgWppV83" inputmode="tel" autocomplete="tel" required placeholder="(17) 99999-9999"></label>
         <label class="sjmPublicField"><span>Procedimento</span><select id="pubAgProcV83" required>${(procs.length?procs:[{nome:'Procedimento',preco:0}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}${Number(p.preco||0)>0?' • '+esc(money(p.preco)):''}</option>`).join('')}</select></label>
+        <label class="sjmPublicField"><span>Profissional</span><select id="pubAgProfV83">${(profs.length?profs:[{nome:'Profissional principal'}]).map(p=>`<option value="${esc(p.nome)}">${esc(p.nome)}</option>`).join('')}</select></label>
         <label class="sjmPublicField"><span>Data</span><input id="pubAgDataV83" type="date" min="${today()}" value="${esc(d)}" required></label>
         <label class="sjmPublicField"><span>Horário livre</span><select id="pubAgHoraV83" required>${times.length?times.map(h=>`<option value="${h}">${h}</option>`).join(''):'<option value="">Sem horário livre</option>'}</select></label>
         <label class="sjmPublicField"><span>Observação</span><input id="pubAgObsV83" placeholder="Opcional"></label>
-      </div><div class="sjmPublicHint">${a.pixPct?`Sinal Pix: ${esc(a.pixPct)}%${a.pixChave?' • Chave: '+esc(a.pixChave):''}`:'Ao confirmar, o horário será enviado para a agenda do studio.'}</div>
+      </div><div class="sjmPublicHint">${a.pixPct?`Sinal Pix: ${esc(a.pixPct)}%${a.pixChave?' • Chave: '+esc(a.pixChave):''}`:'Ao clicar em confirmar, a cliente confirma o pedido. O horário fica bloqueado na agenda e aguarda a confirmação da profissional.'}</div>
       <div class="sjmPublicActions"><button class="sjmPublicBtn" type="submit">Confirmar agendamento</button><button class="sjmPublicBtn secondary" type="button" id="pubAgBackV83">Voltar</button></div></form></div>`;
     $('pubAgDataV83')?.addEventListener('change',()=>renderPublicV83());
     $('pubAgBackV83')?.addEventListener('click',()=>{ location.hash='dashboard'; });
@@ -10631,11 +10641,11 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   async function submitPublicV83(ev){
     const form=ev.target; if(!form || form.id!=='pubAgFormV83') return;
     ev.preventDefault(); ev.stopPropagation(); ev.stopImmediatePropagation();
-    const nome=clean($('pubAgNomeV83')?.value), wpp=digits($('pubAgWppV83')?.value), procedimento=clean($('pubAgProcV83')?.value), data=clean($('pubAgDataV83')?.value), hora=clean($('pubAgHoraV83')?.value), obs=clean($('pubAgObsV83')?.value);
+    const nome=clean($('pubAgNomeV83')?.value), wpp=digits($('pubAgWppV83')?.value), procedimento=clean($('pubAgProcV83')?.value), profissional=clean($('pubAgProfV83')?.value)||'Profissional principal', data=clean($('pubAgDataV83')?.value), hora=clean($('pubAgHoraV83')?.value), obs=clean($('pubAgObsV83')?.value);
     if(!nome||!wpp||!procedimento||!data||!hora){ alert('Preencha nome, WhatsApp, procedimento, data e horário.'); return; }
     if(isBusy(data,hora)){ alert('Esse horário acabou de ser ocupado. Escolha outro horário.'); renderPublicV83(); return; }
     const pd=getPublicData(); const proc=(pd.procedimentos||[]).find(p=>clean(p.nome)===procedimento)||{};
-    const req={id:id(),cliente:nome,wpp,procedimento,data,hora,valor:Number(proc.preco||0)||0,obs,status:'Confirmado',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
+    const req={id:id(),cliente:nome,wpp,procedimento,profissional,data,hora,valor:Number(proc.preco||0)||0,obs,status:'Agendado',statusCliente:'confirmado',statusProfissional:'pendente',criadoEm:new Date().toISOString(),studioNome:pd.studioNome||'Studio'};
     let sent=false;
     try{
       const uid=ownerUid();
@@ -10646,12 +10656,13 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ console.warn(BUILD,'pedido firebase:',e); }
     try{ localStorage.setItem('sjm_ultimo_autoagendamento_cliente', JSON.stringify(req)); }catch(e){}
     const studioTel=digits(pd.studioWpp||params().get('tel')||'');
-    const msgCliente=`Olá, ${nome}! Seu pedido de agendamento foi enviado para ${pd.studioNome||'o studio'}.%0A%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}`;
-    const msgStudio=`Novo agendamento pelo link.%0A%0ACliente: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}${obs?'%0AObs: '+encodeURIComponent(obs):''}`;
+    const msgCliente=`Olá, ${nome}! Seu pedido de agendamento foi enviado para ${pd.studioNome||'o studio'}.%0A%0AProcedimento: ${encodeURIComponent(procedimento)}%0AProfissional: ${encodeURIComponent(profissional)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}`;
+    const msgStudio=`Novo agendamento pelo link.%0A%0ACliente: ${encodeURIComponent(nome)}%0AWhatsApp: ${encodeURIComponent(wpp)}%0AProcedimento: ${encodeURIComponent(procedimento)}%0AProfissional: ${encodeURIComponent(profissional)}%0AData: ${encodeURIComponent(data)}%0AHorário: ${encodeURIComponent(hora)}${obs?'%0AObs: '+encodeURIComponent(obs):''}`;
     try{ notifyLocal('Agendamento enviado', `${procedimento} em ${data} às ${hora}`); }catch(e){}
     if(sent){
       alert('Agendamento enviado e registrado ✅\nVocê receberá a confirmação pelo studio.');
       if(studioTel) window.open(`https://wa.me/55${studioTel}?text=${msgStudio}`,'_blank','noopener,noreferrer');
+      try{ publicDataCache=publicDataCache||pd; publicDataCache.busySlots=Array.isArray(publicDataCache.busySlots)?publicDataCache.busySlots:[]; publicDataCache.busySlots.push({data,hora,status:'Agendado',cliente:nome}); }catch(e){}
       renderPublicV83();
     }else if(studioTel){
       alert('Não consegui gravar direto no banco. Vou abrir o WhatsApp para enviar o pedido ao studio.');
@@ -10712,7 +10723,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       }
       const c=findClient(req.cliente, req.wpp);
       if(!c) state.clientes.push({id:'cli_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),nome:req.cliente||'Cliente',wpp:req.wpp||'',tel:req.wpp||'',obs:'Criada pelo autoagendamento',fotos:[]});
-      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',data:req.data,hora:req.hora,status:'Confirmado',valor:Number(req.valor||0)||0,recebido:0,obs:req.obs||'',origem:'autoagendamento',publicRequestId:req.id,criadoEm:req.criadoEm||new Date().toISOString()});
+      state.agenda.push({id:'ag_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6),cliente:req.cliente||'Cliente',wpp:req.wpp||'',procedimento:req.procedimento||'Procedimento',profissional:req.profissional||'Profissional principal',data:req.data,hora:req.hora,status:'Agendado',valor:Number(req.valor||0)||0,recebido:0,obs:(req.obs?req.obs+'\n':'')+'Autoagendamento: cliente confirmou pelo link. Aguardando confirmação da profissional.',origem:'autoagendamento',publicRequestId:req.id,statusCliente:req.statusCliente||'confirmado',statusProfissional:'pendente',criadoEm:req.criadoEm||new Date().toISOString()});
       state.autoagendamentoPedidosProcessados.push(req.id);
       await saveAll('autoagendamento-recebido');
       try{ if(typeof renderAgendaHard==='function') renderAgendaHard(); if(typeof renderCalendar==='function') renderCalendar(); if(typeof renderClientes==='function') renderClientes(); if(typeof renderDashboard==='function') renderDashboard(); }catch(e){}
