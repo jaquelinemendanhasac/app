@@ -11144,7 +11144,7 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
 
 /* =========================================================
-   v86 base v80 — Correção real da rota pública de autoagendamento
+   v87 base v80 — Correção real da rota pública de autoagendamento
    - #agendar/slug não cai mais na trava de Plano Premium
    - link sem sid usa o slug público do studio
    - mantém app principal intacto

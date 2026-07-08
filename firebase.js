@@ -60,8 +60,43 @@ if (__SJM_FORCE_LOGOUT_V56) {
 
 try { await enableIndexedDbPersistence(db); } catch {}
 
+const SJM_CANONICAL_STUDIO_ID = "studio-jaqueline-mendanha";
+
 function globalDoc(user) {
+  // Base única do Studio: todos os logins autorizados leem e gravam no mesmo lugar.
+  return doc(db, "studio", SJM_CANONICAL_STUDIO_ID, "state", "globalState");
+}
+function legacyUserGlobalDoc(user) {
   return doc(db, "studio", user.uid, "state", "globalState");
+}
+function legacyTopGlobalDoc() {
+  return doc(db, "studio", "globalState");
+}
+function stateScoreForSync(s) {
+  try {
+    if (!s || typeof s !== "object") return -1;
+    return (Array.isArray(s.agenda) ? s.agenda.length * 4 : 0)
+      + (Array.isArray(s.clientes) ? s.clientes.length * 3 : 0)
+      + (Array.isArray(s.atendimentos) ? s.atendimentos.length * 4 : 0)
+      + (Array.isArray(s.procedimentos) ? s.procedimentos.length : 0)
+      + (Array.isArray(s.materiais) ? s.materiais.length : 0)
+      + (Array.isArray(s.despesas) ? s.despesas.length : 0)
+      + (Array.isArray(s.receitasExtras) ? s.receitasExtras.length : 0);
+  } catch { return -1; }
+}
+function stateTimeForSync(s) {
+  try { return Number(s?.meta?.updatedAt || 0); } catch { return 0; }
+}
+function chooseBestSyncState(list) {
+  let best = null, bestScore = -1, bestTime = -1;
+  for (const item of list) {
+    const st = item?.state || item;
+    if (!st || typeof st !== "object") continue;
+    const sc = stateScoreForSync(st);
+    const tm = stateTimeForSync(st);
+    if (sc > bestScore || (sc === bestScore && tm > bestTime)) { best = st; bestScore = sc; bestTime = tm; }
+  }
+  return best;
 }
 function studioPublicDoc(uid) {
   return doc(db, "studio", uid, "public", "autoagendamento");
@@ -266,17 +301,39 @@ async function push(state, user = auth.currentUser) {
 
 function subscribe(user) {
   try { unsubscribeSnapshot?.(); } catch {}
-  unsubscribeSnapshot = onSnapshot(globalDoc(user), (snap) => {
+  unsubscribeSnapshot = onSnapshot(globalDoc(user), async (snap) => {
     ready = true;
-    if (!snap.exists()) {
-      const local = window.__SJM_GET_STATE?.();
-      if (local) push(local, user);
+
+    let remote = null;
+    if (snap.exists()) remote = (snap.data() || {}).state || null;
+
+    // Migração segura: se a base oficial ainda não tem dados, procura bases antigas.
+    if (!remote) {
+      const candidates = [];
+      try {
+        const oldUser = await getDoc(legacyUserGlobalDoc(user));
+        if (oldUser.exists()) candidates.push((oldUser.data() || {}).state);
+      } catch(e) { console.warn("migração uid antiga:", e); }
+      try {
+        const oldTop = await getDoc(legacyTopGlobalDoc());
+        if (oldTop.exists()) candidates.push((oldTop.data() || {}).state);
+      } catch(e) { console.warn("migração global antiga:", e); }
+      try {
+        const local = window.__SJM_GET_STATE?.();
+        if (local) candidates.push(local);
+      } catch(e) {}
+
+      const best = chooseBestSyncState(candidates);
+      if (best) {
+        applyingRemote = true;
+        try {
+          if (typeof window.__SJM_SET_STATE_FROM_CLOUD === "function") window.__SJM_SET_STATE_FROM_CLOUD(best);
+          else window.__SJM_PENDING_REMOTE_FROM_CLOUD = best;
+        } finally { applyingRemote = false; }
+        try { await push(best, user); } catch(e) { console.warn("publicação base migrada:", e); }
+      }
       return;
     }
-
-    const data = snap.data() || {};
-    const remote = data?.state;
-    if (!remote) return;
 
     const local = window.__SJM_GET_STATE?.();
     const localMeta = local?.meta || {};
@@ -306,17 +363,19 @@ function subscribe(user) {
   });
 }
 
-
 window.__SJM_FIREBASE_AUTH_READY = () => !!auth.currentUser;
 window.__SJM_PUBLISH_PUBLIC_AUTOAGENDAMENTO = async (publicData) => {
   const user = auth.currentUser;
   if (!user || user.isAnonymous) throw new Error("Studio não autenticado para publicar autoagendamento.");
+  const slug = String(publicData?.autoagendamento?.slug || publicData?.slug || "").trim();
   const payload = Object.assign({}, publicData || {}, {
     ownerUid: user.uid,
+    publicSlug: slug || null,
     updatedAt: Date.now(),
-    version: "v83-autoagendamento-completo"
+    version: "v85-autoagendamento-publico-real"
   });
   await setDoc(studioPublicDoc(user.uid), payload, { merge: true });
+  if (slug) await setDoc(studioPublicDoc(slug), payload, { merge: true });
   return payload;
 };
 window.__SJM_LOAD_PUBLIC_AUTOAGENDAMENTO = async (ownerUid) => {
@@ -339,7 +398,8 @@ window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST = async (ownerUid, request) => {
     id,
     statusPedido: "novo",
     createdAt: Date.now(),
-    source: "autoagendamento-publico"
+    source: "autoagendamento-publico",
+    ownerKey: uid
   });
   await setDoc(bookingRequestDoc(uid, id), payload, { merge: true });
   return payload;
@@ -347,25 +407,45 @@ window.__SJM_CREATE_PUBLIC_BOOKING_REQUEST = async (ownerUid, request) => {
 window.__SJM_MARK_PUBLIC_BOOKING_REQUEST = async (requestId, data) => {
   const user = auth.currentUser;
   if (!user || user.isAnonymous || !requestId) return;
-  await setDoc(bookingRequestDoc(user.uid, requestId), Object.assign({}, data || {}, { processedAt: Date.now() }), { merge: true });
+  const payload = Object.assign({}, data || {}, { processedAt: Date.now() });
+  await setDoc(bookingRequestDoc(user.uid, requestId), payload, { merge: true });
+  const key = String(data?.sourceStudioKey || data?.ownerKey || "").trim();
+  if (key && key !== user.uid) await setDoc(bookingRequestDoc(key, requestId), payload, { merge: true });
 };
 
-let unsubscribeBookingRequests = null;
-function subscribeBookingRequests(user){
-  try { unsubscribeBookingRequests?.(); } catch(e) {}
-  if(!user || user.isAnonymous) return;
+let unsubscribeBookingRequests = [];
+function currentPublicSlugForStudio(){
+  try {
+    const s = window.__SJM_GET_STATE?.();
+    const raw = s?.autoagendamento?.slug || s?.settings?.studioNome || "";
+    return String(raw || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+  } catch(e) { return ""; }
+}
+function subscribeOneBookingKey(key){
+  if(!key) return;
   try{
-    unsubscribeBookingRequests = onSnapshot(collection(db, "studio", user.uid, "bookingRequests"), (snap)=>{
+    const unsub = onSnapshot(collection(db, "studio", key, "bookingRequests"), (snap)=>{
       snap.docChanges().forEach((ch)=>{
         if(ch.type !== "added" && ch.type !== "modified") return;
-        const data = ch.doc.data() || {};
+        const data = Object.assign({ __sourceStudioKey: key }, ch.doc.data() || {});
         if(data.statusPedido && data.statusPedido !== "novo") return;
         if(typeof window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST === "function"){
           try { window.__SJM_HANDLE_PUBLIC_BOOKING_REQUEST(Object.assign({id: ch.doc.id}, data)); } catch(e){ console.warn("pedido autoagendamento:", e); }
         }
       });
     });
-  }catch(e){ console.warn("listener autoagendamento:", e); }
+    unsubscribeBookingRequests.push(unsub);
+  }catch(e){ console.warn("listener autoagendamento:", key, e); }
+}
+function subscribeBookingRequests(user){
+  try { unsubscribeBookingRequests.forEach(fn=>{try{fn();}catch(e){}}); } catch(e) {}
+  unsubscribeBookingRequests = [];
+  if(!user || user.isAnonymous) return;
+  subscribeOneBookingKey(user.uid);
+  setTimeout(()=>{
+    const slug = currentPublicSlugForStudio();
+    if(slug && slug !== user.uid) subscribeOneBookingKey(slug);
+  }, 1400);
 }
 
 onAuthStateChanged(auth, async (user) => {
@@ -424,8 +504,9 @@ onAuthStateChanged(auth, async (user) => {
         local.settings.plano = pending.plano || "basic";
         window.__SJM_SET_STATE_FROM_CLOUD?.(local);
         window.__SJM_PENDING_SIGNUP = null;
+        // Só faz push inicial automático para cadastro novo. Login existente aguarda o snapshot da nuvem.
+        push(local, user);
       }
-      if (local) push(local, user);
-    } catch (e) { console.warn("push inicial:", e); }
+    } catch (e) { console.warn("push inicial cadastro:", e); }
   }, 900);
 });
