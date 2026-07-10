@@ -19,7 +19,6 @@ body{
   color:var(--txt);
 }
 
-/* HEADER */
 .topbar{
   display:flex;
   align-items:center;
@@ -37,7 +36,6 @@ body{
 
 .brandRow{ display:flex; align-items:center; gap:12px; }
 
-/* ✅ LOGO: aparece por padrão, esconde só quando tiver isHidden */
 .logo{
   width:44px;
   height:44px;
@@ -54,7 +52,6 @@ body{
 
 .topbar__right{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-/* TABS */
 .tabs{
   display:flex;
   gap:8px;
@@ -152,7 +149,6 @@ body{
 .field{ display:flex; flex-direction:column; gap:6px; min-width:240px; }
 .field span{ font-weight:1000; font-size:12px; color:#3b2b5f; }
 
-/* ✅ inputs normais brancos */
 input, select, textarea{
   border:1px solid var(--line);
   border-radius:12px;
@@ -164,7 +160,6 @@ input, select, textarea{
 }
 textarea{ resize:vertical; }
 
-/* TABELAS */
 .tableWrap{
   background:#fff;
   border:1px solid var(--line);
@@ -193,7 +188,6 @@ textarea{ resize:vertical; }
   vertical-align:top;
 }
 
-/* ✅ inputs de tabela (mini) */
 .mini{
   width:100%;
   min-width:120px;
@@ -243,7 +237,6 @@ pre{
   border:1px solid #eee;
 }
 
-/* DASHBOARD logo */
 .dashHead{
   display:flex;
   justify-content:space-between;
@@ -260,7 +253,6 @@ pre{
 }
 .dashLogo.isHidden{ display:none; }
 
-/* Dock do Backup */
 .backupDock{
   display:none;
   position:fixed;
@@ -274,14 +266,12 @@ pre{
 }
 .backupDock .btn{ width:auto; }
 
-/* DESKTOP */
 @media (min-width: 900px){
   .grid2{ grid-template-columns:1fr 1fr; }
   .card{ grid-column:span 3; }
   .wrap{ padding:18px; }
 }
 
-/* MOBILE */
 @media (max-width: 768px){
   .topbar{
     flex-direction:column;
@@ -358,9 +348,6 @@ pre{
   .backupDock .btn{ width:100%; }
 }
 
-/* =========================================================
-   ✅ CALENDÁRIO V2 — limpo, sem nomes dentro dos dias
-   ========================================================= */
 .calTop{
   display:flex;
   align-items:center;
@@ -619,23 +606,16 @@ pre{
   .calCount,.calMoney,.calConflict{ font-size:9px; min-width:17px; height:17px; }
 }
 
-/* =========================================================
-   ✅ DIFERENÇA VISUAL: Agenda x Atendimentos
-   ========================================================= */
 #tblAgenda thead th{ background:linear-gradient(90deg, var(--p), #5a189a); }
 #tblAtend thead th{ background:linear-gradient(90deg, var(--a), var(--p)); }
 #tblProc thead th{ background:linear-gradient(90deg, #2B2D42, #1f2230); }
 
-/* Botões rápidos do calendário: não estourar o card */
 #calDayList .actions{ margin:6px 0 0; }
 #calDayList .actions .btn{ width:auto; }
 @media (max-width:768px){
   #calDayList .actions .btn{ width:100%; }
 }
 
-/* =========================================================
-   ✅ CRM Remarketing
-   ========================================================= */
 #tblCrm thead th{
   background:linear-gradient(90deg, #2B2D42, var(--p));
 }
@@ -686,15 +666,13 @@ pre{
   gap:10px;
   margin-bottom:8px;
 }
-/* ✅ FIX: ID correto da tabela CRM */
+
 #tblCRM thead th{
   background:linear-gradient(90deg, #2B2D42, var(--p));
 }
 
-/* ✅ melhora estabilidade do hover do calendário */
 .calDay{ will-change: transform; }
 
-/* SAAS / PLANOS */
 .planBadge{
   display:inline-flex;
   margin-top:4px;
@@ -729,7 +707,6 @@ pre{
   text-align:center;
 }
 
-/* PREMIUM: planos e fotos */
 .planBadge{
   display:inline-block;
   margin-top:5px;
@@ -810,10 +787,6 @@ pre{
   font-weight:900;
 }
 
-
-/* =========================================================
-   ✅ v23 Melhorias Premium / Dashboard / WhatsApp
-   ========================================================= */
 .smallValue{
   font-size:16px !important;
   line-height:1.2;
@@ -864,12 +837,9 @@ pre{
   .miniCards{ grid-template-columns:1fr; }
 }
 
-/* Exportação do Dashboard */
 .dashExportActions{ margin-top:6px; margin-bottom:14px; }
 .dashExportActions .btn{ min-width:160px; }
 
-
-/* v31: bloqueia todo o sistema até login autorizado */
 body.auth-locked .tabs,
 body.auth-locked .wrap,
 body.auth-locked .footer{ display:none !important; }
@@ -882,7 +852,6 @@ body.auth-locked::after{
   font-weight:900;
 }
 
-/* ✅ v32: bloqueia o sistema antes do login */
 .authGate{
   display:none;
   max-width:520px;
@@ -900,10 +869,6 @@ body.auth-locked .tabs,
 body.auth-locked .wrap,
 body.auth-locked .footer{ display:none !important; }
 
-
-/* =========================================================
-   ✅ v33 Planos + Desenvolvedor
-   ========================================================= */
 .planBadge{
   display:inline-block;
   margin-top:6px;
@@ -981,10 +946,6 @@ body.auth-locked .footer{ display:none !important; }
 .thumbProc{ display:none !important; }
 @media (max-width:768px){ .planCards{ grid-template-columns:1fr; } }
 
-
-/* =========================================================
-   v34 - Login/Cadastro/Recuperar senha e Desenvolvedor protegido
-   ========================================================= */
 .authBox{ display:none; padding:18px; max-width:520px; margin:28px auto; }
 body.auth-locked .authBox{ display:block; }
 body.auth-locked .authGate{ display:none !important; }
@@ -1002,8 +963,6 @@ body:not(.auth-locked) .authBox{ display:none !important; }
 .devAccessBox{ margin-top:12px; }
 .planDevNotice{ padding:10px 12px; border-radius:14px; background:#eef6ff; border:1px solid #cfe8ff; font-weight:900; }
 
-
-/* ===== v39: suporte e rodapé limpo ===== */
 .supportTopBtn{background:#fff;color:var(--txt);border:1px solid rgba(255,255,255,.65);}
 .supportModal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:260;display:flex;align-items:center;justify-content:center;padding:16px;}
 .supportModal[hidden]{display:none;}
@@ -1015,9 +974,6 @@ body:not(.auth-locked) .authBox{ display:none !important; }
 .footer #syncInfo{display:none!important;}
 @media (min-width:700px){.supportGrid{grid-template-columns:1fr 1fr 1fr;}}
 
-/* =========================================================
-   Studio Sync Pro v41 — módulos 2.0 e 2.5
-   ========================================================= */
 .simpleList{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .simpleItem{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px;font-weight:800;box-shadow:0 3px 10px rgba(16,24,40,.04)}
 .photoGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:12px}
@@ -1030,7 +986,6 @@ body:not(.auth-locked) .authBox{ display:none !important; }
 .dashExportActions{margin-top:0}
 @media(max-width:768px){.photoGrid{grid-template-columns:1fr}.simpleItem{font-size:13px}}
 
-/* v43 — Dashboard como central financeira */
 .dashboardQuick,
 .dashboardLists,
 .dashboardFinanceBox{ margin-top:16px; }
@@ -1045,12 +1000,10 @@ body:not(.auth-locked) .authBox{ display:none !important; }
 .simpleList .simpleItem{ margin-bottom:8px; }
 @media(max-width:760px){ .quickStats{ grid-template-columns:1fr; } }
 
-/* v46 */
 .inputWarn{border:1px solid #f59e0b!important;background:#fff7ed!important;}
 .panel[data-route="relatorios"], .tab[data-tab="relatorios"]{display:none!important;}
 #cfgCorPrimaria,#cfgCorAcento{display:none!important;}
 
-/* v54 user area */
 .userTopBtn{margin-left:8px}
 .userModalOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:18px}
 .userModal{width:min(760px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 24px 80px rgba(0,0,0,.25);padding:22px}
@@ -1065,21 +1018,16 @@ body:not(.auth-locked) .authBox{ display:none !important; }
 .userChangeList{font-size:13px;color:#475569;line-height:1.5}
 @media(max-width:720px){.userGrid{grid-template-columns:1fr}.userModal{padding:16px}}
 
-/* v55 compact folders */
 .clientFolderGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
 .compactFolder{padding:10px;border:1px solid rgba(15,23,42,.08);border-radius:14px;background:#fff}
 .compactFolder summary{cursor:pointer;font-weight:700;list-style:none}
 .compactFolder summary::-webkit-details-marker{display:none}
 .dangerText{color:#b91c1c;font-weight:700}
 
-/* v56 dev no lag */
 body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{display:none!important}
 
-/* v63 fix: mostrar seletores de cores na Config */
 #cfgCorPrimaria,#cfgCorAcento{display:inline-block!important;width:80px!important;height:42px!important;padding:4px!important;border-radius:10px!important;}
 
-
-/* ===== Dev Master Final ===== */
 .devMasterShell{display:grid;gap:14px}
 .devMasterNav{display:flex;gap:8px;flex-wrap:wrap;background:rgba(255,255,255,.7);border:1px solid rgba(20,20,40,.08);border-radius:18px;padding:10px;position:sticky;top:8px;z-index:3}
 .devMasterNav button{border:0;border-radius:999px;padding:10px 14px;font-weight:800;background:#fff;box-shadow:0 6px 16px rgba(0,0,0,.05);cursor:pointer}
@@ -1105,16 +1053,11 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .devPill{display:inline-block;border-radius:999px;padding:4px 9px;background:#f4e7f7;font-size:12px;font-weight:800}
 @media(max-width:900px){.devGrid2,.devGrid3,.devGrid4{grid-template-columns:1fr}.devTable table{min-width:760px}.devSwitches{grid-template-columns:1fr}}
 
-
-/* Correção final Dev */
 .tab[data-tab="desenvolvedor"].devForceShow{display:inline-flex!important}
 .devMasterNav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .devMasterNav button{border:0;border-radius:999px;padding:10px 14px;font-weight:800;background:#fff;box-shadow:0 6px 16px rgba(0,0,0,.06);cursor:pointer}
 .devMasterNav button.active{background:linear-gradient(90deg,var(--primary,#7B2CBF),var(--accent,#F72585));color:#fff}
 
-/* =========================================================
-   DEV PRO — central profissional de desenvolvimento e controle
-   ========================================================= */
 .devProRoot .devHero{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
 .devProRoot .devHero__title h2{margin:0 0 6px;font-size:28px}
 .devProRoot .devHero__title p{margin:0;color:var(--muted)}
@@ -1146,13 +1089,8 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 @media(max-width:900px){.devProRoot .devKpis{grid-template-columns:repeat(2,minmax(0,1fr))}.devProRoot .devSplit,.devProRoot .devThree{grid-template-columns:1fr}}
 @media(max-width:560px){.devProRoot .devKpis{grid-template-columns:1fr}.devProRoot .devHero__title h2{font-size:23px}}
 
-/* v71 Dev Master */
 .devMaster{max-width:1280px;margin:0 auto}.devLayout{display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:start}.devSide{position:sticky;top:12px;display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.7);border:1px solid rgba(17,24,39,.08);border-radius:22px;padding:12px}.devSideBtn{border:0;border-radius:14px;background:transparent;text-align:left;padding:11px 12px;font-weight:800;color:#374151;cursor:pointer}.devSideBtn.active,.devSideBtn:hover{background:linear-gradient(135deg,var(--primary,#7b2cbf),var(--accent,#f72585));color:white}.devMain{min-width:0}.devGrid,.devSplit{display:grid;grid-template-columns:1fr 1fr;gap:14px}.devThree{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.devKpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}.devKpi{background:white;border:1px solid rgba(17,24,39,.08);border-radius:18px;padding:14px;box-shadow:0 10px 25px rgba(15,23,42,.05)}.devKpi span{display:block;font-size:12px;color:#6b7280;font-weight:800}.devKpi b{font-size:22px}.devToolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.devInput,.devSelect,.devTextarea{width:100%;border:1px solid #e5e7eb;border-radius:12px;padding:10px;background:white;font-weight:700}.devTextarea{min-height:90px}.devTableWrap{overflow:auto}.devTable{width:100%;border-collapse:separate;border-spacing:0}.devTable th{background:#1f2937;color:white;padding:10px;text-align:left;white-space:nowrap}.devTable td{border-bottom:1px solid #edf0f4;padding:8px;vertical-align:top}.devBadge{display:inline-block;border-radius:999px;padding:4px 9px;background:#eef2ff;font-weight:900;font-size:12px}.devBadge.ok{background:#dcfce7;color:#166534}.devBadge.warn{background:#fef3c7;color:#92400e}.devBadge.danger{background:#fee2e2;color:#991b1b}.devLogCard,.devTicketCard,.devReleaseCard,.devNotice{background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;padding:12px;margin:8px 0}.devSmall{font-size:12px;color:#6b7280;font-weight:800}.devStatusPill{background:white;border:1px solid rgba(17,24,39,.08);border-radius:999px;padding:9px 12px;font-weight:900}.devDot{display:inline-block;width:10px;height:10px;border-radius:99px;background:#22c55e;margin-right:6px}.devDot.warn{background:#f59e0b}@media(max-width:900px){.devLayout,.devGrid,.devSplit,.devThree{grid-template-columns:1fr}.devSide{position:static;display:grid;grid-template-columns:repeat(2,1fr)}}
 
-
-/* =========================================================
-   Studio Sync Pro v72 - correções finais UI / Dev / Fidelidade
-   ========================================================= */
 .hiddenHard{display:none!important}
 .sjmStatusPill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.06);font-weight:800}
 .sjmDevGrid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:12px;margin:12px 0}
@@ -1176,7 +1114,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .sjmAutoDisabledBox{background:#fff3f3;border:1px solid #f1b5b5;border-radius:16px;padding:14px;font-weight:800;color:#8a1f1f}
 @media(max-width:900px){.sjmDevGrid,.sjmDevGrid3{grid-template-columns:1fr}.sjmMiniTable{font-size:12px}}
 
-/* v64 — Explorador de fotos das clientes */
 .photoExplorer{border:1px solid rgba(15,23,42,.08);border-radius:18px;background:#fff;overflow:hidden}
 .photoExplorerTop{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid rgba(15,23,42,.08);background:#fafafa}
 .photoSearch{width:100%;max-width:420px;border:1px solid rgba(15,23,42,.12);border-radius:14px;padding:12px 14px;font-weight:700;background:#fff}
@@ -1195,7 +1132,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .photoGridLarge .photoCard{text-decoration:none;color:inherit;display:block}
 @media(max-width:800px){.photoExplorerBody{grid-template-columns:1fr}.photoClientList{border-right:0;border-bottom:1px solid rgba(15,23,42,.08);max-height:260px}.photoExplorerTop{align-items:flex-start;flex-direction:column}.photoSearch{max-width:none}}
 
-/* v52 — Clientes cadastradas compacto */
 .clientesCompactPanel{margin-top:12px;}
 .clientesCompactTop{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .clientesCompactTop h3{margin:0 0 4px;}
@@ -1223,7 +1159,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 .iconBtn.danger{color:#b91c1c;background:#fee2e2;border-color:#fecaca;}
 @media(max-width:760px){.clientesCompactLayout{grid-template-columns:1fr}.clientesCompactList{max-height:260px}.clienteFichaGrid{grid-template-columns:1fr}.clienteFichaActions,.clienteFichaHead{flex-direction:column;align-items:stretch}}
 
-/* Agenda compacta em duas colunas */
 .agendaCompact{
   display:grid;
   grid-template-columns:minmax(260px, 32%) 1fr;
@@ -1273,7 +1208,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
   .agendaCompact__filterRow{ grid-template-columns:1fr; }
 }
 
-/* Ajustes solicitados — Agenda igual Clientes + Config compacta */
 .logoActions{
   display:flex;
   flex-direction:column;
@@ -1334,7 +1268,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
   .agendaTopActions .btn{ width:100%; min-width:0; }
 }
 
-/* ===== Correção: Clientes no mesmo padrão da Agenda + cores compactas fáceis ===== */
 .clienteTopActions{margin-bottom:14px;}
 .clienteCompact{margin-top:10px;}
 .clienteCompact[hidden]{display:none!important;}
@@ -1362,8 +1295,6 @@ body.auth-locked .tabs, body.auth-locked main, body.auth-locked #btnUserArea{dis
 #cfgCorPrimaria,#cfgCorAcento{display:block!important;width:76px!important;height:48px!important;border:0!important;padding:0!important;border-radius:14px!important;background:transparent!important;}
 #cfgCorPrimariaHex,#cfgCorAcentoHex{flex:1;border:1px solid #e5e7eb;border-radius:14px;padding:13px 14px;font-weight:900;font-size:16px;text-transform:uppercase;}
 
-
-/* ===== Polimento premium v2 — cabeçalho compacto, botões e configurações ===== */
 .topbar{padding:10px 14px;gap:10px;}
 .logo{width:38px;height:38px;border-radius:12px;}
 .brand__title{font-size:16px;line-height:1.1;}
@@ -1401,7 +1332,6 @@ button[id*="Cancel"],button[id*="Cancelar"]{background:#fff;color:#374151;border
   .planSummary__renew{text-align:left;}
 }
 
-/* ===== WhatsApp templates recolhidos por seta ===== */
 .wppTemplateAccordions{ display:flex; flex-direction:column; gap:10px; }
 .wppTplItem{ border:1px solid var(--line); border-radius:18px; background:#fff; overflow:hidden; }
 .wppTplItem summary{ cursor:pointer; list-style:none; padding:14px 16px; font-weight:1000; color:var(--txt); display:flex; align-items:center; justify-content:space-between; }
@@ -1411,7 +1341,6 @@ button[id*="Cancel"],button[id*="Cancelar"]{background:#fff;color:#374151;border
 .wppTplItem .field{ padding:0 14px 14px; }
 .wppTplItem textarea{ min-height:130px; resize:vertical; }
 
-/* v82 base v80 — Autoagendamento público funcional */
 body.sjm-public-booking .tabs,
 body.sjm-public-booking .wrap,
 body.sjm-public-booking .footer,
@@ -1437,8 +1366,6 @@ body.sjm-public-booking .sjmPublicBooking{display:block!important;}
 .googleBtn::before{content:"G";display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;margin-right:8px;font-weight:900;color:#4285f4;background:#fff}
 .authDivider{display:flex;align-items:center;gap:10px;margin:8px 0 10px;color:#6b7280;font-size:12px}.authDivider:before,.authDivider:after{content:"";height:1px;background:rgba(17,24,39,.14);flex:1}
 
-
-/* v93 autoagendamento público com calendário real */
 .sjmPubWide{max-width:860px}
 .sjmPubTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 14px}
 .sjmPubTop strong{font-size:22px;color:#242436;text-align:center}

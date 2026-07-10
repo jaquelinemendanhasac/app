@@ -1,8 +1,18 @@
-Studio Sync Pro v93
+STUDIO SYNC PRO v100 — BASE LIMPA
 
-Correção aplicada sobre a v92.
-- Autoagendamento público abre calendário real.
-- Mostra apenas horários livres conforme a agenda publicada.
-- Horário escolhido fica bloqueado no link.
-- Pedido entra na agenda como Agendado e fica aguardando Confirmação da profissional.
-- Sem duplicar arquivos nem criar versões remendadas.
+Base originada do aplicativo funcional enviado pelo usuário.
+
+Limpeza aplicada:
+- preservação de todas as funcionalidades existentes;
+- remoção de uma definição duplicada de bindDashboardExportButtons que era substituída pela definição seguinte;
+- atualização da identificação interna e do cache para v100;
+- nenhum módulo funcional foi removido.
+
+IMPORTANTE:
+Os blocos de compatibilidade e correções acumuladas foram mantidos quando não havia prova estática suficiente de que eram inativos. A próxima etapa deve consolidá-los por módulo, acompanhada de testes de regressão.
+
+LIMPEZA TÉCNICA 2
+- Removidos comentários históricos e marcações de patches antigos.
+- Removidos espaços e linhas vazias excedentes.
+- Nenhuma função, tela, regra de negócio ou integração foi removida.
+- Chaves de compatibilidade e migração antigas foram mantidas para preservar dados existentes.

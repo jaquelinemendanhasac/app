@@ -1,32 +1,15 @@
-/* Studio Jaqueline Mendanha — Gestão Completa (SYNC PRO / FIXED v17)
-  - Blindado contra tela branca (elementos ausentes não quebram)
-  - Sincronização total (derived + UI)
-  - Regra do estúdio: Realizado => Recebido = preço do procedimento (sempre)
-  - Agenda cria/remove Atendimentos automaticamente
-  - Status "Bloqueio" (Folga/Compromisso) não cria atendimento e não tem valor
-  - Clientes: N° do molde (substitui Saúde/Medicamentos)
-  - ✅ FIX: não perder foco ao digitar (anti-eco do Firebase + remoto pendente)
-*/
 
-const APP_BUILD = "Studio Sync Pro — v95 duração procedimentos persistente";
+const APP_BUILD = "Studio Sync Pro — v100 base limpa";
 window.__SJM_APP_LOADED = true;
 
-// ✅ Dashboard: escolha como calcular despesas no "Lucro Líquido" do mês
-// "ALL"  => despesas de TODOS os meses
-// "MONTH"=> despesas SOMENTE do mês atual (versão alternativa)
 const DASH_LUCRO_DESPESAS_SCOPE = "ALL";
 
-
-// =======================================================
-// ✅ SJM: DIGITAÇÃO SEM PERDER FOCO (evita re-render no input)
-// =======================================================
 window.__SJM_IS_EDITING = window.__SJM_IS_EDITING || false;
 
 function isTextField(el){
   return el && (el.tagName==="INPUT" || el.tagName==="TEXTAREA" || el.tagName==="SELECT");
 }
 
-// guarda foco/caret antes de render pesado
 function captureFocus(){
   const a = document.activeElement;
   if(!isTextField(a)) return null;
@@ -40,7 +23,6 @@ function captureFocus(){
   };
 }
 
-// restaura foco/caret depois do render
 function restoreFocus(s){
   if(!s) return;
 
@@ -57,13 +39,11 @@ function restoreFocus(s){
   }
 }
 
-// use ISSO quando precisar renderizar muito (tabelas)
 function safeRender(fn){
   const snap = captureFocus();
   try { fn(); } finally { restoreFocus(snap); }
 }
 
-// debounce de commit (pra não salvar a cada tecla)
 function debounce(fn, ms=250){
   let t = null;
   return (...args)=>{
@@ -75,9 +55,6 @@ function debounce(fn, ms=250){
 const saveSoftDebounced = debounce(()=> saveSoft(), 250);
 const scheduleSyncDebounced = debounce(()=> scheduleSync(), 350);
 
-// =======================================================
-// ✅ MODO DIGITANDO (evita sync mexer no input ativo)
-// =======================================================
 document.addEventListener("focusin", (e)=>{
   if(isTextField(e.target)) window.__SJM_IS_EDITING = true;
 }, true);
@@ -161,7 +138,6 @@ function applyPlanUI(){
   });
 }
 
-
 const PLAN_PRICES = {
   basic: "R$ 29,90/mês",
   pro: "R$ 59,90/mês",
@@ -236,7 +212,6 @@ function storageKeyForUser(user){
   return `${KEY}__user__${safeStorageId(id)}`;
 }
 
-/* =================== HELPERS SAFE =================== */
 const $ = (sel)=> document.querySelector(sel);
 const $$ = (sel)=> Array.from(document.querySelectorAll(sel));
 const byId = (id)=> document.getElementById(id);
@@ -264,16 +239,13 @@ function onInput(id, fn){
 
 const money = (n)=> (Number(n||0)).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 
-/* ✅ num() mais resistente (aceita 0,01 / 0.01 / 00001) */
 const num = (v)=> {
   if (v === null || v === undefined) return 0;
   const s = String(v).trim();
   if (!s) return 0;
 
-  // remove espaços
   let clean = s.replace(/\s+/g,"");
 
-  // se tiver vírgula, trata pt-BR: 1.234,56 -> 1234.56
   if (clean.includes(",")) clean = clean.replace(/\./g,"").replace(",", ".");
 
   const x = Number(clean);
@@ -282,9 +254,6 @@ const num = (v)=> {
 
 const uid = ()=> Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(2,6);
 
-/* =================== PROCEDIMENTOS ESPECIAIS DO SISTEMA =================== */
-/* Médico/Folga/Compromisso/Reunião ocupam horário, mas não entram em CRM,
-   faturamento, clientes atendidas, ticket médio, DRE nem estatísticas. */
 const SPECIAL_PROC_NAMES = ["MÉDICO", "MEDICO", "FOLGA", "COMPROMISSO", "REUNIÃO", "REUNIAO"];
 
 function normalizeProcName(nome){
@@ -322,7 +291,6 @@ function ensureSpecialProcedures(targetState = state){
   });
 }
 
-
 const todayISO = ()=> new Date().toISOString().slice(0,10);
 
 function fmtBRDate(iso){
@@ -336,10 +304,6 @@ function addDaysISO(iso, days){
   return d.toISOString().slice(0,10);
 }
 
-// =======================================================
-// ✅ SJM: ID do dispositivo + versão (evita "eco" do Firebase derrubar foco)
-// (NÃO usa uid() aqui pra não depender da ordem)
-// =======================================================
 function makeClientId(){
   return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(2,8);
 }
@@ -347,7 +311,6 @@ const CLIENT_ID_KEY = KEY + "_client_id";
 const CLIENT_ID = localStorage.getItem(CLIENT_ID_KEY) || makeClientId();
 localStorage.setItem(CLIENT_ID_KEY, CLIENT_ID);
 
-// guarda remoto pendente enquanto está digitando
 window.__SJM_PENDING_REMOTE = window.__SJM_PENDING_REMOTE || null;
 
 function ensureMeta(s){
@@ -365,7 +328,6 @@ function bumpRev(){
   state.meta.updatedAt = Date.now();
 }
 
-/* =================== STATE =================== */
 function defaultState(){
   return {
     meta: { clientId: CLIENT_ID, rev: 0, updatedAt: Date.now() },
@@ -429,7 +391,6 @@ Total recebido: {total}`
     receitasExtras: [],
     wppQueue: [],
 
-    // ✅ CRM / Remarketing
     crm: {
       tplRemarketing:
 `Oi {cliente}! 💜 Faz {dias} dias desde seu último atendimento no {studio}.
@@ -445,7 +406,6 @@ function sanitizeState(parsed){
   const base = defaultState();
   const s = { ...base, ...(parsed && typeof parsed === "object" ? parsed : {}) };
 
-  // ✅ garante meta
   s.meta = (s.meta && typeof s.meta === "object") ? s.meta : {};
   if(!s.meta.clientId) s.meta.clientId = CLIENT_ID;
   if(typeof s.meta.rev !== "number") s.meta.rev = 0;
@@ -499,7 +459,6 @@ function sanitizeState(parsed){
   s.wppQueue = arr(s.wppQueue);
   s.crmQueue = arr(s.crmQueue);
 
-  // migração: agenda
   s.agenda.forEach(a=>{
     if(a && typeof a==="object"){
       if(a.id === undefined) a.id = uid();
@@ -514,7 +473,6 @@ function sanitizeState(parsed){
     }
   });
 
-  // migração: clientes (remove saude/meds e usa molde)
   s.clientes.forEach(c=>{
     if(c && typeof c==="object"){
       if(c.id === undefined) c.id = uid();
@@ -525,7 +483,6 @@ function sanitizeState(parsed){
       if(c.alergia === undefined) c.alergia = "N";
       if(c.quais === undefined) c.quais = "";
       if(c.gestante === undefined) c.gestante = "N";
-      // ✅ novo campo
       if(c.molde === undefined){
         const oldSaude = (c.saude !== undefined) ? String(c.saude||"").trim() : "";
         const oldMeds  = (c.meds !== undefined) ? String(c.meds||"").trim() : "";
@@ -544,13 +501,11 @@ function sanitizeState(parsed){
         createdAt: typeof f.createdAt === "number" ? f.createdAt : Date.now()
       }));
 
-      // limpa campos antigos
       if(c.saude !== undefined) delete c.saude;
       if(c.meds !== undefined) delete c.meds;
     }
   });
 
-  // migração: atendimentos
   s.atendimentos.forEach(a=>{
     if(a && typeof a==="object"){
       if(a.id === undefined) a.id = uid();
@@ -565,7 +520,6 @@ function sanitizeState(parsed){
     }
   });
 
-  // migração: materiais
   s.materiais.forEach(m=>{
     if(m && typeof m==="object"){
       if(m.id === undefined) m.id = uid();
@@ -573,11 +527,6 @@ function sanitizeState(parsed){
       if(m.nome === undefined) m.nome = "";
       if(m.unidade === undefined) m.unidade = "ml";
 
-      // Novo modelo de cálculo:
-      // qtdPorUnidade = quantos ml/g/kg/un vem em cada embalagem/unidade comprada
-      // valorUnidade = quanto custou cada embalagem/unidade
-      // unidadesCompradas = quantas embalagens/unidades foram compradas
-      // qtdCliente = quanto usa em cada atendimento
       if(m.qtdPorUnidade === undefined) m.qtdPorUnidade = num(m.qtdTotal);
       if(m.valorUnidade === undefined) m.valorUnidade = num(m.valorCompra);
       if(m.unidadesCompradas === undefined) m.unidadesCompradas = (m.qtdComprada !== undefined) ? num(m.qtdComprada) : 1;
@@ -595,7 +544,6 @@ function sanitizeState(parsed){
     }
   });
 
-  // migração: despesas
   s.despesas.forEach(d=>{
     if(d && typeof d==="object"){
       if(d.id === undefined) d.id = uid();
@@ -606,7 +554,6 @@ function sanitizeState(parsed){
     }
   });
 
-  // migração: receitas extras
   s.receitasExtras.forEach(r=>{
     if(r && typeof r==="object"){
       if(r.id === undefined) r.id = uid();
@@ -663,9 +610,6 @@ function saveProcedureBackup(){
 }
 
 function load(){
-  // ✅ v66: carregamento compatível com versões antigas.
-  // Procura a base com mais dados em todas as chaves locais do Studio Sync Pro.
-  // Isso evita perder clientes/agenda/materiais ao trocar a pasta/versão antes do Firebase.
   function scoreLocalState(s){
     try{
       if(!s || typeof s !== "object") return -1;
@@ -799,8 +743,6 @@ window.__SJM_ON_AUTH_USER = (userInfo)=>{
       }
     }catch{}
 
-    // ✅ Correção v37: escolhe a base mais completa; se empatar, usa a mais recente.
-    // Isso preserva dados e também alterações simples, como horário do WhatsApp.
     let chosen = chooseBestState([userState, currentState, legacyState]);
     if(!chosen) chosen = defaultState();
 
@@ -808,7 +750,6 @@ window.__SJM_ON_AUTH_USER = (userInfo)=>{
     state = sanitizeState(chosen);
     ensureMeta(state);
 
-    // Salva também na chave do usuário e mantém uma cópia de segurança local.
     try{ localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state)); }catch{}
     try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch{}
 
@@ -825,14 +766,12 @@ window.__SJM_ON_AUTH_USER = (userInfo)=>{
 window.__SJM_GET_STATE = () => state;
 window.__SJM_CLOUD_READY = window.__SJM_CLOUD_READY || false;
 
-/* ✅ status de sync no rodapé */
 window.__SJM_SET_SYNC_STATUS = (msg)=>{
   const el = byId("syncInfo");
   if(el) el.textContent = msg;
 };
 window.__SJM_SET_SYNC_STATUS("Sync: aguardando…");
 
-/* =================== CLOUD SYNC (Firebase Bridge) =================== */
 let cloudTimer = null;
 function scheduleCloudPush(){
   if(typeof window.__SJM_PUSH_TO_CLOUD !== "function") return;
@@ -853,26 +792,22 @@ function scheduleCloudPush(){
 let __SJM_IS_SYNCING = false;
 
 function saveSoft(){
-  // ✅ alterações locais incrementam rev (evita eco do Firebase)
   if(!__SJM_IS_SYNCING){
     bumpRev();
   }
 
   try{
     localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-    // ✅ cópia de segurança local para não perder dados se o usuário/troca de login falhar
     localStorage.setItem(KEY, JSON.stringify(state));
   }catch(e){
     console.warn("localStorage cheio?", e);
   }
 
-  // ✅ evita spam de cloud durante sync automático (syncDerivedAndUI / apply remoto)
   if(!__SJM_IS_SYNCING){
     scheduleCloudPush();
   }
 }
 
-// ✅ aplica remoto de forma segura (anti-eco + sem derrubar foco)
 window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
   const incoming = sanitizeState(remoteState);
   ensureMeta(incoming);
@@ -883,8 +818,6 @@ window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
   const incomingTime = stateFreshness(incoming);
   const localTime = stateFreshness(state);
 
-  // Proteção do autoagendamento: logo após receber pedido público, não deixar
-  // um snapshot remoto antigo apagar o agendamento recém-inserido.
   try{
     const recentPublic = Date.now() - Number(window.__SJM_LAST_PUBLIC_BOOKING_AT||0) < 15000;
     if(recentPublic){
@@ -900,14 +833,12 @@ window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
     }
   }catch(e){}
 
-  // Proteção forte: remoto mais vazio ou mais antigo não apaga dados/configurações locais.
   if(incomingScore < localScore || (incomingScore === localScore && incomingTime < localTime)){
     window.__SJM_SET_SYNC_STATUS("Sync: remoto antigo ignorado ✅");
     scheduleCloudPush();
     return;
   }
 
-  // ignora eco do mesmo device quando não é mais novo
   if(incoming.meta.clientId === CLIENT_ID && incoming.meta.rev <= state.meta.rev){
     window.__SJM_SET_SYNC_STATUS("Sync: ok ✅");
     return;
@@ -923,7 +854,6 @@ window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
   __SJM_IS_SYNCING = true;
   try{
     localStorage.setItem(ACTIVE_STORAGE_KEY, JSON.stringify(state));
-    // ✅ cópia de segurança local para não perder dados se o usuário/troca de login falhar
     localStorage.setItem(KEY, JSON.stringify(state));
   }catch(e){
     console.warn("localStorage cheio?", e);
@@ -937,7 +867,6 @@ window.__SJM_APPLY_REMOTE_STATE = (remoteState) => {
 };
 
 window.__SJM_SET_STATE_FROM_CLOUD = (remoteState) => {
-  // se está digitando, segura o remoto pra não recriar a tabela e perder foco
   if(window.__SJM_IS_EDITING){
     window.__SJM_PENDING_REMOTE = remoteState;
     window.__SJM_SET_SYNC_STATUS("Sync: recebido (aguardando terminar) ⏳");
@@ -950,7 +879,6 @@ document.addEventListener("focusout", (e)=>{
   if(isTextField(e.target)){
     window.__SJM_IS_EDITING = false;
 
-    // ✅ se chegou atualização remota enquanto digitava, aplica agora
     if(window.__SJM_PENDING_REMOTE){
       const remote = window.__SJM_PENDING_REMOTE;
       window.__SJM_PENDING_REMOTE = null;
@@ -962,12 +890,10 @@ document.addEventListener("focusout", (e)=>{
   }
 }, true);
 
-/* =================== CONFIRM DELETE =================== */
 function confirmDel(label="este item"){
   return confirm(`Tem certeza que deseja excluir ${label}?`);
 }
 
-/* =================== THEME / HEADER =================== */
 function applyTheme(){
   const r = document.documentElement;
   r.style.setProperty("--p", state.settings.corPrimaria || "#7B2CBF");
@@ -1002,7 +928,6 @@ function applyTheme(){
 }
 applyTheme();
 
-/* =================== ROUTING =================== */
 (function initRouting(){
   const tabs = byId("tabs");
   if(!tabs) return;
@@ -1040,7 +965,6 @@ function setRoute(route){
   if(typeof window.__SJM_SET_ROUTE === "function") window.__SJM_SET_ROUTE(route);
 }
 
-/* =================== BACKUP =================== */
 onClick("btnExport", ()=>{
   const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -1053,9 +977,6 @@ onClick("btnExport", ()=>{
   URL.revokeObjectURL(url);
 });
 
-/* Importação de backup: fluxo único no patch LIMPEZA FINAL. */
-
-/* =================== DOM HELPERS (tables) =================== */
 function inputHTML({value="", type="text", cls="", readonly=false, options=null, step=null, inputmode=null}){
   const stepAttr = step ? ` step="${step}"` : "";
   const imAttr = inputmode ? ` inputmode="${inputmode}"` : "";
@@ -1068,7 +989,6 @@ function inputHTML({value="", type="text", cls="", readonly=false, options=null,
 function getCell(tr, idx){ return tr.querySelectorAll("td")[idx]; }
 function getInp(td){ return td ? td.querySelector("input,select") : null; }
 
-/* =================== DEBOUNCE SYNC =================== */
 let syncTimer = null;
 function scheduleSync(){
   if(syncTimer) clearTimeout(syncTimer);
@@ -1084,7 +1004,6 @@ function scheduleSync(){
   }, 220);
 }
 
-/* =================== CORE LOOKUPS =================== */
 function procPrice(nome, data=null){
   if(isSpecialProcedure(nome)) return 0;
   const p = state.procedimentos.find(x => x.nome === nome);
@@ -1115,13 +1034,11 @@ function clientWpp(name){
   return c?.wpp || c?.tel || "";
 }
 
-/* =================== DURAÇÃO PROCEDIMENTO =================== */
 function procDuracao(nome){
   const p = state.procedimentos.find(x => x.nome === nome);
   return p?.duracaoMin || 60;
 }
 
-/* =================== CONFLITO POR DURAÇÃO =================== */
 function isConflictByDuration(index){
   const a = state.agenda[index];
   if(!a?.data || !a?.hora) return false;
@@ -1156,10 +1073,8 @@ function isConflictByDuration(index){
   });
 }
 
-
 function updateConflictUI(){}
 
-/* =================== REGRA DO ESTÚDIO =================== */
 function enforceAgendaRecebidoRules(){
   state.agenda.forEach(ag=>{
     const status = (ag.status || "Agendado");
@@ -1185,7 +1100,6 @@ function enforceAgendaRecebidoRules(){
   });
 }
 
-/* =================== WHATSAPP =================== */
 function normalizePhoneBR(p){
   const d = String(p||"").replace(/\D/g,"");
   if(!d) return "";
@@ -1213,17 +1127,9 @@ async function copyToClipboardSafe(text){
   catch{ return false; }
 }
 
-/* =================== MATERIAIS =================== */
 function calcularMaterial(m){
-  // Modelo correto:
-  // Ex.: Gel com 15 ml por pote, R$70 por pote, 2 potes comprados,
-  // usa 2 ml por cliente.
-  // Custo por ml = 70 / 15 = 4,6667
-  // Custo por cliente = 4,6667 * 2 = 9,3334
-  // Total comprado = 15 * 2 = 30 ml
   if(!m || typeof m !== "object") return;
 
-  // Migração segura dos nomes antigos.
   if(m.qtdPorUnidade === undefined) m.qtdPorUnidade = (m.conteudoUnidade !== undefined) ? num(m.conteudoUnidade) : num(m.qtdTotal);
   if(m.valorUnidade === undefined) m.valorUnidade = num(m.valorCompra);
   if(m.unidadesCompradas === undefined) m.unidadesCompradas = (m.qtdComprada !== undefined) ? num(m.qtdComprada) : 1;
@@ -1248,7 +1154,6 @@ function custoMateriaisPorCliente(){
   }, 0);
 }
 
-/* =================== CRM (Atendimentos) — DERIVED =================== */
 function calcularAtendimento(a){
   if(isSpecialProcedure(a.procedimento)){
     a.valor = 0;
@@ -1264,7 +1169,6 @@ function calcularAtendimento(a){
   a.lucro = num(a.recebido) - num(a.custoTotal);
 }
 
-/* =================== AGENDA -> CRM (Atendimentos) =================== */
 function getAtendimentoByAgendaId(agendaId){
   return state.atendimentos.find(x => x.fromAgendaId === agendaId) || null;
 }
@@ -1327,7 +1231,6 @@ function syncAgendaToAtendimentos(){
   });
 }
 
-/* =================== DASH =================== */
 function monthKey(iso){
   if(!iso) return "";
   const [y,m] = iso.split("-");
@@ -1337,7 +1240,6 @@ function currentMonthKey(){
   return monthKey(todayISO());
 }
 
-// ✅ Resumo com opção de filtrar por mês e escolher escopo de despesas
 function calcResumo(opts = {}){
   const {
     onlyMonthKey = null,
@@ -1383,7 +1285,6 @@ function calcMonthlyRevenue(){
   return keys.map(k => ({ k, v: map.get(k) }));
 }
 
-/* ======= Charts (no libs) ======= */
 function drawBars(canvas, labels, values){
   if(!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -1449,7 +1350,6 @@ function drawLine(canvas, points){
   ctx.stroke();
 }
 
-/* =================== ✅ CALENDÁRIO (COM BOTÕES) =================== */
 let __CAL_CURSOR = new Date();
 let __CAL_SELECTED_ISO = todayISO();
 
@@ -1510,7 +1410,6 @@ function dayBadges(iso){
   return { totalAg, totalRec };
 }
 
-// ✅ helper para criar "Novo agendamento" no dia selecionado
 function calNewAtSelectedDay(){
   const iso = __CAL_SELECTED_ISO || todayISO();
   const firstProc = state.procedimentos.find(p=>p.nome && !p.especial)?.nome || state.procedimentos.find(p=>p.nome)?.nome || "Compromisso";
@@ -1640,7 +1539,6 @@ function renderCalendarDay(){
 
     const isBlock = (st==="Bloqueio");
 
-    // ✅ botões: Realizado / Cancelado / Editar (Agenda)
     const buttons = isBlock ? `` : `
       <div class="actions" style="margin-top:8px; gap:8px;">
         <button class="btn btn--ghost" data-cal-act="done" data-id="${a.id}">Realizado</button>
@@ -1662,7 +1560,6 @@ function renderCalendarDay(){
     `;
   }).join("");
 
-  // ✅ binds dos botões do dia
   box.querySelectorAll('[data-cal-act]').forEach((btn)=>{
     btn.addEventListener('click', ()=>{
       const act = btn.getAttribute('data-cal-act');
@@ -1717,8 +1614,6 @@ function updateCalendarAuto(){
   renderCalendar();
 }
 
-
-// ✅ Calendário: ao clicar em Realizado, abre câmera/galeria, salva foto e abre WhatsApp
 function handleCalendarRealizadoComFoto(ag){
   if(!ag) return;
 
@@ -1800,7 +1695,6 @@ function handleCalendarRealizadoComFoto(ag){
   input.click();
 }
 
-/* =================== SYNC ENGINE =================== */
 function syncDerivedAndUI(){
   ensureSpecialProcedures();
   __SJM_IS_SYNCING = true;
@@ -1823,9 +1717,7 @@ function syncDerivedAndUI(){
   }
 }
 
-/* =================== RENDER HARD =================== */
 function renderAllHard(){
-  // ✅ mantém foco/caret mesmo se renderizar muita coisa
   safeRender(()=>{
     renderProcedimentos();
     renderClientes();
@@ -1848,7 +1740,6 @@ function renderAllHard(){
   });
 }
 
-/* =================== AGENDA =================== */
 function getAgendaTbody(){ return $("#tblAgenda tbody"); }
 function getAgendaNotice(){ return byId("agendaNotice"); }
 
@@ -1913,8 +1804,6 @@ function isConflict(i){
   });
 }
 
-
-
 function escAttr(v){
   return String(v ?? "")
     .replaceAll("&","&amp;")
@@ -1944,8 +1833,6 @@ function agendaClienteInputHTML(valor=""){
 }
 
 function openAgendaEditorById(agendaId){
-  // Abre a Agenda no formulário compacto e carrega exatamente o registro selecionado.
-  // Corrige o erro em que "Editar" do Calendário abria um novo agendamento vazio.
   const ag = state.agenda.find(x => x && x.id === agendaId);
   if(!ag) return;
 
@@ -1971,10 +1858,6 @@ function openAgendaEditorById(agendaId){
   requestAnimationFrame(()=> setTimeout(doOpen, 80));
 }
 
-
-
-
-/* =================== AGENDA COMPACTA =================== */
 function agendaStatusClass(st){
   return String(st||"Agendado").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 }
@@ -2005,12 +1888,8 @@ function agendaCompactFiltered(){
     if(data && agData !== data) return false;
     if(status && st !== status) return false;
 
-    // v89: a tela principal da Agenda não deve abrir atendimentos Realizados antigos.
-    // Realizados continuam salvos e aparecem apenas quando o usuário pesquisar/filtrar.
     if(st === "Realizado" && !temBuscaOuFiltro) return false;
 
-    // Quando o filtro estiver em "Agendado", esconder datas passadas.
-    // Datas antigas continuam disponíveis pela busca/lupa, filtros e relatórios.
     if(status === "Agendado" && agData && agData < hoje) return false;
 
     if(busca){
@@ -2050,8 +1929,6 @@ function renderAgendaCompact(){
   const items = agendaCompactFiltered();
   const selectedDirect = window.__agendaSelectedId ? state.agenda.find(x=>x && x.id===window.__agendaSelectedId) : null;
 
-  // v90: se o formulário estiver aberto, manter exatamente o agendamento selecionado.
-  // Isso impede que filtros/listas puxem um realizado antigo enquanto o usuário está criando um novo.
   if(window.__agendaViewMode !== 'form' || !selectedDirect){
     agendaCompactEnsureSelected(items);
   }
@@ -2150,7 +2027,6 @@ function renderAgendaCompact(){
   byId('agDetData')?.addEventListener('change', e=>{ ag.data=e.target.value; refresh(); });
   byId('agDetHora')?.addEventListener('change', e=>{ ag.hora=e.target.value; refresh(); });
   byId('agDetCliente')?.addEventListener('input', e=>{
-    // A digitação aparece imediatamente; só o salvamento fica em lote.
     ag.cliente = e.target.value;
     const w = byId('agDetWpp');
     if(w) w.value = clientWpp(ag.cliente);
@@ -2443,12 +2319,6 @@ function updateAgendaAutoCells(){
   });
 }
 
-/* =======================================================
-   ✅ RESTO DO APP (tabelas + binds) — COMPLETO
-   (Mantém seus IDs. Só completa as funções que faltavam.)
-======================================================= */
-
-/* =================== PROCEDIMENTOS =================== */
 function renderProcedimentos(){
   const body = document.querySelector('#tblProc tbody');
   if(!body) return;
@@ -2585,7 +2455,6 @@ onClick('btnResetProc', ()=>{
   scheduleSync();
 });
 
-/* =================== CLIENTES =================== */
 function renderClientes(){
   const body = document.querySelector('#tblCli tbody');
   if(!body) return;
@@ -2658,7 +2527,6 @@ onClick('btnAddCliente', ()=>{
   scheduleSync();
 });
 
-/* =================== MATERIAIS =================== */
 function renderMaterialAlerts(){
   const box = byId('materialAlerts');
   if(!box) return;
@@ -2770,7 +2638,6 @@ onClick('btnAddMat', ()=>{
   scheduleSync();
 });
 
-/* =================== CRM (Atendimentos) =================== */
 function getAtendTbody(){ return document.querySelector('#tblCRM tbody') || document.querySelector('#tblAtend tbody'); }
 
 function getOrCreateClientByName(name){
@@ -3024,10 +2891,8 @@ function addAtendimentoManual(){
 
 onClick('btnAddAtendimento', addAtendimentoManual);
 
-// ✅ Compat: botão novo "CRM" (se existir no HTML) usa a mesma ação do antigo "Atendimento"
 onClick('btnAddCRM', addAtendimentoManual);
 
-/* =================== DESPESAS =================== */
 function renderDespesas(){
   const body = document.querySelector('#tblDesp tbody');
   if(!body) return;
@@ -3096,7 +2961,6 @@ function normalizeHora(v, fallback='20:00'){
   return fallback;
 }
 
-/* =================== WHATSAPP =================== */
 function bindWppUI(){
   const setV = (id, v)=>{ const el = byId(id); if(el) el.value = v ?? ''; };
 
@@ -3234,8 +3098,6 @@ function renderWppQueue(){
   });
 }
 
-
-/* =================== CRM / REMARKETING =================== */
 function normName(s){ return String(s||"").trim().toLowerCase(); }
 
 function daysBetweenISO(aISO, bISO){
@@ -3252,7 +3114,6 @@ function getLastAtendimentoISOByClientName(nome){
 
   let best = "";
 
-  // 1) atende (CRM) explícito
   for(const a of (state.atendimentos||[])){
     if(!a) continue;
     if(normName(a.cliente) !== n) continue;
@@ -3260,7 +3121,6 @@ function getLastAtendimentoISOByClientName(nome){
     if(d && (!best || d > best)) best = d;
   }
 
-  // 2) fallback: agenda realizado (caso não tenha atendimento derivado por algum motivo)
   for(const ag of (state.agenda||[])){
     if(!ag) continue;
     if((ag.status||"Agendado") !== "Realizado") continue;
@@ -3292,12 +3152,9 @@ function fillCrmTpl(tpl, item){
 
 function getCrmElements(){
   return {
-    // KPIs (suporta IDs antigos e novos do seu index.html)
     kpiTotal: byId("crmKpiTotal") || byId("crmTotal") || byId("kpiCrmTotal"),
     kpiOk:    byId("crmKpiOk")    || byId("crmOk"),
-    // "Atenção" pode estar como crmKpiAtt OU crmKpiWarn
     kpiAtt:   byId("crmKpiAtt")   || byId("crmKpiWarn") || byId("crmAtt"),
-    // Alguns layouts juntam REM+OLD em um KPI só (crmKpiRisk)
     kpiRem:   byId("crmKpiRem")   || byId("crmRem"),
     kpiOld:   byId("crmKpiOld")   || byId("crmOld"),
     kpiRisk:  byId("crmKpiRisk")  || byId("crmRisk"),
@@ -3307,18 +3164,14 @@ function getCrmElements(){
     txtTpl:    byId("crmTpl")    || byId("crmTemplate") || byId("crmMensagem"),
 
     btnSaveTpl: byId("btnCrmSaveTpl") || byId("btnSaveCrmTpl") || byId("btnSaveCrmTemplate"),
-    // botão novo (gera conforme o filtro selecionado)
     btnGenSelected: byId("btnCrmQueueSelected") || byId("btnCrmGenSelected") || byId("btnCrmQueue"),
-    // legado: botões antigos 45+ / 90+ (se ainda existirem)
     btnGen45:   byId("btnCrmGen45")   || byId("btnCrmQueue45") || byId("btnCrm45"),
     btnGen90:   byId("btnCrmGen90")   || byId("btnCrmQueue90") || byId("btnCrm90"),
     btnClear:   byId("btnCrmClear")   || byId("btnCrmClearQueue") || byId("btnCrmClearQueue"),
 
-    // tabela do seu HTML é #tblCRM
     tbl: $("#tblCRM tbody") || $("#tblCrmQueue tbody") || $("#tblCRMQueue tbody") || $("#tblCrm tbody"),
     chart: byId("crmChart") || byId("chartCRM") || byId("crmBars"),
 
-    // opcional: se você usar um container em div em vez de tabela
     listBox: byId("crmQueue"),
   };
 }
@@ -3338,7 +3191,6 @@ Que tal agendarmos sua manutenção? 😊`;
 function buildCrmRows(){
   const today = todayISO();
 
-  // base de clientes: usa state.clientes, mas também inclui quem aparece em atendimentos/agenda
   const names = new Map();
 
   (state.clientes||[]).forEach(c=>{
@@ -3373,7 +3225,6 @@ function buildCrmRows(){
     });
   }
 
-  // ordena: mais dias primeiro, sem histórico por último
   rows.sort((a,b)=>{
     const da = (a.dias===null) ? -1 : a.dias;
     const db = (b.dias===null) ? -1 : b.dias;
@@ -3393,14 +3244,11 @@ function applyCrmFilter(rows){
     if(filtro === "ALL") return true;
     if(filtro === "OK") return r.situacaoKey === "OK";
 
-    // aceita valores antigos e novos do <select> do HTML
     if(filtro === "ATT" || filtro === "WARN") return r.situacaoKey === "ATT";
 
-    // novos buckets
     if(filtro === "R1") return r.situacaoKey === "R1";
     if(filtro === "R2") return r.situacaoKey === "R2";
 
-    // legado (REM/REMARKETING) = soma dos dois remarketing
     if(filtro === "REM" || filtro === "REMARKETING") return (r.situacaoKey === "R1" || r.situacaoKey === "R2");
 
     if(filtro === "OLD" || filtro === "WINBACK") return r.situacaoKey === "OLD";
@@ -3428,7 +3276,6 @@ function renderCRM(){
   if(el.kpiOk)    el.kpiOk.textContent    = String(cOk);
   if(el.kpiAtt)   el.kpiAtt.textContent   = String(cAtt);
 
-  // se existir KPI "risk" no HTML, ele mostra REM + OLD juntos
   if(el.kpiRisk){
     el.kpiRisk.textContent = String(cRem + cOld);
   }else{
@@ -3448,12 +3295,10 @@ function renderCRM(){
     el.inpBusca.value = state.crm.busca || "";
   }
 
-  // gráfico simples (barras por bucket)
   if(el.chart){
     drawBars(el.chart, ["Em dia","Atenção","Remarketing","Antigos"], [cOk,cAtt,cRem,cOld]);
   }
 
-  // tabela da fila
   if(el.tbl){
     if(!state.crmQueue.length){
       el.tbl.innerHTML = `<tr><td colspan="6"><div class="hint">Fila vazia.</div></td></tr>`;
@@ -3528,7 +3373,6 @@ function genCrmQueueSelected(){
       rows = base.filter(r=>r.situacaoKey === "R2");
       break;
 
-    // legado: "REMARKETING" (46–90) = R1 + R2
     case "REM":
     case "REMARKETING":
       rows = base.filter(r=>r.situacaoKey === "R1" || r.situacaoKey === "R2");
@@ -3546,7 +3390,6 @@ function genCrmQueueSelected(){
 
     case "ALL":
     default:
-      // por padrão, não enfileira "Sem histórico"
       rows = base.filter(r=>r.situacaoKey !== "NONE");
       break;
   }
@@ -3565,7 +3408,6 @@ function genCrmQueueSelected(){
   renderCRM();
 }
 
-// ✅ legado (mantém compatibilidade se ainda existir botão 45+/90+)
 function genCrmQueue(minDias){
   ensureCrmDefaults();
   const rows = buildCrmRows()
@@ -3595,7 +3437,6 @@ function bindCRMUI(){
   ensureCrmDefaults();
   const el = getCrmElements();
 
-  // evita bind duplicado
   if(bindCRMUI.__bound) return;
   bindCRMUI.__bound = true;
 
@@ -3622,10 +3463,8 @@ function bindCRMUI(){
     alert("Template salvo ✅");
   });
 
-  // ✅ gera fila conforme o filtro selecionado
   el.btnGenSelected?.addEventListener("click", genCrmQueueSelected);
 
-  // legado (se existir no HTML antigo)
   el.btnGen45?.addEventListener("click", ()=> genCrmQueue(45));
   el.btnGen90?.addEventListener("click", ()=> genCrmQueue(90));
 
@@ -3661,7 +3500,6 @@ function sendReportToday(){
   window.open(waLink(wppStudio, msg), '_blank');
 }
 
-/* =================== CONFIG =================== */
 function bindConfigUI(){
   const cfgStudioNome = byId('cfgStudioNome');
   const cfgLogoUrl = byId('cfgLogoUrl');
@@ -3776,7 +3614,6 @@ function bindConfigUI(){
   }
 }
 
-/* =================== DASHBOARD COMPARAÇÕES (MoM / YoY) =================== */
 function mkToParts(mk){
   const [y,m] = String(mk||'').split('-').map(Number);
   if(!y || !m) return null;
@@ -3835,7 +3672,6 @@ function updateRevenueComparisons(){
   hintMoM.textContent = `Mês atual vs mês anterior: ${money(cur)} vs ${money(prev)} (${fmtPct(momPct)})`;
   hintYoY.textContent = `Mês atual vs ano anterior: ${money(cur)} vs ${money(yoy)} (${fmtPct(yoyPct)})`;
 }
-
 
 function ensureReceitasExtrasUI(){
   const panel = document.querySelector('.panel[data-route="dashboard"]');
@@ -3975,7 +3811,6 @@ function renderReceitasExtrasUI(){
   });
 }
 
-/* =================== DASHBOARD =================== */
 function updateDashboardKPIs(){
   const k1 = byId("kpiReceita");
   const k2 = byId("kpiCustos");
@@ -3985,20 +3820,17 @@ function updateDashboardKPIs(){
 
   const mk = currentMonthKey();
 
-  // ✅ KPIs do mês atual (receita/custos/lucro)
   const resumoMes = calcResumo({
     onlyMonthKey: mk,
     despesasScope: DASH_LUCRO_DESPESAS_SCOPE
   });
 
-  // ✅ Despesas SEMPRE TOTAL (pra manter “Despesas” como todos os meses)
   const despesasTotal = state.despesas.reduce((s,d)=> s + num(d.valor), 0);
 
   k1.textContent = money(resumoMes.receita);
   k2.textContent = money(resumoMes.custos);
   k3.textContent = money(despesasTotal);
 
-  // ✅ Lucro do mês com despesas conforme a constante (ALL ou MONTH)
   k4.textContent = money(resumoMes.lucro);
 }
 
@@ -4016,7 +3848,6 @@ function updateDashboardInsights(){
   safeText('kpiTopProcedimento', topProc ? `${topProc[0]} (${topProc[1]})` : '—');
   safeText('kpiProximoHorario', future ? `${fmtBRDate(future.data)} ${future.hora||''}` : '—');
 }
-
 
 function escapeHTML(v){
   return String(v ?? '')
@@ -4300,20 +4131,6 @@ function exportDashboardExcel(){
   }
 }
 
-function bindDashboardExportButtons(){
-  const pdfBtn = byId('btnExportPDF');
-  const excelBtn = byId('btnExportExcel');
-  if(pdfBtn && !pdfBtn.dataset.boundExport){
-    pdfBtn.dataset.boundExport = '1';
-    pdfBtn.addEventListener('click', (e)=>{ e.preventDefault(); exportDashboardPDF(); });
-  }
-  if(excelBtn && !excelBtn.dataset.boundExport){
-    excelBtn.dataset.boundExport = '1';
-    excelBtn.addEventListener('click', (e)=>{ e.preventDefault(); exportDashboardExcel(); });
-  }
-}
-
-// Bind extra: garante que os botões funcionem mesmo se a tela for renderizada depois.
 setTimeout(bindDashboardExportButtons, 300);
 window.__SJM_EXPORT_PDF = exportDashboardPDF;
 window.__SJM_EXPORT_EXCEL = exportDashboardExcel;
@@ -4334,7 +4151,6 @@ function renderDashboard(){
 
   const mk = currentMonthKey();
 
-  // ✅ Barras: receita/lucro do mês + despesas total
   const resumoMes = calcResumo({
     onlyMonthKey: mk,
     despesasScope: DASH_LUCRO_DESPESAS_SCOPE
@@ -4347,17 +4163,14 @@ function renderDashboard(){
     [resumoMes.receita, resumoMes.lucro, despesasTotal]
   );
 
-  // ✅ Linha: receita por mês (histórico)
   const monthly = calcMonthlyRevenue();
   drawLine(line, monthly);
 
-  // Se existir comparação, mantém
   if(typeof updateRevenueComparisons === "function"){
     updateRevenueComparisons();
   }
 }
 
-/* =================== BOOT =================== */
 function renderAllOnce(){
   renderAllHard();
   renderDashboard();
@@ -4365,7 +4178,6 @@ function renderAllOnce(){
 
 renderAllOnce();
 
-/* =================== SERVICE WORKER =================== */
 (async function registerSW(){
   try{
     if("serviceWorker" in navigator){
@@ -4376,19 +4188,13 @@ renderAllOnce();
   }
 })();
 
-/* =================== FINAL SYNC =================== */
 enforceAgendaRecebidoRules();
 syncAgendaToAtendimentos();
 state.materiais.forEach(calcularMaterial);
 state.atendimentos.forEach(calcularAtendimento);
 saveSoft();
-scheduleSync(); 
+scheduleSync();
 
-/* =========================================================
-   ✅ v30 FINAL: EXPORTAÇÃO E FOTO DO CALENDÁRIO CORRIGIDAS
-   - Exporta PDF/Excel sem depender das funções antigas
-   - Abre câmera/galeria direto ao clicar em Realizado
-   ========================================================= */
 function __sjmSafeArray(v){ return Array.isArray(v) ? v : []; }
 function __sjmCleanText(v){
   return String(v ?? '')
@@ -4565,14 +4371,9 @@ function handleCalendarRealizadoComFoto(ag){
   ag.recebido=procPrice(ag.procedimento, ag.data);
   saveSoft(); renderAgendaHard(); renderCalendar(); scheduleSync();
   if(!canUseFeature('fotos')){ alert('Atendimento marcado como realizado ✅'); return; }
-  // abre direto a galeria/câmera dentro do clique do usuário
   __sjmOpenPhotoPickerForAgenda(ag);
 }
 
-
-/* =========================================================
-   ✅ v31 FINAL: login obrigatório, exportação corrigida, foto opcional ao realizar
-   ========================================================= */
 (function(){
   function v31Ascii(text){
     return String(text ?? '')
@@ -4705,7 +4506,6 @@ function handleCalendarRealizadoComFoto(ag){
   setTimeout(v31BindExport,50); setTimeout(v31BindExport,500); setTimeout(v31BindExport,1500);
 })();
 
-/* v31: Realizado pergunta se deseja foto. Se não, apenas realiza. Fotos não aparecem na tabela da agenda. */
 function __sjmOpenPhotoPickerForAgenda(ag){
   return new Promise((resolve)=>{
     const input=document.createElement('input');
@@ -4749,10 +4549,6 @@ function handleCalendarRealizadoComFoto(ag){
   }
 }
 
-
-/* =========================================================
-   ✅ v32 FINAL: exportação robusta + foto opcional somente galeria + login bloqueado
-   ========================================================= */
 (function(){
   const BUILD = 'v37-persistencia-whatsapp-final-corrigido';
 
@@ -4871,7 +4667,6 @@ function handleCalendarRealizadoComFoto(ag){
   window.__SJM_EXPORT_EXCEL = exportExcelV32;
   setTimeout(bindExportV32, 50); setTimeout(bindExportV32, 800); setTimeout(bindExportV32, 1800);
 
-  // Foto Premium: somente galeria, sem capture/câmera obrigatória, e sem aparecer na tabela da agenda.
   window.__SJM_PICK_GALLERY_FOR_AGENDA = function(ag){
     return new Promise((resolve)=>{
       const input=document.createElement('input');
@@ -4912,10 +4707,6 @@ function handleCalendarRealizadoComFoto(ag){
   };
 })();
 
-
-/* =========================================================
-   ✅ v34: Planos, Desenvolvedor, exportação PDF real e foto via galeria
-   ========================================================= */
 (function(){
   function escPdf(v){ return String(v ?? '').replace(/[\\()]/g, '\\$&').replace(/[\r\n]+/g, ' '); }
   function moneyV33(v){ try{return money(v)}catch{return 'R$ '+(Number(v||0)||0).toFixed(2).replace('.', ',')} }
@@ -5039,12 +4830,6 @@ function handleCalendarRealizadoComFoto(ag){
   setTimeout(bindV33,50); setTimeout(bindV33,800); setTimeout(bindV33,1800);
 })();
 
-/* =========================================================
-   ✅ v34: Correções de planos, desenvolvedor protegido, cadastro/recuperação
-   - Plano real não vira Desenvolvedor.
-   - Desenvolvedor exige senha e é modo temporário.
-   - Mudar de plano salva e atualiza o botão superior.
-   ========================================================= */
 const SJM_DEV_PASSWORD = ""; // removido na versão cliente
 const SJM_ALLOWED_PLANS = ["basic", "pro", "premium"];
 
@@ -5259,7 +5044,6 @@ function normalizePlanOnLoadV34(){
   }catch(e){ console.warn("normalize plan v34:", e); }
 }
 
-// Reforça as correções depois que o app terminar os renders iniciais.
 setTimeout(()=>{ bindPlanModal(); normalizePlanOnLoadV34(); }, 100);
 setTimeout(()=>{ bindPlanModal(); normalizePlanOnLoadV34(); }, 900);
 setTimeout(()=>{ bindPlanModal(); normalizePlanOnLoadV34(); }, 2200);
@@ -5267,15 +5051,6 @@ setTimeout(()=>{ bindPlanModal(); normalizePlanOnLoadV34(); }, 2200);
 window.__SJM_UNLOCK_DEVELOPER = unlockDeveloperV34;
 window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
-
-/* =========================================================
-   ✅ v40 ESTÁVEL — Correção de base
-   - Persistência real por usuário sem sobrescrever com vazio.
-   - Rodapé limpo para usuárias.
-   - Horários do WhatsApp salvos imediatamente.
-   - Suporte visível.
-   - Desenvolvedor protegido continua separado do plano real.
-   ========================================================= */
 (function(){
   const PUBLIC_FOOTER = "";
   const LAST_GOOD_KEY = KEY + "__last_good_v44";
@@ -5358,7 +5133,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     const keys = new Set([ACTIVE_STORAGE_KEY, KEY, LAST_GOOD_KEY, ...LEGACY_LAST_KEYS]);
     userScopedKeys(userInfo).forEach(k=>keys.add(k));
 
-    // Lê chaves antigas, mas NUNCA grava em todas elas. Isso evita apagar contas com estado vazio.
     try{
       for(let i=0;i<localStorage.length;i++){
         const k = localStorage.key(i);
@@ -5375,7 +5149,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
         if(st) list.push(st);
       }catch{}
     });
-    // estado atual entra por último; se estiver vazio, não vence estado útil salvo.
     list.push(state);
     return list;
   }
@@ -5431,7 +5204,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       state = sanitizeState(chosen);
       ensureMeta(state);
 
-      // Primeiro cadastro: aplica dados informados sem apagar o restante.
       const pending = window.__SJM_PENDING_SIGNUP;
       if(pending){
         state.settings = state.settings || {};
@@ -5462,7 +5234,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     const remoteFresh = fresh(incoming);
     const localFresh = fresh(state);
 
-    // Firebase vazio ou menos completo nunca pode apagar dados locais.
     if(localScore > 0 && remoteScore === 0){ persistScoped(); scheduleCloudPush(); cleanFooter(); return; }
     if(localScore > remoteScore){ persistScoped(); scheduleCloudPush(); cleanFooter(); return; }
     if(localScore === remoteScore && remoteFresh < localFresh){ persistScoped(); scheduleCloudPush(); cleanFooter(); return; }
@@ -5482,7 +5253,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     cleanFooter();
   };
 
-  // Horários WhatsApp: aceita 23, 23:00, 08:30 e salva imediatamente.
   normalizeHora = function(v, fallback="20:00"){
     const raw = String(v ?? "").trim();
     if(!raw) return fallback;
@@ -5565,17 +5335,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_V40_BEST_SCORE = usefulScore;
 })();
 
-/* =========================================================
-   Studio Sync Pro v41 — Roadmap 2.0 + 2.5 integrado
-   - Financeiro completo básico
-   - Autoagendamento configurável
-   - Equipe/comissões
-   - Fidelidade
-   - Galeria por cliente
-   - Marketing/retenção
-   - Relatórios avançados
-   - Permissões para secretária/funções
-   ========================================================= */
 (function(){
   const V41_ROUTES = [
     ['autoagendamento','Autoagendamento'],
@@ -5845,7 +5604,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ bindFinanceiro(); bindAutoAg(); bindEquipe(); bindFidelidade(); bindGaleria(); bindMarketing(); bindRelatorios(); }catch(e){ console.warn('v41 bind:',e); }
   }
 
-  // integra ao render geral sem quebrar o que já existe
   const oldRenderAllHardV41 = renderAllHard;
   renderAllHard = function(){
     try{ oldRenderAllHardV41(); }catch(e){ console.warn('renderAllHard antigo:',e); }
@@ -5862,7 +5620,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_V41_RENDER = renderV41All;
 })();
 
-/* v41 final — libera rotas novas nos planos corretos */
 (function(){
   try{
     const add = (plan, items)=>{ if(PLAN_FEATURES[plan]) PLAN_FEATURES[plan] = [...new Set([...(PLAN_FEATURES[plan]||[]), ...items])]; };
@@ -5874,14 +5631,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }catch(e){ console.warn('v41 final plan patch:', e); }
 })();
 
-
-/* =========================================================
-   v44 VERIFICADO — ajustes finais de estabilidade
-   - Expõe planos no window para patches futuros.
-   - Garante rotas 2.0/2.5 nos planos corretos.
-   - Reaplica rodapé limpo e botão suporte.
-   - Mantém modo Desenvolvedor separado do plano real.
-   ========================================================= */
 (function(){
   try{
     window.PLAN_FEATURES = PLAN_FEATURES;
@@ -5920,18 +5669,10 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     document.addEventListener('DOMContentLoaded', support);
     setTimeout(support, 300);
 
-    // Reforça render das permissões e planos depois que todos os módulos carregarem.
     setTimeout(()=>{ try{ applyPlanUI(); window.__SJM_V41_RENDER?.(); }catch(e){ console.warn('v44 final render:', e); } }, 500);
   }catch(e){ console.warn('v44 final patch:', e); }
 })();
 
-
-/* =========================================================
-   Studio Sync Pro v45 — Dashboard central financeiro
-   - Aba Financeiro removida do menu
-   - Financeiro completo dentro do Dashboard
-   - Resumo visual: hoje, meta, próximos horários e alertas
-   ========================================================= */
 (function(){
   function el(id){ return document.getElementById(id); }
   function n(v){ return Number(String(v ?? 0).replace('R$','').replace(/\./g,'').replace(',','.')) || 0; }
@@ -6037,19 +5778,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_RENDER_DASHBOARD_VISUAL_V44 = renderDashboardVisualV44;
 })();
 
-
-
-/* v90: bloco legado v45 de persistência múltipla removido. */
-
-/* =========================================================
-   Studio Sync Pro v46 — correções de estabilidade e visual
-   - Configuração de caixa atualiza meta imediatamente
-   - CRM com resumo comercial seguro (sem lucro absurdo)
-   - Aba Relatórios removida de vez
-   - Cores removidas da tela Config
-   - Persistência reforçada entre versões/login/localStorage
-   - Clientes/WhatsApp com validação visual
-   ========================================================= */
 (function(){
   const V46 = true;
   const esc = (v)=>String(v??'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -6080,7 +5808,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return lucro;
   }
 
-  // remove visualmente e funcionalmente a aba Relatórios
   function removeRelatorios(){
     document.querySelectorAll('[data-tab="relatorios"], .tab[data-tab="relatorios"], button[data-route="relatorios"], a[href="#relatorios"]').forEach(x=>x.remove());
     document.querySelectorAll('.panel[data-route="relatorios"]').forEach(x=>x.remove());
@@ -6088,10 +5815,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ ['basic','pro','premium','developer'].forEach(p=>{ if(PLAN_FEATURES[p]) PLAN_FEATURES[p]=PLAN_FEATURES[p].filter(x=>x!=='relatorios'); }); }catch{}
   }
 
-  // mantido como no-op: a tela de cores deve continuar visível e funcional.
   function removeConfigColors(){ return; }
 
-  // evita os números absurdos do CRM e mantém o resumo dentro do CRM
   function renderCrmReportsV46(){
     try{
       const atend=arr(state.atendimentos).filter(a=>String(a.status||'')!=='Cancelado');
@@ -6106,7 +5831,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ console.warn('v46 CRM reports', e); }
   }
 
-  // Configuração de caixa: meta deve refletir na hora nos cards
   function updateGoalFromFinance(){
     try{
       state.financeiro = state.financeiro && typeof state.financeiro==='object' ? state.financeiro : {};
@@ -6140,7 +5864,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }
   }
 
-  // backup/merge automático: procura estados antigos e usa o mais completo para não perder dados ao trocar versão/login
   function stateScoreV46(s){
     try{
       if(!s||typeof s!=='object') return 0;
@@ -6191,7 +5914,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ console.warn('v46 auth preserve', e); }
   };
 
-  // WhatsApp visualmente obrigatório para cliente; evita linha parecer completa sem telefone
   function markClientPhoneRequired(){
     try{
       document.querySelectorAll('#tblCli tbody tr').forEach(tr=>{
@@ -6207,7 +5929,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch{}
   }
 
-  // pequenos lembretes úteis no dashboard (aniversário/manutenção) sem criar nova aba
   function enhanceDashboardAlerts(){
     try{
       const box=byId('dashAlertList'); if(!box) return;
@@ -6226,7 +5947,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ console.warn('v46 alerts', e); }
   }
 
-  // Patch em renderização principal
   const oldRenderAll = window.renderAllHard;
   if(typeof oldRenderAll==='function'){
     window.renderAllHard = function(){
@@ -6262,15 +5982,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.addEventListener('beforeunload', preserveBestLocal);
 })();
 
-
-/* =========================================================
-   Studio Sync Pro v47 — limpeza visual e correções finais
-   - Métricas do dashboard e gráfico do CRM corrigidos
-   - Remove legenda do calendário, limpar agenda, Galeria e Permissões da barra
-   - Galeria compacta dentro de Clientes
-   - Marketing sem lista de espera e sem pesquisa de satisfação
-   - Materiais com rótulo claro: quantidade comprada
-   ========================================================= */
 (function(){
   function v47Num(v){ const n=Number(String(v??'').replace(',','.')); return Number.isFinite(n)?n:0; }
   function v47Money(v){ try{return money(v47Num(v));}catch{return 'R$ '+v47Num(v).toFixed(2).replace('.',',');} }
@@ -6287,7 +5998,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return {ctx,W,H,ratio};
   }
 
-  // Substitui o gráfico de barras antigo. Agora aceita valores negativos e sempre desenha algo legível.
   window.drawBars = function(canvas, labels, values){
     const c=v47ClearCanvas(canvas); if(!c) return;
     const {ctx,W,H,ratio}=c;
@@ -6369,13 +6079,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(v47Boot,1800);
 })();
 
-/* =========================================================
-   ✅ v51 — Desenvolvedor Master por LOGIN, sem botão público
-   - O card/botão "Entrar como desenvolvedor" não aparece para usuárias.
-   - Somente o login de desenvolvedor libera a rota Dev.
-   - Dev pode ver/alterar valores dos planos, alterar plano da profissional,
-     consultar telefones/e-mails da equipe, responder suporte e registrar bugs.
-   ========================================================= */
 (function(){
   const DEV_EMAIL = ""; // removido na versão cliente
 
@@ -6693,14 +6396,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   };
 })();
 
-
-/* =========================================================
-   ✅ v52 — Desenvolvedor Master completo
-   - Oculto para clientes comuns; aparece apenas no login dev.
-   - Sem card de total de agendamentos no painel DEV.
-   - Inclui planos, valores, limites, status, teste, suporte, bugs,
-     logs, histórico, backup e entrada assistida como profissional.
-   ========================================================= */
 (function(){
   const DEV_EMAIL_V52 = ""; // removido na versão cliente
   function esc52(v){ return String(v ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
@@ -6958,12 +6653,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_RENDER_DEV_V52 = renderDevPanelV52;
 })();
 
-
-
-
-/* =========================================================
-   ✅ v54 — Área do Usuário + DEV sempre atualizado
-   ========================================================= */
 (function(){
   const BUILD_V54 = "v56-logout-dev-sem-travar";
   const DEV_EMAIL_V54 = ""; // removido na versão cliente
@@ -7030,7 +6719,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     times.forEach(t => setTimeout(renderDevFresh54, t));
   }
 
-  // Corrige o erro: login entra na tela DEV antiga e só atualiza depois de trocar de aba.
   window.addEventListener("load", function(){
     cleanOldCache54();
     forceDevFreshLoop54();
@@ -7042,7 +6730,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }
   }, true);
 
-  // Envolve funções antigas de rota/render sem quebrar o projeto.
   ["renderAllHard","renderApp","render","showRoute","setRoute"].forEach(name=>{
     try{
       const old = window[name] || (typeof globalThis[name] === "function" ? globalThis[name] : null);
@@ -7229,13 +6916,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_FORCE_DEV_FRESH_V54 = forceDevFreshLoop54;
 })();
 
-
-/* =========================================================
-   ✅ v55 — Correções solicitadas
-   1) Pastas de clientes sempre aparecem, mesmo sem foto.
-   2) Materiais: cálculo e estoque baixo atualizam na hora.
-   3) Troca de plano só com senha + aviso de cobrança na próxima fatura.
-   ========================================================= */
 (function(){
   const DEV_PASS_V55 = ""; // removido na versão cliente
 
@@ -7254,7 +6934,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }catch(e){ return false; }
   }
 
-  // ---------- PASTAS: todos os clientes aparecem ----------
   function ensureClientFolders55(){
     try{
       state.clientes = Array.isArray(state.clientes) ? state.clientes : [];
@@ -7297,7 +6976,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       </div>`;
   };
 
-  // Garante pasta no cadastro/edição de cliente e atualiza painel
   const oldRenderClientes55 = typeof renderClientes === "function" ? renderClientes : null;
   if(oldRenderClientes55){
     window.renderClientes = renderClientes = function(){
@@ -7307,7 +6985,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     };
   }
 
-  // ---------- MATERIAIS: cálculo + estoque ----------
   function calcMaterialV55(m){
     if(!m || typeof m !== "object") return m;
     if(!m.id) m.id = id55();
@@ -7315,11 +6992,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(m.nome === undefined) m.nome = "";
     if(!m.unidade) m.unidade = "ml";
 
-    // Modelo:
-    // qtdPorUnidade = quanto vem em UMA unidade/embalagem (ml/g/kg/un)
-    // valorUnidade = valor pago por UMA unidade/embalagem
-    // unidadesCompradas = quantas unidades/embalagens comprou
-    // qtdCliente = quanto usa por cliente
     m.qtdPorUnidade = n55(m.qtdPorUnidade);
     m.valorUnidade = n55(m.valorUnidade);
     m.unidadesCompradas = n55(m.unidadesCompradas);
@@ -7332,7 +7004,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     m.custoCliente = m.custoUnit * m.qtdCliente;
     m.rendimento = m.qtdCliente > 0 ? (m.qtdTotal / m.qtdCliente) : 0;
 
-    // consumo estimado por atendimentos realizados
     const realizados = (state.atendimentos||[]).filter(a => n55(a.recebido) > 0 || String(a.status||"").toLowerCase()==="realizado").length;
     m.consumoEstimado = m.qtdCliente * realizados;
     m.estoqueRestante = Math.max(0, m.qtdTotal - m.consumoEstimado);
@@ -7373,7 +7044,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       state.materiais.forEach(calcMaterialV55);
       oldRenderMateriais55();
 
-      // Atualiza números de alerta imediatamente durante edição.
       const body = document.querySelector('#tblMat tbody');
       if(body && !body.__v55MaterialBound){
         body.__v55MaterialBound = true;
@@ -7384,7 +7054,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     };
   }
 
-  // ---------- TROCA DE PLANO COM SENHA ----------
   function getStoredPassword55(){
     try{
       return localStorage.getItem("studio_sync_dev_password") ||
@@ -7442,7 +7111,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     alert(`Plano alterado de ${PLAN_LABELS[old] || old} para ${PLAN_LABELS[plan] || plan}.\n\nA cobrança será atualizada na próxima fatura.\nNenhum dado foi apagado.`);
   };
 
-  // Reforça o listener do modal para usar a função nova
   document.addEventListener("click", function(e){
     const btn = e.target?.closest?.("[data-change-plan]");
     if(!btn) return;
@@ -7451,7 +7119,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     window.changePlan(btn.dataset.changePlan);
   }, true);
 
-  // Boot v55
   function boot55(){
     try{
       ensureClientFolders55();
@@ -7465,13 +7132,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(boot55, 1800);
 })();
 
-
-/* =========================================================
-   ✅ v56 — Correção logout + DEV sem travar digitação
-   - Sair encerra Firebase/local e fica na tela de login.
-   - DEV não re-renderiza enquanto o usuário está digitando/clicando em campo.
-   - Remove o parâmetro logout da URL depois que a tela de login abre.
-   ========================================================= */
 (function(){
   const BUILD_V56 = "v56-logout-dev-sem-travar";
   window.__SJM_BUILD = BUILD_V56;
@@ -7488,7 +7148,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return inDevRouteV56() && activeIsFieldV56();
   }
 
-  // Durante edição no DEV, não deixa render pesado roubar foco.
   const oldRenderDev52_v56 = window.__SJM_RENDER_DEV_V52 || window.renderDevPanelV52;
   if(typeof oldRenderDev52_v56 === "function" && !oldRenderDev52_v56.__v56Wrapped){
     const wrapped = function(){
@@ -7516,7 +7175,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ globalThis.renderAllHard = wrappedAll; }catch(e){}
   }
 
-  // No DEV, sync não re-renderiza a tela enquanto há campo ativo.
   const oldSchedule_v56 = window.scheduleSync || (typeof scheduleSync === "function" ? scheduleSync : null);
   if(typeof oldSchedule_v56 === "function" && !oldSchedule_v56.__v56Wrapped){
     const wrappedSchedule = function(){
@@ -7532,7 +7190,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ globalThis.scheduleSync = wrappedSchedule; }catch(e){}
   }
 
-  // Marca edição por mais tempo para inputs/selects do DEV.
   document.addEventListener("focusin", (e)=>{
     if(activeIsFieldV56() && inDevRouteV56()) window.__SJM_IS_EDITING = true;
   }, true);
@@ -7551,7 +7208,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ window.__SJM_LOGGING_OUT = true; sessionStorage.setItem("sjm_force_logout","1"); }catch(e){}
     try{ if(typeof saveSoft === "function") saveSoft(); }catch(e){}
 
-    // encerra login local/dev
     try{
       [
         "studio_sync_user","currentUser","user","authUser","studio_sync_role","role",
@@ -7567,7 +7223,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       window.__SJM_IMPERSONATING_PROFESSIONAL = null;
     }catch(e){}
 
-    // encerra Firebase de verdade
     try{
       if(typeof window.__SJM_SIGN_OUT === "function"){
         await window.__SJM_SIGN_OUT();
@@ -7581,14 +7236,12 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       if(msg) msg.textContent = "Você saiu. Entre com outra conta.";
     }catch(e){}
 
-    // usa replace para não voltar automaticamente com histórico/hash antigo
     const cleanPath = location.pathname + "?logout=1";
     location.replace(cleanPath);
   }
 
   window.__SJM_LOGOUT = doLogoutV56;
 
-  // Intercepta qualquer botão de sair, inclusive o modal antigo.
   document.addEventListener("click", function(e){
     const btn = e.target?.closest?.("#btnLogout54,[data-logout],.logoutBtn");
     if(!btn) return;
@@ -7597,7 +7250,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     doLogoutV56();
   }, true);
 
-  // Se abriu com ?logout=1, força tela de login e não deixa voltar sozinho.
   document.addEventListener("DOMContentLoaded", ()=>{
     if(new URLSearchParams(location.search).get("logout") === "1" || sessionStorage.getItem("sjm_force_logout") === "1"){
       try{
@@ -7614,14 +7266,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
 })();
 
-
-
-/* BLOCO v58 banco único removido na v81-limpa: substituído pelo salvamento central original + v62. */
-
-/* =========================================================
-   v60 - Ajuste pedido: remover Equipe por enquanto, mover Indicação para Fidelidade,
-   remover Pacotes/Assinaturas e renomear Marketing para Promoções.
-   ========================================================= */
 (function(){
   function v60PatchMenu(){
     try{
@@ -7661,12 +7305,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   document.addEventListener('click', ()=>setTimeout(v60Run,50), true);
 })();
 
-
-
-/* =========================================================
-   LIMPEZA FINAL — CONFIG, IMPORTAÇÃO E BOOT ESTÁVEL
-   Mantém apenas um fluxo para logo/cor/importar e evita binds duplicados.
-   ========================================================= */
 (function(){
   'use strict';
   function el(id){ return document.getElementById(id); }
@@ -7742,10 +7380,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_IMPORT_BACKUP_FILE = importBackupFile;
 })();
 
-/* =========================================================
-   v70 DEV PRO — Central profissional de desenvolvimento e controle
-   Base: mantém o app funcionando e acrescenta gestão do SaaS.
-   ========================================================= */
 (function(){
   'use strict';
   const DEV_PRO_BUILD = 'v70-dev-pro-control-center';
@@ -8253,12 +7887,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_RENDER_DEV_PRO = renderShell;
 })();
 
-/* =========================================================
-   v71 DEV MASTER COMPLETO — Painel SaaS profissional
-   Acrescenta: Studios, usuários, assinaturas, financeiro,
-   relatórios, logs, backups, atualizações, segurança, IA,
-   ferramentas e importação CSV/JSON sem remover o app atual.
-   ========================================================= */
 (function(){
   'use strict';
   const BUILD='v71-dev-master-completo';
@@ -8324,18 +7952,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   document.addEventListener('DOMContentLoaded',install); window.addEventListener('load',()=>{install();setTimeout(()=>render('dash'),1400)}); setTimeout(install,1500); window.__SJM_RENDER_DEV_PRO=render;
 })();
 
-
-/* =========================================================
-   STUDIO SYNC PRO v72 FINAL
-   Correções reais em cima da v71:
-   1) Fidelidade avançada: ativar/desativar cartão, indicação e cashback.
-   2) Recompensa aparece no Dashboard quando cliente completa selos.
-   3) Autoagendamento desativado esconde regras, Pix, link e prévia.
-   4) Área do usuário recebe Importar backup.
-   5) Cores aplicam na hora e salvam sem quebrar logo.
-   6) Desenvolvedor Master completo com métricas SaaS, planos, suporte,
-      erros, auditoria, monitoramento, financeiro e crescimento.
-   ========================================================= */
 (function(){
   const DEV_PASS = ""; // removido na versão cliente
   const $id = (id)=>document.getElementById(id);
@@ -9024,9 +8640,8 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
 
   document.addEventListener("DOMContentLoaded", ()=>[80,300].forEach(t=>setTimeout(bootV72,t)));
   window.addEventListener("load", ()=>[80,300].forEach(t=>setTimeout(bootV72,t)));
-  /* Studio Sync Pro Limpa Estável: removido boot em todo clique para não travar digitação/edição */
-  setInterval(()=>{ 
-    patchDashboardRewardsV72(); 
+  setInterval(()=>{
+    patchDashboardRewardsV72();
     if(location.hash==="#autoagendamento") patchAutoAgV72();
   }, 2500);
 
@@ -9035,15 +8650,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_V72_RENDER_FIDELIDADE = renderFidelidadeV72;
 })();
 
-
-/* =========================================================
-   STUDIO SYNC PRO — LIMPA ESTÁVEL 1.0
-   Patch final consolidado:
-   - Fidelidade salva Ativado/Desativado sem re-render em clique.
-   - Campanhas desativadas escondem listas, prévias e alertas.
-   - Área Dev substituída por painel completo e estável.
-   - Eventos delegados para evitar duplicação e travamento de digitação.
-   ========================================================= */
 (function(){
   const FINAL_BUILD = "Studio Sync Pro — Limpa Estável 1.0";
   window.__SJM_FINAL_BUILD = FINAL_BUILD;
@@ -9291,8 +8897,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   window.__SJM_RENDER_DEV_FINAL=renderDevFinal;
 })();
 
-
-/* Patch mínimo — fidelidade: seleção Ativado/Desativado reflete na hora e salva como booleano. */
 (function(){
   function getStateSafe(){ try{return state;}catch(e){return window.__SJM_GET_STATE?.() || window.state;} }
   function asBool(v, def){
@@ -9342,7 +8946,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }, true);
 })();
 
-/* Ajuste mínimo definitivo — Fidelidade não pode voltar para Ativado sozinha. Não altera Dev. */
 (function(){
   function st(){ try{return state;}catch(e){return window.__SJM_GET_STATE?.() || window.state || null;} }
   function boolFromSelect(id, fallback){
@@ -9398,11 +9001,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }, true);
 })();
 
-/* =========================================================
-   ✅ v64 — Fotos das clientes: lista com busca e galeria por cliente
-   - Substitui a grade de pastas por um explorador simples.
-   - Não altera Dev, planos, agenda, financeiro ou demais funções.
-   ========================================================= */
 (function(){
   function esc64(v){ return String(v ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
   function norm64(v){ return String(v||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
@@ -9512,12 +9110,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
 })();
 
-/* =========================================================
-   v52 — Clientes cadastradas em painel compacto
-   - Mantém os dados e campos atuais.
-   - Troca a tabela grande por lista lateral com busca + ficha da cliente.
-   - Não altera Dev, planos, financeiro, agenda ou galeria de fotos.
-   ========================================================= */
 (function(){
   function escV52(v){
     return String(v ?? '').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
@@ -9655,10 +9247,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
 })();
 
-
-/* =========================================================
-   PATCH CLIENTE — remove senha/admin/desenvolvedor embutido
-   ========================================================= */
 (function(){
   try{
     window.__SJM_DEV_UNLOCKED = false;
@@ -9718,7 +9306,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(hideDevClientPatch, 800);
 })();
 
-/* ===== Correção final: Clientes igual Agenda + cores fáceis ===== */
 (function(){
   function $c(id){ return document.getElementById(id); }
   function ehtml(v){ try{return escapeHTML(String(v??''));}catch{return String(v??'').replace(/[&<>'"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':'&quot;'}[m]));} }
@@ -9808,13 +9395,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(bindEasyColors,1000);
 })();
 
-
-/* BLOCO v58 velocidade removido na v81-limpa: evitava sobrescrita de saveSoft/render. */
-
-/* =========================================================
-   v62 — Correção definitiva: salvar agendamentos + limpar procedimentos especiais
-   Base: correcao_agenda_whatsapp. Não altera layout.
-   ========================================================= */
 (function(){
   'use strict';
   if(window.__SJM_SAVE_FIX_V62) return;
@@ -9932,18 +9512,15 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(push !== false) pushCloudDebounced();
   }
 
-  // Salvar oficial: grava local imediato e envia remoto em lote.
   const oldSave = (typeof saveSoft === 'function') ? saveSoft : window.saveSoft;
   window.saveSoft = function(){
     persist('save', true);
-    // Não dependemos do save antigo, mas mantemos compatibilidade sem permitir que erro interrompa.
     try{ if(oldSave && !oldSave.__v62) oldSave(); }catch(e){}
   };
   window.saveSoft.__v62 = true;
   try{ saveSoft = window.saveSoft; }catch(e){}
   try{ globalThis.saveSoft = window.saveSoft; }catch(e){}
 
-  // Sync derivado não pode terminar sem salvar o estado atualizado.
   const oldSchedule = (typeof scheduleSync === 'function') ? scheduleSync : window.scheduleSync;
   window.scheduleSync = function(){
     try{ if(oldSchedule && !oldSchedule.__v62) oldSchedule(); }catch(e){}
@@ -9955,7 +9532,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   try{ scheduleSync = window.scheduleSync; }catch(e){}
   try{ globalThis.scheduleSync = window.scheduleSync; }catch(e){}
 
-  // Quando remoto chegar antigo, não deixar apagar agenda recém salva.
   const oldApply = window.__SJM_APPLY_REMOTE_STATE;
   window.__SJM_APPLY_REMOTE_STATE = function(remoteState){
     try{ cleanSpecials(remoteState); ensureAgendaShape(remoteState); }catch(e){}
@@ -9973,7 +9549,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ setSt(remoteState); persist('remote-applied', false); if(typeof renderAllHard === 'function') renderAllHard(); }catch(e){}
   };
 
-  // Agenda: garante persistência depois de qualquer input/change/click relevante.
   function isAgendaTarget(el){
     if(!el) return false;
     if(el.closest && (el.closest('#agendaCompactDetail') || el.closest('#tblAgenda') || el.closest('#agendaFormPanel') || el.closest('#agendaListPanel'))) return true;
@@ -9992,7 +9567,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     setTimeout(function(){ persist('agenda-click', true); }, 80);
   }, true);
 
-  // Reforça criação de novo agendamento sem mexer no layout.
   const oldOpenEdit = (typeof openAgendaEditorById === 'function') ? openAgendaEditorById : window.openAgendaEditorById;
   if(typeof oldOpenEdit === 'function'){
     window.openAgendaEditorById = function(id){
@@ -10003,19 +9577,11 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ openAgendaEditorById = window.openAgendaEditorById; }catch(e){}
   }
 
-  // Inicialização: limpa duplicados e salva de verdade antes da primeira renderização seguinte.
   try{ persist('boot', false); }catch(e){ console.warn('boot v62:', e); }
   setTimeout(function(){ try{ persist('boot-late', true); if(typeof renderProcedimentos === 'function') renderProcedimentos(); }catch(e){} }, 350);
   window.addEventListener('beforeunload', function(){ try{ persist('beforeunload', true); }catch(e){} });
 })();
 
-/* =========================================================
-   v73 — Ajustes solicitados Allan
-   - Plano atual altera e atualiza em Configurações
-   - Botão Concluir cadastro antes das fotos da cliente
-   - Confirmação da agenda marca como Confirmado automaticamente
-   - Procedimentos iniciam e ficam apenas com os fixos definidos
-   ========================================================= */
 (function(){
   'use strict';
   if(window.__SJM_ALLAN_FIX_V73) return;
@@ -10049,7 +9615,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     rerender();
   }
 
-  // Plano: Configurações e cards sempre atualizam o plano atual.
   document.addEventListener('change', function(e){
     if(e.target && e.target.id === 'cfgPlano') setPlanV73(e.target.value);
   }, true);
@@ -10082,7 +9647,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   };
   try{ renderPlanCards = window.renderPlanCards; }catch(e){}
 
-  // Agenda: clicar em confirmação também muda status para Confirmado.
   function confirmAgendaV73(a){
     if(!a || String(a.status||'') === 'Bloqueio') return;
     a.status = 'Confirmado';
@@ -10102,8 +9666,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     if(a) setTimeout(()=>confirmAgendaV73(a), 30);
   }, true);
 
-  // Procedimentos: corrigido em patch v79 no final do arquivo.
-  // Clientes: botão Concluir cadastro antes de Fotos.
   function addConcluirCliente(){
     const actions = document.querySelector('.clienteDetail__actions');
     if(!actions || $('cliDetConcluir')) return;
@@ -10140,14 +9702,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }, 400);
 })();
 
-
-/* =======================================================
-   PATCH v79 - Procedimentos salvando de verdade
-   - Sistema: apenas Médico, Folga, Reunião e Compromisso
-   - Usuário pode criar quantos procedimentos quiser
-   - Não substitui um procedimento pelo outro
-   - Salva em state + localStorage + backup próprio
-======================================================= */
 (function(){
   'use strict';
   if(window.__SJM_PROCEDIMENTOS_V79) return;
@@ -10281,7 +9835,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
       result.push(p);
     });
 
-    // Recupera procedimentos que estavam salvos em outra chave/back-up.
     customFrom(rescue).forEach(p=>{
       const sameId = result.some(x => x.id === p.id);
       const sameFull = result.some(x =>
@@ -10299,7 +9852,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   }
 
   function garantirProcedimentosV79(){
-    // Usa o state real do app mesmo quando window.state ainda não foi exposto.
     try{ if(!window.state && typeof state !== 'undefined' && state) window.state = state; }catch(e){}
     const s = (typeof state !== 'undefined' && state) ? state : window.state;
     if(!s) return;
@@ -10491,7 +10043,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   };
   try{ renderProcedimentos = window.renderProcedimentos; }catch(e){}
 
-  // Captura primeiro e impede listeners antigos de criar/restaurar procedimento errado.
   window.addEventListener('click', function(e){
     const add = e.target && e.target.closest ? e.target.closest('#btnAddProc') : null;
     if(!add) return;
@@ -10533,7 +10084,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     e.stopImmediatePropagation();
   }, true);
 
-  // Procedimentos contam como dados importantes no anti-sobrescrita do Firebase.
   try{
     window.stateDataScore = function(s){
       try{
@@ -10552,7 +10102,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     try{ stateDataScore = window.stateDataScore; }catch(e){}
   }catch(e){}
 
-  // Se vier estado remoto antigo, preserva os procedimentos criados pelo usuário.
   try{
     const oldApply = window.__SJM_APPLY_REMOTE_STATE;
     if(typeof oldApply === 'function'){
@@ -10569,7 +10118,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }
   }catch(e){}
 
-  // Inicialização final: roda depois dos patches antigos e salva a lista certa.
   function boot(){
     try{
       garantirProcedimentosV79();
@@ -10586,23 +10134,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   });
 })();
 
-
-
-/* v81-limpa-base-v80: limpeza segura aplicada em app.js. */
-
-
-
-/* v90: bloco legado v82 de autoagendamento removido; mantida implementação pública segura atual. */
-
-/* =========================================================
-   v83 base v80 — Autoagendamento completo e seguro
-   - publica dados públicos do studio para o link do cliente
-   - cliente envia pedido direto ao Firestore quando o link tem sid
-   - app do studio recebe pedido, salva na agenda e cria cliente
-   - evita duplicidade por requestId e por horário ocupado
-   - gera notificação local no navegador e mensagens de WhatsApp
-   Observação: para visitante salvar sem login de dono, ative Anonymous Auth no Firebase.
-   ========================================================= */
 (function autoAgendamentoCompletoV83(){
   const BUILD='v83-autoagendamento-completo';
   const $=(id)=>document.getElementById(id);
@@ -10769,7 +10300,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     return (state.agenda||[]).some(a=>a&&String(a.data)===String(data)&&String(a.hora).slice(0,5)===String(hora).slice(0,5)&&String(a.status||'').toLowerCase()!=='cancelado'&&String(a.publicRequestId||'')!==String(ignoreRequestId||''));
   }
   async function saveAll(reason){
-    // Gravação forte: local + Firebase antes de considerar o autoagendamento processado.
     try{
       state.meta = state.meta && typeof state.meta==='object' ? state.meta : {};
       state.meta.rev = Number(state.meta.rev||0) + 1;
@@ -10845,13 +10375,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(boot,200); setTimeout(boot,1600); setTimeout(boot,3500);
 })();
 
-
-/* =========================================================
-   v87 base v80 — Correção real da rota pública de autoagendamento
-   - #agendar/slug não cai mais na trava de Plano Premium
-   - link sem sid usa o slug público do studio
-   - mantém app principal intacto
-   ========================================================= */
 (function publicBookingRouteGuardV85(){
   function isPublic(){ return /^#agendar(\/|$)/i.test(String(location.hash||'')); }
   function apply(){
@@ -10871,15 +10394,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(apply,20); setTimeout(apply,600); setTimeout(apply,1800);
 })();
 
-
-/* =========================================================
-   v93 — Autoagendamento com calendário real e horários livres
-   - link público abre calendário do studio, não formulário solto
-   - mostra somente horários disponíveis da Agenda publicada
-   - cliente confirma; pedido bloqueia horário imediatamente no link
-   - profissional recebe na Agenda como Agendado e confirma pelo botão Confirmação
-   - sem reescrever dados antigos: usa a mesma base/campos já existentes
-   ========================================================= */
 (function autoAgendamentoCalendarioRealV93(){
   'use strict';
   if(window.__SJM_AUTOAGENDAMENTO_V93) return;
@@ -11049,7 +10563,6 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
     }
     const times=freeTimes(selectedDate, selectedProcName);
     const renderKey=JSON.stringify({selectedDate,selectedProcName,month:currentMonth.getMonth(),year:currentMonth.getFullYear(),busy:(pd.busySlots||[]).length,upd:pd.updatedAt||0});
-    // não reescreve enquanto a cliente digita, exceto quando muda calendário/dados
     if(document.activeElement && root.contains(document.activeElement) && lastRenderKey===renderKey) return;
     lastRenderKey=renderKey;
     root.innerHTML=`<div class="sjmPublicBookingCard sjmPubWide">
@@ -11183,5 +10696,3 @@ window.__SJM_LOCK_DEVELOPER = lockDeveloperV34;
   setTimeout(boot,300); setTimeout(boot,1800); setTimeout(boot,4200);
 })();
 
-
-/* v94 — correção duração dos procedimentos + autoagenda respeita duração e bloqueios por intervalo. */
